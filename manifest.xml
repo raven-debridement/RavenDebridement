@@ -1,0 +1,14 @@
+<package>
+  <description brief="raven_debridement_master">
+
+     raven_debridement_master
+
+  </description>
+  <author>Jonathan Kim</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/raven_debridement_master</url>
+
+</package>
+
+
