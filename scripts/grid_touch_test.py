@@ -16,7 +16,6 @@ import tf
 import tfx
 
 from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
-#from raven_2_trajectory import TrajectoryPlayer, Stage
 
 class InitPoseHolder:
 	init_pose = None
