@@ -1,0 +1,66 @@
+<!-- a general launch file that should work on most systems -->
+
+<launch>
+    <include file="$(find prosilica_camera)/launch/stereo.launch" />
+	
+	<node pkg="stereo_image_proc" type="stereo_image_proc" name="stereo_image_proc"/>
+
+	<node pkg="tf" type="static_transform_publisher" name="camera_to_ground" args="0 0 0 0 0 0 ground camera 100" />
+	<node pkg="tf" type="static_transform_publisher" name="left_to_right" args="0.5 0 0 1 0 0 left_camera right_camera 100" /> 	
+
+
+	<group ns="ar">
+		<node name="left_ar_pose" pkg="ar_pose" type="ar_multi" respawn="false" output="screen">
+		 	<param name="image_topic" value="/left/image_rect_color" />
+			<param name="info_topic" value="/left/camera_info" />
+		    <param name="marker_pattern_list" type="string" value="$(find ar_pose)/data/object_4x4"/>
+		    <param name="threshold" type="int" value="100"/>
+			<param name="publish_topic" type="string" value="left_ar_markers" />
+		</node>
+
+		<node name="right_ar_pose" pkg="ar_pose" type="ar_multi" respawn="false" output="screen">
+			<param name="image_topic" value="/right/image_rect_color" />
+			<param name="info_topic" value="/right/camera_info" />
+				<param name="marker_pattern_list" type="string" value="$(find ar_pose)/data/object_4x4"/>
+				<param name="threshold" type="int" value="100"/>
+			<param name="publish_topic" type="string" value="right_ar_markers" />
+		</node>
+
+		<node name="pose_estimator" pkg="raven_pose_estimator" type="pose_estimator">
+			<remap from="left_ar_markers" to="left_poses" />
+			<remap from="right_ar_markers" to="right_poses" />
+			<remap from="marker_type" to="AR" />
+		</node>
+	</group>
+	
+	<group ns="chess">
+		<arg name="width" default="8" />
+		<arg name="height" default="6" />
+		<arg name="square" default="0.00615" />
+		<arg name="left_topic" default="left_tracker" />
+		<arg name="right_topic" default="right_tracker" />
+		<arg name="left_camera_info" default="/left/camera_info" />
+		<arg name="right_camera_info" default="/right/camera_info" />
+		<arg name="left_camera_image" default="/left/image_color" />
+		<arg name="right_camera_image" default="/right/image_color" />
+
+		<node name="left_chessboard_tracker" pkg="raven_2_vision" type="chessboard_tracker"
+		            args="--width $(arg width) --height $(arg height) --square $(arg square) --topic $(arg left_topic) --info $(arg left_camera_info) --image $(arg left_camera_image)"
+		            output="screen"/>
+
+		<node name="right_chessboard_tracker" pkg="raven_2_vision" type="chessboard_tracker"
+		            args="--width $(arg width) --height $(arg height) --square $(arg square) --topic $(arg right_topic) --info $(arg right_camera_info) --image $(arg right_camera_image)"
+		            output="screen"/>
+
+		<node name="pose_estimator" pkg="raven_pose_estimator" type="pose_estimator" output="screen">
+			<remap from="left_poses" to="$(arg left_topic)" />
+		 	<remap from="right_poses" to="$(arg right_topic)" />
+			<remap from="marker_type" to="CHESS" />
+		</node>
+	</group>
+
+	<group ns="control">
+		
+	</group>
+
+</launch>
