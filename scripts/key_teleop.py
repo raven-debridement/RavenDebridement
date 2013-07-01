@@ -92,6 +92,7 @@ class PoseCommander:
 
         cmd = RavenCommand()
         cmd.header.stamp = now
+        cmd.header.frame_id = '/world'
 
         cmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
         cmd.pedal_down = True
@@ -100,7 +101,7 @@ class PoseCommander:
         arm_cmd = ArmCommand()
         arm_cmd.active = True
         arm_cmd.tool_command.pose_option = ToolCommand.POSE_POS_REL_ORI_OFF
-        arm_cmd.tool_command.grasp_option = ToolCommand.GRASP_OFF
+        arm_cmd.tool_command.grasp_option = ToolCommand.GRASP_ANGLE
         pose = Pose()
         pose.position.x = position
         arm_cmd.tool_command.pose = pose
