@@ -1,13 +1,25 @@
 <package>
-  <description brief="raven_debridement_master">
+  <description brief="master-control">
 
-     raven_debridement_master
+     master-control
 
   </description>
   <author>Jonathan Kim</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/raven_debridement_master</url>
+
+  <depend package="rospy"/>
+  <depend package="tf"/>
+  
+  <depend package="geometry_msgs"/>
+  <depend package="std_msgs"/>
+  <depend package="sensor_msgs"/>
+  
+  <depend package="raven_2_msgs"/>
+  <depend package="raven_2_trajectory"/>
+  <depend package="tfx"/>
+  <depend package="tf_conversions"/>
 
 </package>
 
