@@ -12,7 +12,7 @@ from geometry_msgs.msg import *
 from math import *
 import optparse
 
-from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
+#from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
 
 RATE = 100
 SPEED = 0.00001
@@ -78,7 +78,7 @@ class PoseCommander:
 
         self.position = 0
         self.speed = speed
-        self.player = TrajectoryPlayer(arms=self.selected_arm)
+        #self.player = TrajectoryPlayer(arms=self.selected_arm)
 
         self.sub = rospy.Subscriber('raven_state', RavenState, self.cb)
         self.pub = rospy.Publisher('raven_command', RavenCommand)
