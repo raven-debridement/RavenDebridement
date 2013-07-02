@@ -12,7 +12,10 @@ from geometry_msgs.msg import *
 from math import *
 import optparse
 
+from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
+
 RATE = 100
+SPEED = 0.00001
 
 help_msg = """
 Control The Raven!
@@ -69,30 +72,26 @@ class PoseCommander:
     """
     arm_name is either 'R' or 'L'
     """
-    def __init__(self,arm_name,joint,speed=10):
-        self.state = None
-        self.first_state = None
-        self.first_joint_value = {}
+    def __init__(self,arm_name,speed=0.1):
         self.arm_names = ['R','L']#[arm_name]
         self.selected_arm = arm_name
 
-        self.joint = joint
+        self.position = 0
         self.speed = speed
+        self.player = TrajectoryPlayer(arms=self.selected_arm)
 
-        self.start_time = None
-
+        self.sub = rospy.Subscriber('raven_state', RavenState, self.cb)
         self.pub = rospy.Publisher('raven_command', RavenCommand)
+
+    def cb(self, msg):
+        self.setPosition(self.position)
 
     def setPosition(self, position):
         now = rospy.Time.now()
-        if not self.start_time:
-            self.start_time = now
-
-        dur_from_start = (now - self.start_time).to_sec()
 
         cmd = RavenCommand()
         cmd.header.stamp = now
-        cmd.header.frame_id = '/world'
+        cmd.header.frame_id = '/0_link'
 
         cmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
         cmd.pedal_down = True
@@ -101,10 +100,22 @@ class PoseCommander:
         arm_cmd = ArmCommand()
         arm_cmd.active = True
         arm_cmd.tool_command.pose_option = ToolCommand.POSE_RELATIVE
-        arm_cmd.tool_command.grasp_option = ToolCommand.GRASP_OFF
+        arm_cmd.tool_command.grasp_option = ToolCommand.GRASP_INCREMENT_SIGN
         pose = Pose()
         pose.position.x = position
+        pose.position.y = -position
+        pose.position.z = position
+        pose.orientation.w = 1
+        #pose.orientation.x = 0.5
+        #pose.orientation.y = 0.3
+        #pose.orientation.z = -0.57
+        #pose.orientation.w = 0.53
         arm_cmd.tool_command.pose = pose
+        arm_cmd.joint_types.append(Constants.JOINT_TYPE_INSERTION)
+        joint_cmd = JointCommand()
+        joint_cmd.command_type = JointCommand.COMMAND_TYPE_VELOCITY
+        joint_cmd.value = 0
+        arm_cmd.joint_commands.append(joint_cmd)
         cmd.arms.append(arm_cmd)
 
         self.pub.publish(cmd)
@@ -146,7 +157,7 @@ if __name__ == '__main__':
     if len(args) > 1:
         arm_name = args[1]
 
-    speed = None
+    speed = SPEED
     if len(args) > 2:
         speed = float(args[2])
 
