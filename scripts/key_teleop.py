@@ -69,7 +69,7 @@ class PoseCommander:
     """
     arm_name is either 'R' or 'L'
     """
-    def __init__(self,arm_name,joint,speed=0.1):
+    def __init__(self,arm_name,joint,speed=10):
         self.state = None
         self.first_state = None
         self.first_joint_value = {}
@@ -100,8 +100,8 @@ class PoseCommander:
         cmd.arm_names.append(self.selected_arm)
         arm_cmd = ArmCommand()
         arm_cmd.active = True
-        arm_cmd.tool_command.pose_option = ToolCommand.POSE_POS_REL_ORI_OFF
-        arm_cmd.tool_command.grasp_option = ToolCommand.GRASP_ANGLE
+        arm_cmd.tool_command.pose_option = ToolCommand.POSE_RELATIVE
+        arm_cmd.tool_command.grasp_option = ToolCommand.GRASP_OFF
         pose = Pose()
         pose.position.x = position
         arm_cmd.tool_command.pose = pose
@@ -122,10 +122,10 @@ class PoseCommander:
                 if cmd == KEYS['help']:
                     print help_msg
                 elif cmd == KEYS['+pos']:
-                    self.position = self.speed / RATE
+                    self.position = self.speed
                     self.setPosition(self.position)
                 elif cmd == KEYS['-pos']:
-                    self.position = -self.speed / RATE
+                    self.position = -self.speed
                     self.setPosition(self.position)
                 elif cmd == KEYS['+speed']:
                     self.speed = self.speed * 1.1
