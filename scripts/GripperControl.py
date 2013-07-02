@@ -32,10 +32,10 @@ class GripperControlClass:
 
         if self.armName == Constants.Arm.Left:
             self.toolframe = Constants.Frames.LeftTool
-            self.tooltopic = Constants.ToolTopic.Left
+            self.tooltopic = Constants.RavenTopics.LeftTool
         else:
             self.toolframe = Constants.Frames.RightTool
-            self.tooltopic = Constants.ToolTopic.Right
+            self.tooltopic = Constants.RavenTopics.RightTool
 
 
         if listener == None:
@@ -83,10 +83,10 @@ class GripperControlClass:
         """
         
     def closeGripper(self):
-        self.setGripper(-1)
+        return self.setGripper(-1)
                 
     def openGripper(self):
-        self.setGripper(1)
+        return self.setGripper(1)
         
     def setGripper(self, value):
         # create the header
@@ -122,6 +122,8 @@ class GripperControlClass:
         ravenCmd.header = header
         
         self.raven_pub.publish(ravenCmd)
+        
+        return True
 
 
 def test():

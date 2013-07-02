@@ -22,7 +22,11 @@ class Frames:
     RightTool = '/tool_R'
     Base = '/0_link'
 
-# publish ToolCommandStamped directly
-class ToolTopic:
-    Left = '/raven_command/tool/L'
-    Right = '/raven_command/tool/R'
+class RavenTopics:
+    #publish ToolCommandStamped directly
+    LeftTool = '/raven_command/tool/L'
+    RightTool = '/raven_command/tool/R'
+
+    RavenState = '/raven_state'
+    RavenCommand = '/raven_command'
+

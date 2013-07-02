@@ -10,6 +10,7 @@ import tf.transformations as tft
 import tfx
 
 from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion
+from raven_2_msgs.msg import *
 
 import Util
 import Constants
@@ -42,8 +43,9 @@ class ImageDetectionClass():
 
 
         # Temporary. Will eventually be placed with real image detection
-        # Will subscribe to camera feeds eventually
-        rospy.Subscriber('stereo_points_3d', PointStamped, self.stereoCallback)
+        # Will subscribe to camera feeds eventually 
+       rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
+       rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
 
     def stereoCallback(self, msg):
         """
@@ -53,23 +55,26 @@ class ImageDetectionClass():
         """
         if self.receptaclePoint == None:
             self.receptaclePoint = msg 
-           self.receptaclePoint.point.z += .2
+            self.receptaclePoint.point.z += .2
         else:
             #msg.point.z -= .03 # so gripper doesn't pick up right on the edge
             self.objectPoint = msg
 
+        
+    def ravenStateCallback(self, msg):
         # gripperPoses in own frames
         rgp = PoseStamped()
         rgp.header.stamp = msg.header.stamp
-        rgp.header.frame_id = ConstantsClass.ToolFrame.Right
+        rgp.header.frame_id = Constants.ToolFrame.Right
         rgp.pose.orientation.w = 1
         self.rightGripperPose = rgp
         
         lgp = PoseStamped()
         lgp.header.stamp = msg.header.stamp
-        lgp.header.frame_id = ConstantsClass.ToolFrame.Left
+        lgp.header.frame_id = Constants.ToolFrame.Left
         lgp.pose.orientation.w = 1
         self.leftGripperPose = lgp
+
 
     def hasFoundObject(self):
         return self.objectPoint != None
