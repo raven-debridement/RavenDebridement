@@ -26,11 +26,11 @@ class GripperControlClass:
     Class for controlling the end effectors of the Raven
     """
 
-    def __init__ (self, armName=Constants.Arms.Left, listener=None):
+    def __init__ (self, armName=Constants.Arm.Left, listener=None):
         self.armName = armName
         
 
-        if self.arms = Constants.Arms.Left:
+        if self.armName == Constants.Arm.Left:
             self.toolframe = Constants.Frames.LeftTool
             self.tooltopic = Constants.ToolTopic.Left
         else:
@@ -43,6 +43,7 @@ class GripperControlClass:
         self.listener = listener
 
         self.pub = rospy.Publisher(self.tooltopic, ToolCommandStamped)
+        self.raven_pub = rospy.Publisher('/raven_command', RavenCommand)
         #self.player = TrajectoryPlayer(tf_listener=self.listener, arms=self.armName)
  
     def goToGripperPose(self, toolPose, toolPoseOption=ToolCommand.POSE_ABSOLUTE):
@@ -66,8 +67,8 @@ class GripperControlClass:
         toolCmdStamped.header = header
         toolCmdStamped.command = toolCmd
 
-
-        self.pub.Publish(toolCmdStamped)
+        
+        self.pub.publish(toolCmdStamped)
         """
         # create the arm command
         armCmd = ArmCommand()
@@ -98,15 +99,34 @@ class GripperControlClass:
         toolCmdStamped.header = header
         toolCmdStamped.command = toolCmd
 
-        self.pub.Publish(toolCmdStamped)
+        #rospy.loginfo('publishing')
+        #self.pub.publish(toolCmdStamped)
+
+        # create the arm command
+        armCmd = ArmCommand()
+        armCmd.tool_command = toolCmd
+        armCmd.active = True
+
+        # create the raven command
+        ravenCmd = RavenCommand()
+        ravenCmd.arm_names.append(self.armName)
+        ravenCmd.arms.append(armCmd)
+        ravenCmd.pedal_down = True
+        header.frame_id = Constants.Frames.Base
+        ravenCmd.header = header
         
+        self.raven_pub.publish(ravenCmd)
         
 
 def test():
     rospy.init_node('gripper_control',anonymous=True)
     gripperControl = GripperControlClass(Constants.Arm.Right, tf.TransformListener())
-    gripperControl.closeGripper()
-    rospy.spin()
+    
+    while not rospy.is_shutdown():
+        rospy.loginfo('Closing the gripper')
+        gripperControl.closeGripper()
+        rospy.loginfo('Spinning')
+        rospy.sleep(.5)
         
 if __name__ == '__main__':    
     test()
