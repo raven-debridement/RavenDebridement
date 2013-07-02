@@ -83,6 +83,12 @@ class GripperControlClass:
         """
         
     def closeGripper(self):
+        self.setGripper(-1)
+                
+    def openGripper(self):
+        self.setGripper(1)
+        
+    def setGripper(self, value):
         # create the header
         header = Header()
         header.frame_id = self.toolframe
@@ -92,7 +98,7 @@ class GripperControlClass:
         toolCmd = ToolCommand()
         toolCmd.pose_option = ToolCommand.POSE_OFF
         toolCmd.grasp_option = ToolCommand.GRASP_INCREMENT_SIGN
-        toolCmd.grasp = -1
+        toolCmd.grasp = value
 
         # create tool pose stamped
         toolCmdStamped = ToolCommandStamped()
@@ -116,7 +122,7 @@ class GripperControlClass:
         ravenCmd.header = header
         
         self.raven_pub.publish(ravenCmd)
-        
+
 
 def test():
     rospy.init_node('gripper_control',anonymous=True)
@@ -126,7 +132,7 @@ def test():
         rospy.loginfo('Closing the gripper')
         gripperControl.closeGripper()
         rospy.loginfo('Spinning')
-        rospy.sleep(.5)
+        rospy.sleep(.1)
         
 if __name__ == '__main__':    
     test()
