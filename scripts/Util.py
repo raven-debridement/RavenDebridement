@@ -14,6 +14,8 @@ import tf
 import tf.transformations as tft
 import operator
 
+import tfx
+
 def positionSubtract(p1, offset):
     pos = Point()
     pos.x = p1.x - offset.x
@@ -227,6 +229,8 @@ def withinBounds(ps0, ps1, transBound, rotBound, listener=None):
 
 def combinePoses(ps0, ps1, op=operator.add, listener=None):
     """
+    DEPRECATED
+
     Returns a PoseStamped of op(ps0,ps1)
     """
     # must be in same reference frame
@@ -262,15 +266,32 @@ def combinePoses(ps0, ps1, op=operator.add, listener=None):
 
 def addPoses(ps0, ps1, listener=None):
     """
+    DEPRECATED
+
     Returns a PoseStamped of ps0+ps1
     """
     return combinePoses(ps0,ps1,operator.add, listener)
 
 def subPoses(ps0, ps1, listener=None):
     """
+    DEPRECATED
+
     Returns a PoseStamped of ps0-ps1
     """
     return combinePoses(ps0,ps1,operator.sub,listener)
+
+def poseDifference(pose0, pose1):
+    """
+    Returns pose0 - pose1
+
+    All args and return values are geometry_msgs.msg.Pose
+    """
+
+    pose0, pose1 = tfx.pose(pose0), tfx.pose(pose1)
+    
+    deltaPose = tfx.pose(pose0.position - pose1.position, pose0.orientation.quaternion - pose1.orientation.quaternion)
+    
+    return deltaPose.msg.Pose()
 
 
 class TimeoutClass():

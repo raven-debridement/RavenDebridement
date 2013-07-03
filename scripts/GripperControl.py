@@ -52,11 +52,15 @@ class GripperControlClass:
     def goToGripperPose(self, startPose, endPose):
         """
         Given a startPose, move to endPose
+        Both startPose and endPose are geometry_msgs.msg.Pose
 
         startPose is the current pose of the gripper WITH RESPECT TO MyConstants.Frames.Link0
 
         toolPose is the current pose of the gripper WITH RESPECT TO MyConstants.Frames.Link0
         """
+        startPose = tfx.pose(startPose)
+        endPose = tfx.pose(endPose)
+
         player = TrajectoryPlayer(arms=self.armName)
 
         player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
@@ -67,14 +71,18 @@ class GripperControlClass:
     def goToGripperPoseDelta(self, startPose, deltaPose):
         """
         Given a startPose, move by deltaPose
+        Both startPose and deltaPose are geometry_msgs.msg.Pose
 
         startPose is the pose of the gripper WITH RESPECT TO MyConstants.Frames.Link0
 
         deltaPose is the difference between the current pose and the final pose
         """
+        # convert to tfx format
+        startPose = tfx.pose(startPose)
+        deltaPose = tfx.pose(deltaPose)
+
         player = TrajectoryPlayer(arms=self.armName)
 
-        startPose = self.getGripperPose(frame=MyConstants.Frames.Link0)
         #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.quaternion + deltaPose.orientation.quaternion)
         endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.matrix*deltaPose.orientation.matrix)
         # work on orientation combination
@@ -92,50 +100,41 @@ class GripperControlClass:
 
     def closeGripper(self):
         player = TrajectoryPlayer(arms=self.armName)
-        player.add_close_gripper(duration=20)
-        player.play()
+        player.add_close_gripper(duration=4)
+        return player.play()
                 
     def openGripper(self):
         player = TrajectoryPlayer(arms=self.armName)
-        player.add_open_gripper(duration=20)
-        player.play()
+        player.add_open_gripper(duration=4)
+        return player.play()
 
     def getGripperPose(self,frame=MyConstants.Frames.World):
         """
         Returns gripper pose w.r.t. frame
+
+        geometry_msgs.msg.Pose
         """
         commonTime = self.listener.getLatestCommonTime(frame, self.toolframe)
         pos, quat = self.listener.lookupTransform(frame, self.toolframe, commonTime)
 
-        return tfx.pose(pos,quat)
+        return tfx.pose(pos,quat).msg.Pose()
         
 
 def test_closeGripper():
     rospy.init_node('gripper_control',anonymous=True)
     gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
 
-    """
-    rospy.loginfo('Opening the gripper')
-    gripperControl.openGripper()
-    rospy.loginfo('Gripper open')
-
     rospy.loginfo('Closing the gripper')
     gripperControl.closeGripper()
     rospy.loginfo('Gripper Closed')
-    """
 
-    while not rospy.is_shutdown():
-        #rospy.loginfo('Closing the gripper')
-        gripperControl.closeGripper()
-        rospy.loginfo('Spinning')
-        rospy.sleep(.1)
 
 def test_moveGripper():
     rospy.init_node('gripper_control',anonymous=True)
     listener = tf.TransformListener()
     gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
     
-    #currPose = gripperControl.getGripperPose(frame=MyConstants.Frames.World)
+    currPose = tfx.pose(gripperControl.getGripperPose(frame=MyConstants.Frames.Link0))
     #currPose.position.z -= .05
 
     
@@ -155,8 +154,11 @@ def test_moveGripper():
 
     pose = posestamped.pose
     """
+
+    currPose = currPose.msg.Pose()
+    desPose = desPose.msg.Pose()
     
-    gripperControl.goToGripperPose(gripperControl.getGripperPose(MyConstants.Frames.Link0),desPose)
+    gripperControl.goToGripperPose(currPose,desPose)
     
 
 
@@ -168,10 +170,18 @@ def test_moveGripperDelta():
     gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
 
 
-    
-    currPose = gripperControl.getGripperPose(MyConstants.Frames.World)
+    p = Pose()
+    p.position.x = 1
+    pose = tfx.pose(p)
+    print(pose)
+    print(pose.orientation.quaternion)
+    print(pose.msg.Pose())
+    return
 
-    desPose = gripperControl.getGripperPose(MyConstants.Frames.World)
+    
+    currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.World))
+
+    desPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.World))
     desPose.position.z -= .03
     
 
@@ -202,7 +212,7 @@ def test_moveGripperDelta():
     #print(currPose.orientation.quaternion)
     #print(deltaPose.orientation.quaternion)
     
-    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose)
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose.msg.Pose())
 
 
 
