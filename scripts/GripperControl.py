@@ -65,6 +65,24 @@ class GripperControlClass:
         
         return True
 
+    def goToGripperPose1(self, deltaPose):
+        player = TrajectoryPlayer(arms=self.armName)
+
+        startPose = self.getGripperPose(frame=MyConstants.Frames.Link0)
+        endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.quaternion + deltaPose.orientation.quaternion)
+        # work on orientation combination
+
+        print(startPose)
+        print(endPose)
+
+        player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=5)
+
+        player.play()
+        
+        return True
+
+    
+
     def goToGripperPoseRelative(self, toolPose, arm=None):
 
         player = TrajectoryPlayer(arms=self.armName)
@@ -74,7 +92,8 @@ class GripperControlClass:
 
         player.add_stage('pose relative', 5, fn)
 
-        player.play()
+        # dangerous!!!!!
+        #player.play()
 
         return True
 
@@ -146,6 +165,36 @@ def test_moveGripper():
     
     gripperControl.goToGripperPose(pose, ToolCommand.POSE_ABSOLUTE)
     
+def test_moveGripper1():
+    rospy.init_node('gripper_control',anonymous=True)
+    listener = tf.TransformListener()
+    gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
+
+
+    currPose = gripperControl.getGripperPose()
+    
+    desPose = gripperControl.getGripperPose()
+    #desPose.position.z -= .05
+
+    deltaPose = tfx.pose(desPose.position - currPose.position, desPose.orientation.quaternion - currPose.orientation.quaternion)
+
+    common = listener.getLatestCommonTime(MyConstants.Frames.RightTool, MyConstants.Frames.Link0)
+    posestamped = PoseStamped()
+    posestamped.header.stamp = common
+    posestamped.header.frame_id = MyConstants.Frames.RightTool
+    posestamped.pose = deltaPose
+
+    posestamped = listener.transformPose(MyConstants.Frames.Link0, posestamped)
+
+    transformedDeltaPose = tfx.pose(posestamped.pose)
+
+    print(deltaPose)
+    print(transformedDeltaPose)
+
+    #l = tfx.TransformListener.instance()
+    #print(dir(l))
+    gripperControl.goToGripperPose1(deltaPose)
+
 
 def test_moveGripperRelative():
     rospy.init_node('gripper_control',anonymous=True)
@@ -160,7 +209,7 @@ def test_moveGripperRelative():
 
     deltaPose = tfx.pose(desPose.position - currPose.position, desPose.orientation.quaternion - currPose.orientation.quaternion)
 
-
+    
     gripperControl.goToGripperPoseRelative(deltaPose)
     
 
@@ -180,9 +229,10 @@ if __name__ == '__main__':
     rospy.sleep(5)
     #test_closeGripper()
     #test_moveGripper()
-    test_gripperPose()
+    test_moveGripper1()
+    #test_gripperPose()
     #test_moveGripperRelative()
-
+    
 
 
 
