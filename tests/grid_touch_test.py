@@ -71,7 +71,7 @@ def main():
 		point = grid_11 + row_interp * row_vector + col_interp * col_vector 
 		return point
 	
-	player = TrajectoryPlayer(arms='L')
+	player = TrajectoryPlayer(arms='R')
 	
 	d = 1.75
 	
