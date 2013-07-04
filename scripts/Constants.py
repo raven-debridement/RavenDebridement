@@ -13,6 +13,9 @@ import rospy
 class StereoClick:
     StereoName = 'stereo_points_3d'
 
+class AR:
+    Stereo = 'stereo_pose'
+
 class Arm:
     Left = 'L'
     Right = 'R'
