@@ -22,7 +22,7 @@ You can uncomment the viewer at bottom if you want to view the image stream.
        By default, when neither argument is set, open the first camera found.
        If both are set, open by IP address and verify the GUID matches.
   -->
-  <arg name="left_guid" default="104897" />
+  <arg name="left_guid" default="139217" />
   <!-- tf frame id associated with this camera -->
   <arg name="left_frame_id" default="$(arg left_camera)_optical_frame" />
 
@@ -31,8 +31,8 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   <arg name="right_frame_id" default="$(arg right_camera)_optical_frame" />
 
   <!-- Trigger mode: 'streaming' or 'polled' -->
-  <arg name="left_trigger_mode" default="polled" />
-  <arg name="right_trigger_mode" default="polled" />
+  <arg name="left_trigger_mode" default="streaming" />
+  <arg name="right_trigger_mode" default="streaming" />
   
 
   <!-- The left camera node -->
@@ -52,7 +52,7 @@ You can uncomment the viewer at bottom if you want to view the image stream.
     <param name="guid" type="str" value="$(arg right_guid)" />
     <param name="ip_address" type="str" value="$(arg right_ip_address)" />
     <param name="right_trigger_mode" value="$(arg right_trigger_mode)" />
-    <param name="frame_id" value="$(arg right_frame_id)" />
+    <param name="frame_id" value="$(arg left_frame_id)" />
   </node>
 
   <!-- If running in polled mode, change ns to match your service call argument. -->
