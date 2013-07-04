@@ -21,6 +21,7 @@ from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
 
 # rename so no conflict with raven_2_msgs.msg.Constants
 import Constants as MyConstants
+import Util
 
 
 class GripperControlClass:
@@ -28,7 +29,7 @@ class GripperControlClass:
     Class for controlling the end effectors of the Raven
     """
 
-    def __init__ (self, armName=MyConstants.Arm.Left, listener=None):
+    def __init__ (self, armName, listener=None):
         self.armName = armName
         
 
@@ -48,6 +49,8 @@ class GripperControlClass:
         #self.pub = rospy.Publisher(self.tooltopic, ToolCommandStamped)
         #self.raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
         #self.player = TrajectoryPlayer(arms=self.armName)
+
+        rospy.sleep(1)
  
     def goToGripperPose(self, startPose, endPose):
         """
@@ -63,7 +66,8 @@ class GripperControlClass:
 
         player = TrajectoryPlayer(arms=self.armName)
 
-        player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
+        #player.add_goto_first_pose(endPose,duration=10)
+        player.add_pose_to_pose('goToGripperPose',startPose,endPose)
 
         return player.play()
         
@@ -77,15 +81,22 @@ class GripperControlClass:
 
         deltaPose is the difference between the current pose and the final pose
         """
-        # convert to tfx format
-        startPose = tfx.pose(startPose)
-        deltaPose = tfx.pose(deltaPose)
 
         player = TrajectoryPlayer(arms=self.armName)
 
+
         #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.quaternion + deltaPose.orientation.quaternion)
-        endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.matrix*deltaPose.orientation.matrix)
+        #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.matrix*deltaPose.orientation.matrix)
+
+        #endAngles = tfx.tb_angles(startPose.tb_angles.yaw_deg + deltaPose.tb_angles.yaw_deg, startPose.tb_angles.pitch_deg + deltaPose.tb_angles.pitch_deg, startPose.tb_angles.roll_deg + deltaPose.tb_angles.roll_deg)
+        #endPose = tfx.pose(startPose.position + deltaPose.position, endAngles)
         # work on orientation combination
+
+        endPose = Util.addPoses(startPose, deltaPose)
+
+        # convert to tfx format
+        startPose = tfx.pose(startPose)
+        endPose = tfx.pose(endPose)
 
         #code.interact(local=locals())
 
@@ -95,7 +106,7 @@ class GripperControlClass:
 
         player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
 
-        #return player.play()
+        return player.play()
         
 
     def closeGripper(self):
@@ -114,13 +125,19 @@ class GripperControlClass:
 
         geometry_msgs.msg.Pose
         """
+        self.listener.waitForTransform(frame, self.toolframe, rospy.Time.now(), rospy.Duration(5))
         commonTime = self.listener.getLatestCommonTime(frame, self.toolframe)
         pos, quat = self.listener.lookupTransform(frame, self.toolframe, commonTime)
 
         return tfx.pose(pos,quat).msg.Pose()
         
+#w.r.t. Link0
+down = tfx.tb_angles(0,66,0)
+rightArmDot = tfx.pose(tfx.point(-.060, -.039, -.155), down)
+leftArmDot = tfx.pose(tfx.point(-.036, -.027, -.163), down)
 
 def test_closeGripper():
+    rospy.sleep(4)
     rospy.init_node('gripper_control',anonymous=True)
     gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
 
@@ -130,18 +147,16 @@ def test_closeGripper():
 
 
 def test_moveGripper():
+    rospy.sleep(4)
     rospy.init_node('gripper_control',anonymous=True)
     listener = tf.TransformListener()
-    gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
+    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
     
     currPose = tfx.pose(gripperControl.getGripperPose(frame=MyConstants.Frames.Link0))
-    #currPose.position.z -= .05
-
     
-    point = tfx.point(-.060, -.039, -.150)
-    orientation = tfx.tb_angles(0,90,0)
     
-    desPose = tfx.pose(point, orientation)
+    desPose = leftArmDot
+    #desPose.position.x -= .04
     
     """
     common = listener.getLatestCommonTime(MyConstants.Frames.World, MyConstants.Frames.Link0)
@@ -165,34 +180,30 @@ def test_moveGripper():
 
 
 def test_moveGripperDelta():
+    rospy.sleep(4)
     rospy.init_node('gripper_control',anonymous=True)
     listener = tf.TransformListener()
-    gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
+    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
 
-
-    p = Pose()
-    p.position.x = 1
-    pose = tfx.pose(p)
-    print(pose)
-    print(pose.orientation.quaternion)
-    print(pose.msg.Pose())
-    return
-
-    
+    """
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.World))
 
     desPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.World))
-    desPose.position.z -= .03
-    
-
+    desPose.position.y -= .014
+    #desPose.position.x += .03
+    #desPose.position.z += .01
     """
-    currPose = gripperControl.getGripperPose(MyConstants.Frames.Link0)
+
+    
+    currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     
     # w.r.t. Link0
-    desPoint = tfx.point(-.060, -.039, -.150)
-    desOrientation = tfx.tb_angles(0,90,0)
-    desPose = tfx.pose(desPoint, desOrientation)
-    """
+    desPose = leftArmDot
+    
+
+    deltaPose = tfx.pose(Util.subPoses(desPose, currPose))
+    
+
     #deltaOrientation = tfx.tb_angles(desPose.tb_angles.yaw_deg - currPose.tb_angles.yaw_deg, desPose.tb_angles.pitch_deg - currPose.tb_angles.pitch_deg, desPose.tb_angles.roll_deg - currPose.tb_angles.roll_deg)
     #deltaPose = tfx.pose(desPose.position - currPose.position, deltaOrientation)
     
@@ -200,10 +211,11 @@ def test_moveGripperDelta():
     #deltaQuat = d - np.dot(d, currPose.orientation.quaternion)*currPose.orientation.quaternion
     #deltaPose = tfx.pose(desPose.position - currPose.position, deltaQuat)
 
-
-    deltaPose = tfx.pose(desPose.position - currPose.position, desPose.orientation.quaternion - currPose.orientation.quaternion)
-    
     #code.interact(local=locals())
+
+    #deltaPose = tfx.pose(desPose.position - currPose.position, desPose.orientation.quaternion - currPose.orientation.quaternion)
+    
+    
 
     #print(desPose)
     #print(currPose)
@@ -220,24 +232,28 @@ def test_moveGripperDelta():
 
 def test_gripperPose():
     rospy.init_node('gripper_control',anonymous=True)
-    gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
-    
+    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    """
     point = tfx.point(-.060, -.039, -.150)
     orientation = tfx.tb_angles(0,90,0)
     
     pose = tfx.pose(point, orientation)
     print(pose.msg.Pose())
+    """
 
-    print(gripperControl.getGripperPose())
+    print(tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0)))
 
+def test_down():
+    down = tfx.tb_angles(0,90,0)
+    print(down.quaternion)
+    code.interact(local=locals())
 
 if __name__ == '__main__':
-    rospy.sleep(5)
     #test_closeGripper()
     #test_moveGripper()
     test_moveGripperDelta()
     #test_gripperPose()
-    
+    #test_down()
 
 
 

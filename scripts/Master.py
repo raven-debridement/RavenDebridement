@@ -149,6 +149,9 @@ class MasterClass():
                 continue
 
             
+            # for debugging purposes
+            self.imageDetector.removeObjectPoint()
+
             """
             rospy.sleep(delay)
             rospy.loginfo('Moving vertical with the object')

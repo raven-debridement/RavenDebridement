@@ -43,8 +43,9 @@ def main():
 #		rate.sleep()
 #	init_pose = InitPoseHolder.init_pose
 
-	orientation = tfx.tb_angles(0,90,0)
-	
+	#orientation = tfx.tb_angles(0,90,0)
+	orientation = tfx.tb_angles(0,66,0)
+
 	grid_height = -0.155
 	
 	grid_11 = tfx.point(-0.060, -0.039, grid_height)
@@ -71,7 +72,7 @@ def main():
 		point = grid_11 + row_interp * row_vector + col_interp * col_vector 
 		return point
 	
-	player = TrajectoryPlayer(arms='R')
+	player = TrajectoryPlayer(arms='L')
 	
 	d = 1.75
 	
