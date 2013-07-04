@@ -66,11 +66,13 @@ class MasterClass():
         Loops through the pipeline
         """
         while not rospy.is_shutdown():
-            # can change rate
-            rospy.sleep(.5)
-
+            
             # delay between parts of the pipeline
-            delay = .5
+            delay = 2
+
+            # can change rate
+            rospy.sleep(delay)
+
             # timeout class with 15 second timeout, can change
             timeout = Util.TimeoutClass(15)
 
@@ -78,7 +80,7 @@ class MasterClass():
             # pipeline section. keep loose for testing
 
             # translation bound in meters
-            transBound = .1
+            transBound = float("inf")
             # rotation bound in radians
             rotBound = float("inf")
 
@@ -107,25 +109,32 @@ class MasterClass():
             else:
                 continue
 
+
             rospy.loginfo('Opening the gripper')
             # open gripper
             if not self.gripperControl.openGripper():
                 continue
             
             
-            
+            rospy.sleep(delay)
             rospy.loginfo('Moving to the object point')
             # go to object point
+            
+            transBound = .005
+            rotBound = float("inf")
+            
+            deltaPose = Util.poseDifference(objectPose.pose, gripperPose.pose)
+            self.gripperControl.goToGripperPoseDelta(gripperPose.pose, deltaPose)
+            
             success = True
             timeout.start()
             while not withinBounds(gripperPose, objectPose, transBound, rotBound, self.listener):
                 gripperPose = self.imageDetector.getGripperPose(self.gripperName)
-                self.gripperControl.goToGripperPose(objectPose)
                 
                 if timeout.hasTimedOut():
                     success = False
                     break
-                # must be at least 2 Hz
+                
                 rospy.sleep(.1)
 
             if not success:
@@ -136,11 +145,14 @@ class MasterClass():
             rospy.sleep(delay)
             rospy.loginfo('Closing the gripper')
             # close gripper (consider not all the way)
-            if not self.commandGripper.setGripper(.5):
+            if not self.gripperControl.closeGripper():
                 continue
 
             
+            # for debugging purposes
+            self.imageDetector.removeObjectPoint()
 
+            """
             rospy.sleep(delay)
             rospy.loginfo('Moving vertical with the object')
             # move vertical with the object
@@ -151,7 +163,7 @@ class MasterClass():
 
             # currently have set to no planning, can change
             self.armControl.goToArmPose(vertObjectPose, False)
-
+            """
 
 
 

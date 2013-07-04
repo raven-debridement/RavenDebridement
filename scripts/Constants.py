@@ -23,7 +23,10 @@ class Arm:
 class Frames:
     LeftTool = '/tool_L'
     RightTool = '/tool_R'
-    Base = '/0_link'
+    World = '/world'
+    LeftBase = '/base_link_L'
+    RightBase = '/base_link_R'
+    Link0 = '/0_link'
 
 class RavenTopics:
     #publish ToolCommandStamped directly

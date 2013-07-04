@@ -14,6 +14,8 @@ import tf
 import tf.transformations as tft
 import operator
 
+import tfx
+
 def positionSubtract(p1, offset):
     pos = Point()
     pos.x = p1.x - offset.x
@@ -225,52 +227,37 @@ def withinBounds(ps0, ps1, transBound, rotBound, listener=None):
     return within
 
 
-def combinePoses(ps0, ps1, op=operator.add, listener=None):
+def combinePoses(pose0, pose1, op=operator.sub):
     """
-    Returns a PoseStamped of op(ps0,ps1)
+    Returns op(pose0,pose1)
+
+    All args and return values are geometry_msgs.msg.Pose
     """
-    # must be in same reference frame
-    if listener != None:
-        try:
-            ps0, ps1 = convertToSameFrameAndTime(ps0, ps1, listener)
-        except tf.Exception:
-            return PoseStamped()
 
-    if ps0 == None or ps1 == None:
-        return False
+    pose0, pose1 = tfx.pose(pose0), tfx.pose(pose1)
+    
+    deltaAngles = tfx.tb_angles(op(pose0.tb_angles.yaw_deg, pose1.tb_angles.yaw_deg), op(pose0.tb_angles.pitch_deg, pose1.tb_angles.pitch_deg), op(pose0.tb_angles.roll_deg, pose1.tb_angles.roll_deg))
+    deltaPose = tfx.pose(op(pose0.position,pose1.position), deltaAngles)
+    
+    return deltaPose.msg.Pose()
 
-    xtrans0, ytrans0, ztrans0 = ps0.pose.position.x, ps0.pose.position.y, ps0.pose.position.z
-    xtrans1, ytrans1, ztrans1 = ps1.pose.position.x, ps1.pose.position.y, ps1.pose.position.z
-
-    wrot0, xrot0, yrot0, zrot0 = ps0.pose.orientation.w, ps0.pose.orientation.x, ps0.pose.orientation.y, ps0.pose.orientation.z    
-    wrot1, xrot1, yrot1, zrot1 = ps1.pose.orientation.w, ps1.pose.orientation.x, ps1.pose.orientation.y, ps1.pose.orientation.z
-
-    ps0rot0, ps0rot1, ps0rot2 = tft.euler_from_quaternion([xrot0, yrot0, zrot0, wrot0])
-    ps1rot0, ps1rot1, ps1rot2 = tft.euler_from_quaternion([xrot1, yrot1, zrot1, wrot1])
-
-    addedPoint = Point(op(xtrans0,xtrans1), op(ytrans0,ytrans1), op(ztrans0,ztrans1))
-    addedEuler = [op(ps0rot0,ps1rot0), op(ps0rot1,ps1rot1), op(ps0rot2,ps1rot2)]
-    addedQuaternion = tft.quaternion_from_euler(addedEuler[0], addedEuler[1], addedEuler[2])
-    addedOrientation = Quaternion(addedQuaternion[0], addedQuaternion[1], addedQuaternion[2], addedQuaternion[3])
-
-    addedPose = PoseStamped()
-    addedPose.header = ps0.header
-    addedPose.pose.position = addedPoint
-    addedPose.pose.orientation = addedOrientation
-
-    return addedPose
-
-def addPoses(ps0, ps1, listener=None):
+    
+def addPoses(pose0, pose1):
     """
-    Returns a PoseStamped of ps0+ps1
-    """
-    return combinePoses(ps0,ps1,operator.add, listener)
+    Returns pose0 + pose1
 
-def subPoses(ps0, ps1, listener=None):
+    All args and return values are geometry_msgs.msg.Pose
     """
-    Returns a PoseStamped of ps0-ps1
+    return combinePoses(pose0, pose1, operator.add)
+    
+
+def subPoses(pose0, pose1):
     """
-    return combinePoses(ps0,ps1,operator.sub,listener)
+    Returns pose0 - pose1
+
+    All args and return values are geometry_msgs.msg.Pose
+    """
+    return combinePoses(pose0, pose1, operator.sub)
 
 
 class TimeoutClass():
