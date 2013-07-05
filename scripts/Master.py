@@ -14,6 +14,8 @@ from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion
 import Util
 import Constants
 from GripperControl import GripperControlClass
+from ImageDetection import ImageDetectionClass
+from ARImageDetection import ARImageDetectionClass
 
 class MasterClass():
     """
@@ -177,7 +179,7 @@ def mainloop():
     run loop
     """
     rospy.init_node('master_node')
-    imageDetector = ImageDetectionClass()
+    imageDetector = ARImageDetectionClass()
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.run()
 

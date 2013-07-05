@@ -2,7 +2,7 @@
 
 # Import required Python code.
 import roslib
-roslib.load_manifest('Pr2Debridement')
+roslib.load_manifest('master-control')
 import rospy
 import sys
 from geometry_msgs.msg import Twist, PointStamped, PoseStamped, Quaternion, TransformStamped, Point
@@ -13,12 +13,13 @@ import tf.transformations as tft
 import math
 
 import Util
-from Constants import ConstantsClass
+import Constants
+from ImageDetection import ImageDetectionClass
 
 from threading import Lock
 
-ids_to_joints = {0: ConstantsClass.Arm.Right,
-                 1: ConstantsClass.Arm.Left}
+ids_to_joints = {0: Constants.Arm.Right,
+                 1: Constants.Arm.Left}
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -46,9 +47,11 @@ class ARImageDetectionClass(ImageDetectionClass):
                   # default to straight up
                   self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
 
+            self.state = None
+
             # image processing to find object
             self.listener = tf.TransformListener()
-            self.objectProcessing = ImageProcessingClass()
+            #self.objectProcessing = ImageProcessingClass()
 
             self.locks = dict()
             self.locks['ar_pose'] = Lock()
@@ -65,19 +68,20 @@ class ARImageDetectionClass(ImageDetectionClass):
       def arCallback(self, msg):
             self.locks['ar_pose'].acquire()
             markers = msg.markers
+            rospy.loginfo(len(markers))
             for marker in markers:
-                arframe = ConstantsClass.StereoAR + "_" + str(marker.id)
-                if ids_to_joints[marker.id] == ConstantsClass.Arm.Left:
+                arframe = Constants.StereoAR + "_" + str(marker.id)
+                if ids_to_joints[marker.id] == Constants.Arm.Left:
                     #self.arHandler(marker, "left")
                     self.arHandlerWithOrientation(arframe, "left")
-                elif ids_to_joints[marker.id] == ConstantsClass.Arm.Right:
+                elif ids_to_joints[marker.id] == Constants.Arm.Right:
                     self.arHandlerWithOrientation(arframe, "right")
             self.locks['ar_pose'].release() 
 
       def debugAr(self, gp):
         self.debugArCount += 1
         if self.debugArCount % 10 == 0:
-            print self.listener.transformPose(ConstantsClass.Frames.RightTool, gp)
+            print self.listener.transformPose(Constants.Frames.RightTool, gp)
 
       def arHandlerWithOrientation(self, marker, armname):
         pose = PoseStamped()
@@ -90,7 +94,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.rightGripperPose = gp
 
       def isCalibrated(self):
-            return self.state == ImageDetectionClass.State.Calibrated
+            return self.state == ARImageDetectionClass.State.Calibrated
 
 def test2():
       """
@@ -98,7 +102,7 @@ def test2():
       Mostly a test of the ImageProcessing class
       """
       rospy.init_node('image_detection_node')
-      imageDetector = ImageDetectionClass()
+      imageDetector = ARImageDetectionClass()
       while not rospy.is_shutdown():
             objectPoint = imageDetector.getObjectPoint()
             if objectPoint != None:      
@@ -109,13 +113,27 @@ def test2():
 
 def testCalibration():
     rospy.init_node('image_detection_node')
-    imageDetector = ImageDetectionClass()
+    imageDetector = ARImageDetectionClass()
     while not rospy.is_shutdown():
         raw_input("press any key to calibrate")
         if not imageDetector.isCalibrated():
-            imageDetector.setState(ImageDetectionClass.State.CalibrateLeft)
+            imageDetector.setState(ARImageDetectionClass.State.CalibrateLeft)
+        rospy.sleep(.5)
+
+def testFoundGripper():
+    rospy.init_node('ar_image_detection')
+    imageDetector = ARImageDetectionClass()
+      
+    while not rospy.is_shutdown():
+        if imageDetector.hasFoundGripper(Constants.Arm.Left):
+            rospy.loginfo('Found left arm')
+        if imageDetector.hasFoundGripper(Constants.Arm.Right):
+            rospy.loginfo('Found right arm')
+            
+        rospy.loginfo('Spinning')
         rospy.sleep(.5)
       
 
 if __name__ == '__main__':
-      testCalibration()
+    #testCalibration()
+    testFoundGripper()
