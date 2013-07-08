@@ -5,12 +5,9 @@ You can uncomment the viewer at bottom if you want to view the image stream.
 -->
 
 <launch>
-  <arg name="left_ip_address" default="" /> 
-  <arg name="right_ip_address" default="" /> 
 
   <!-- Namespace to publish in -->
-  <arg name="left_camera" default="left" />
-  <arg name="right_camera" default="right" />
+  <arg name="camera" default="camera" />
 
   <!-- You can select the camera to open by its GUID or IP address. In some cases
        if the camera is connected through a switch (not visible to ListCameras),
@@ -22,49 +19,30 @@ You can uncomment the viewer at bottom if you want to view the image stream.
        By default, when neither argument is set, open the first camera found.
        If both are set, open by IP address and verify the GUID matches.
   -->
-  <!-- <arg name="left_guid" default="139217" /> -->
-  <arg name="left_guid" default="104897" />
-  <!-- tf frame id associated with this camera -->
-  <arg name="left_frame_id" default="$(arg left_camera)_optical_frame" />
-
-  <!-- <arg name="right_guid" default="143047" /> -->
-  <arg name="right_guid" default="139569" />
-  <!-- tf frame id associated with this camera -->
-  <arg name="right_frame_id" default="$(arg left_camera)_optical_frame" />
+  <arg name="guid" default="" />
+  <arg name="ip_address" default="" />
 
   <!-- Trigger mode: 'streaming' or 'polled' -->
-  <arg name="left_trigger_mode" default="syncin2" />
-  <arg name="right_trigger_mode" default="streaming" />
-  
+  <arg name="trigger_mode" default="streaming" />
 
-  <!-- The left camera node -->
-  <node name="$(arg left_camera)_driver" pkg="prosilica_camera" type="prosilica_node" output="screen">
-    <remap from="camera" to="$(arg left_camera)" />
+  <!-- tf frame id associated with this camera -->
+  <arg name="frame_id" default="$(arg camera)_optical_frame" />
 
-    <param name="guid" type="str" value="$(arg left_guid)" />
-    <param name="ip_address" type="str" value="$(arg left_ip_address)" />
-    <param name="left_trigger_mode" value="$(arg left_trigger_mode)" />
-    <param name="frame_id" value="$(arg left_frame_id)" />
+  <!-- The camera node -->
+  <node name="$(arg camera)_driver" pkg="prosilica_camera" type="prosilica_node" output="screen">
+    <remap from="camera" to="$(arg camera)" />
+
+    <param name="guid" type="str" value="$(arg guid)" />
+    <param name="ip_address" type="str" value="$(arg ip_address)" />
+    <param name="trigger_mode" value="$(arg trigger_mode)" />
+    <param name="frame_id" value="$(arg frame_id)" />
     <param name="auto_exposure" value="False" />
     <param name="auto_gain" value="False" />
-    <param name="auto_whitebalance" value="True" />
-  </node>
-
-  <!-- The right camera node -->
-  <node name="$(arg right_camera)_driver" pkg="prosilica_camera" type="prosilica_node" output="screen">
-    <remap from="camera" to="$(arg right_camera)" />
-
-    <param name="guid" type="str" value="$(arg right_guid)" />
-    <param name="ip_address" type="str" value="$(arg right_ip_address)" />
-    <param name="right_trigger_mode" value="$(arg right_trigger_mode)" />
-    <param name="frame_id" value="$(arg left_frame_id)" />
-    <param name="auto_exposure" value="False" />
-    <param name="auto_gain" value="False" />
-    <param name="auto_whitebalance" value="True" />
+    <param name="auto_whitebalance" value="False" />
   </node>
 
   <!-- If running in polled mode, change ns to match your service call argument. -->
-  <!--<group ns="$(arg camera)">-->
+  <group ns="$(arg camera)">
 
       <!--
       Uncomment below if you want to view the image stream on a monochrome
@@ -98,6 +76,6 @@ You can uncomment the viewer at bottom if you want to view the image stream.
     </node>
     -->
 
-  <!--</group>-->
+  </group>
 
 </launch>
