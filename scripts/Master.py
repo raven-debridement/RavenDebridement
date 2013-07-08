@@ -17,6 +17,8 @@ from GripperControl import GripperControlClass
 from ImageDetection import ImageDetectionClass
 from ARImageDetection import ARImageDetectionClass
 
+import code
+
 class MasterClass():
     """
     Contains the master pipeline for master-control in the run method
@@ -118,6 +120,8 @@ class MasterClass():
                 continue
             
             
+            code.interact(local=locals())
+
             rospy.sleep(delay)
             rospy.loginfo('Moving to the object point')
             # go to object point
@@ -125,7 +129,7 @@ class MasterClass():
             transBound = .005
             rotBound = float("inf")
             
-            deltaPose = Util.poseDifference(objectPose.pose, gripperPose.pose)
+            deltaPose = Util.deltaPose(gripperPose.pose, objectPose.pose)
             self.gripperControl.goToGripperPoseDelta(gripperPose.pose, deltaPose)
             
             success = True

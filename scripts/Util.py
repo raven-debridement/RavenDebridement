@@ -237,8 +237,13 @@ def combinePoses(pose0, pose1, op=operator.sub):
     pose0, pose1 = tfx.pose(pose0), tfx.pose(pose1)
     
     deltaAngles = tfx.tb_angles(op(pose0.tb_angles.yaw_deg, pose1.tb_angles.yaw_deg), op(pose0.tb_angles.pitch_deg, pose1.tb_angles.pitch_deg), op(pose0.tb_angles.roll_deg, pose1.tb_angles.roll_deg))
-    deltaPose = tfx.pose(op(pose0.position,pose1.position), deltaAngles)
-    
+    print('combinePoses-deltaAngles')
+    print(deltaAngles)
+    deltaPose = tfx.pose(op(pose0.position,pose1.position))#, deltaAngles)
+    deltaPose.orientation = deltaAngles
+    print('combinePoses-deltaPose')
+    print(deltaPose)
+
     return deltaPose.msg.Pose()
 
     
@@ -258,6 +263,37 @@ def subPoses(pose0, pose1):
     All args and return values are geometry_msgs.msg.Pose
     """
     return combinePoses(pose0, pose1, operator.sub)
+
+def deltaPose(currPose, desPose):
+    """
+    Returns pose0 - pose1
+    """
+
+    currPose, desPose = tfx.pose(currPose), tfx.pose(desPose)
+
+    deltaPosition = desPose.position - currPose.position
+    deltaQuat = rotationFromTo(currPose.orientation, desPose.orientation)
+    deltaPose = tfx.pose(deltaPosition, deltaQuat)
+
+    return deltaPose.msg.Pose()
+    
+
+def rotationFromTo(quat0, quat1):
+    """
+    Returns the quaternion that rotates
+    quat0 to quat1
+    
+    Assumes quat0 and quat1 in same frame
+    """
+    rot0 = tfx.rotation_tb(quat0)
+    rot1 = tfx.rotation_tb(quat1)
+
+    fromToRot = tfx.canonical.CanonicalRotation(rot1.matrix*rot0.inverse().matrix)
+    fromToQuat = fromToRot.quaternion
+
+
+    return Quaternion(*fromToQuat)
+    
 
 
 class TimeoutClass():
