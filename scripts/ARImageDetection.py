@@ -18,8 +18,12 @@ from ImageDetection import ImageDetectionClass
 
 from threading import Lock
 
-ids_to_joints = {0: Constants.Arm.Right,
-                 1: Constants.Arm.Left}
+ids_to_joints = {0: Constants.AR.Frames.Grasper1,
+                 1: Constants.AR.Frames.Grasper2,
+                 4: Constants.AR.Frames.Cube1,
+                 5: Constants.AR.Frames.Cube2,
+                 6: Constants.AR.Frames.Cube3,
+                 7: Constants.AR.Frames.Cube4}
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -48,6 +52,7 @@ class ARImageDetectionClass(ImageDetectionClass):
                   self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
 
             self.state = None
+            self.transforms = {}
 
             # image processing to find object
             self.listener = tf.TransformListener()
@@ -71,11 +76,12 @@ class ARImageDetectionClass(ImageDetectionClass):
             rospy.loginfo(len(markers))
             for marker in markers:
                 arframe = Constants.StereoAR + "_" + str(marker.id)
-                if ids_to_joints[marker.id] == Constants.Arm.Left:
+                frame = ids_to_joints[marker.id]
+                if frame == Constants.AR.Frames.Grasper1 or frame == Constants.AR.Frames.Grasper2:
                     #self.arHandler(marker, "left")
-                    self.arHandlerWithOrientation(arframe, "left")
+                    self.arHandlerWithOrientation(marker, "left")
                 elif ids_to_joints[marker.id] == Constants.Arm.Right:
-                    self.arHandlerWithOrientation(arframe, "right")
+                    self.arHandlerWithOrientation(marker, "right")
             self.locks['ar_pose'].release() 
 
       def debugAr(self, gp):

@@ -15,6 +15,13 @@ class StereoClick:
 
 class AR:
     Stereo = 'stereo_pose'
+    class Frames:
+        Grasper1 = '/grasper1_tip'
+        Grasper2 = '/grasper2_tip'
+        Cube1 = '/cube_1'
+        Cube2 = '/cube_2'
+        Cube3 = '/cube_3'
+        Cube4 = '/cube_4'
 
 class Arm:
     Left = 'L'
