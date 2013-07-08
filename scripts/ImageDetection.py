@@ -15,6 +15,7 @@ from raven_2_msgs.msg import *
 import Util
 import Constants
 
+
 class ImageDetectionClass():
     """
     Used to detect object, grippers, and receptacle
@@ -44,8 +45,8 @@ class ImageDetectionClass():
 
         # Temporary. Will eventually be placed with real image detection
         # Will subscribe to camera feeds eventually 
-       rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
-       rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
+        rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
+        rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
 
     def stereoCallback(self, msg):
         """
@@ -110,63 +111,63 @@ class ImageDetectionClass():
         return objectPoint
             
       
-      def removeObjectPoint(self):
-          #Debug tool to remove object point
-          self.objectPoint = None
+    def removeObjectPoint(self):
+        #Debug tool to remove object point
+        self.objectPoint = None
       
 
-      def hasFoundGripper(self, armName):
-          """
-          armName must be from Constants.Arm
-          """
-          if armName == Constants.Arm.Left:
-              return (self.leftGripperPose != None)
-          else:
-              return (self.rightGripperPose != None)
+    def hasFoundGripper(self, armName):
+        """
+        armName must be from Constants.Arm
+        """
+        if armName == Constants.Arm.Left:
+            return (self.leftGripperPose != None)
+        else:
+            return (self.rightGripperPose != None)
 
-      def getGripperPose(self, armName):
-          """
-          armName must be from Constants.Arm
+    def getGripperPose(self, armName):
+        """
+        armName must be from Constants.Arm
+        
+        returns PoseStamped with frame_id of gripperName
+        """
+        if not self.hasFoundGripper(armName):
+            return None
+
+        # may want to make a copy of gripper pose eventually
+        if armName == Constants.Arm.Left:
+            return self.leftGripperPose
+        else:
+            return self.rightGripperPose
+
+
+    def getGripperPoint(self, armName):
+        """
+        armName must be from Constants.Arm
           
-          returns PoseStamped with frame_id of gripperName
-          """
-          if not self.hasFoundGripper(armName):
-              return None
+        returns PointStamped with frame_id of gripperName
+        """
+        if not self.hasFoundGripper(armName):
+            return None
 
-          # may want to make a copy of gripper pose eventually
-          if armName == Constants.Arm.Left:
-              return self.leftGripperPose
-          else:
-              return self.rightGripperPose
-
-
-      def getGripperPoint(self, armName):
-          """
-          armName must be from Constants.Arm
-          
-          returns PointStamped with frame_id of gripperName
-          """
-          if not self.hasFoundGripper(armName):
-              return None
-
-          return Util.poseStampedToPointStamped(self.getGripperPose(armName))
+        return Util.poseStampedToPointStamped(self.getGripperPose(armName))
       
       
-      def hasFoundReceptacle(self):
-          return (self.receptaclePoint != None)
+    def hasFoundReceptacle(self):
+        return (self.receptaclePoint != None)
 
-      def getReceptaclePose(self):
-          """
-          Returns PoseStamped with position of centroid of receptacle and
-          orientation of the table normal
-          """
-          return Util.pointStampedToPoseStamped(self.receptaclePoint, self.normal)
+    def getReceptaclePose(self):
+        """
+        Returns PoseStamped with position of centroid of receptacle and
+        orientation of the table normal
+        """
+        return Util.pointStampedToPoseStamped(self.receptaclePoint, self.normal)
 
-      def getReceptaclePoint(self):
-          """
-          Returns PointStamped of the centroid of the receptacle
-          """
-          return self.receptaclePoint
+    def getReceptaclePoint(self):
+        """
+        Returns PointStamped of the centroid of the receptacle
+        """
+        return self.receptaclePoint
 
 def test():     
     rospy.init_node('image_detection_node')
