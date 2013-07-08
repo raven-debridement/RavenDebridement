@@ -14,7 +14,7 @@
 
 	<include file="$(find master-control)/launch/ar_corners.launch" />	
 	<!--<include file="$(find raven_pose_estimator)/launch/chessboard_prosilica.launch" />-->
-	<!-- <include file="$(find stereo_click)/launch/stereo_click_control.launch" /> -->
+	<include file="$(find stereo_click)/launch/stereo_click_control.launch" />
 
 	<group ns="control">
 		
