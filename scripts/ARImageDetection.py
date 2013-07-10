@@ -20,6 +20,7 @@ from threading import Lock
 
 ids_to_joints = {0: Constants.AR.Frames.Grasper1,
                  1: Constants.AR.Frames.Grasper2,
+                 2: Constants.AR.Frames.Grasper2,
                  4: Constants.AR.Frames.Cube1,
                  5: Constants.AR.Frames.Cube2,
                  6: Constants.AR.Frames.Cube3,
@@ -38,6 +39,8 @@ class ARImageDetectionClass(ImageDetectionClass):
       """
       def __init__(self, normal=None):
             
+            self.objectPoint = None
+
             #gripper pose. Must both have frame_id of respective tool frame
             self.leftGripperPose = None
             self.rightGripperPose = None
@@ -75,7 +78,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             markers = msg.markers
             rospy.loginfo(len(markers))
             for marker in markers:
-                arframe = Constants.StereoAR + "_" + str(marker.id)
+                #arframe = Constants.StereoAR + "_" + str(marker.id)
                 frame = ids_to_joints[marker.id]
                 if frame == Constants.AR.Frames.Grasper1 or frame == Constants.AR.Frames.Grasper2:
                     #self.arHandler(marker, "left")
@@ -83,6 +86,14 @@ class ARImageDetectionClass(ImageDetectionClass):
                 elif ids_to_joints[marker.id] == Constants.Arm.Right:
                     self.arHandlerWithOrientation(marker, "right")
             self.locks['ar_pose'].release() 
+
+      def calibrate(self, markers):
+          d = {}
+          for marker in markers:
+             d[marker.id] = marker
+          if d[2] and d[6]:
+             transforms[(6,2)] = Utils.transform(d[6], d[2])
+          
 
       def debugAr(self, gp):
         self.debugArCount += 1
@@ -95,9 +106,9 @@ class ARImageDetectionClass(ImageDetectionClass):
         pose.header.frame_id = marker.header.frame_id
         pose.pose = marker.pose.pose
         if armname == "left":
-            self.leftGripperPose = gp
+            self.leftGripperPose = pose
         else:
-            self.rightGripperPose = gp
+            self.rightGripperPose = pose
 
       def isCalibrated(self):
             return self.state == ARImageDetectionClass.State.Calibrated
