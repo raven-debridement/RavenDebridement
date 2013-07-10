@@ -40,6 +40,7 @@ class ARImageDetectionClass(ImageDetectionClass):
       def __init__(self, normal=None):
             
             self.objectPoint = None
+            self.registerObjectPublisher()
 
             #gripper pose. Must both have frame_id of respective tool frame
             self.leftGripperPose = None
@@ -76,7 +77,7 @@ class ARImageDetectionClass(ImageDetectionClass):
       def arCallback(self, msg):
             self.locks['ar_pose'].acquire()
             markers = msg.markers
-            rospy.loginfo(len(markers))
+            #rospy.loginfo(len(markers))
             for marker in markers:
                 #arframe = Constants.StereoAR + "_" + str(marker.id)
                 frame = ids_to_joints[marker.id]

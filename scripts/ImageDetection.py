@@ -43,14 +43,15 @@ class ImageDetectionClass():
         # MAY NEED TO USE LOCKS
         #######################
 
-        object_topic = "object_marker"
-        self.objPublisher = rospy.Publisher(object_topic, Marker)
-        self.objMarker = None
-
         # Temporary. Will eventually be placed with real image detection
         # Will subscribe to camera feeds eventually 
         rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
         rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
+
+    def registerObjectPublisher(self):
+        object_topic = "object_marker"
+        self.objPublisher = rospy.Publisher(object_topic, Marker)
+        self.objMarker = None
 
     def stereoCallback(self, msg):
         """
