@@ -574,3 +574,5 @@ if __name__ == '__main__':
 	"""
 	rospy.sleep(.02)
          
+
+    pylab.show()

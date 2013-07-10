@@ -37,6 +37,7 @@ class ARImageDetectionClass(ImageDetectionClass):
       Used to detect object, grippers, and receptacle
       """
       def __init__(self, normal=None):
+            self.objectPoint = None
             
             #gripper pose. Must both have frame_id of respective tool frame
             self.leftGripperPose = None
@@ -73,9 +74,9 @@ class ARImageDetectionClass(ImageDetectionClass):
       def arCallback(self, msg):
             self.locks['ar_pose'].acquire()
             markers = msg.markers
-            rospy.loginfo(len(markers))
+            #rospy.loginfo(len(markers))
             for marker in markers:
-                arframe = Constants.StereoAR + "_" + str(marker.id)
+                #arframe = Constants.StereoAR + "_" + str(marker.id)
                 frame = ids_to_joints[marker.id]
                 if frame == Constants.AR.Frames.Grasper1 or frame == Constants.AR.Frames.Grasper2:
                     #self.arHandler(marker, "left")
@@ -95,9 +96,9 @@ class ARImageDetectionClass(ImageDetectionClass):
         pose.header.frame_id = marker.header.frame_id
         pose.pose = marker.pose.pose
         if armname == "left":
-            self.leftGripperPose = gp
+            self.leftGripperPose = pose
         else:
-            self.rightGripperPose = gp
+            self.rightGripperPose = pose
 
       def isCalibrated(self):
             return self.state == ARImageDetectionClass.State.Calibrated
@@ -126,7 +127,7 @@ def testCalibration():
             imageDetector.setState(ARImageDetectionClass.State.CalibrateLeft)
         rospy.sleep(.5)
 
-def testFoundGripper():
+def testFound():
     rospy.init_node('ar_image_detection')
     imageDetector = ARImageDetectionClass()
       
@@ -136,10 +137,13 @@ def testFoundGripper():
         if imageDetector.hasFoundGripper(Constants.Arm.Right):
             rospy.loginfo('Found right arm')
             
+        if imageDetector.hasFoundObject():
+            rospy.loginfo('Found object')
+            
         rospy.loginfo('Spinning')
         rospy.sleep(.5)
       
 
 if __name__ == '__main__':
     #testCalibration()
-    testFoundGripper()
+    testFound()

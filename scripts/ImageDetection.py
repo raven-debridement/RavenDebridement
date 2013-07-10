@@ -46,7 +46,7 @@ class ImageDetectionClass():
         # Temporary. Will eventually be placed with real image detection
         # Will subscribe to camera feeds eventually 
         rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
-        rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
+        #rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
 
     def stereoCallback(self, msg):
         """
@@ -173,11 +173,12 @@ def test():
     rospy.init_node('image_detection_node')
     imageDetector = ImageDetectionClass()
     while not rospy.is_shutdown():
-        objectPoint = imageDetector.getObjectPoint()
-        if objectPoint != None:      
+        if imageDetector.hasFoundObject():
+            objectPoint = imageDetector.getObjectPoint()
             print(objectPoint)
         else:
             print('Not Found')
+
         rospy.sleep(.5)
       
 

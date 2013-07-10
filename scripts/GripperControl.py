@@ -170,8 +170,10 @@ class GripperControlClass:
 #down = tfx.tb_angles(0,66,0)
 down = tfx.tb_angles(0,90,0)
 rightArmDot = tfx.pose(tfx.point(-.060, -.039, -.155), down)
-leftArmDot = tfx.pose(tfx.point(-.036, .001, -.159), tfx.tb_angles(-9,56.4,-3.4))
+leftArmDot = tfx.pose(tfx.point(.006, -.056, -.158), down)
 leftArmDotOther = tfx.pose(tfx.point(-.034, -.030, -.159), tfx.tb_angles(-9,56.4,-3.4))
+# tfx.tb_angles(0,40,0)
+leftArmFourthDot = tfx.pose(tfx.point(-.084,.003,-.157), down)
 
 def test_closeGripper():
     rospy.sleep(4)
@@ -240,7 +242,21 @@ def test_moveGripperDelta():
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     
     # w.r.t. Link0
-    desPose = leftArmDotOther
+    desPose = leftArmDot
+
+    #desPose = tfx.pose(currPose.position, currPose.orientation)
+    #desPose.orientation = tfx.tb_angles(-175.1,59.2,-170.9)
+
+    """
+    desPose = PoseStamped()
+    desPose.pose = tfx.pose(tfx.point(-.148,.008,.08), tfx.tb_angles(0,90,0)).msg.Pose()
+    header = Header()
+    header.frame_id = '/frame_bottom_B'
+    header.stamp = rospy.Time.now()
+    desPose.header = header
+    desPose = listener.transformPose(MyConstants.Frames.Link0, desPose)
+    desPose = tfx.pose(desPose)
+    """
 
     #deltaPosition = desPose.position - currPose.position
     #deltaQuat = Util.rotationFromTo(currPose.orientation, desPose.orientation)
@@ -305,7 +321,7 @@ def test_commandRaven():
     raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
     rospy.sleep(4)
 
-    toolPose = leftArmDotOther
+    toolPose = leftArmDot
     """
     toolPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     #toolPose.orientation = tfx.tb_angles(0,0,0)
@@ -314,6 +330,14 @@ def test_commandRaven():
     """
 
     while not rospy.is_shutdown():
+       
+        quat0 = leftArmDot.msg.Pose().orientation
+        quat1 = gripperControl.getGripperPose(frame=MyConstants.Frames.Link0).orientation
+
+        between = Util.angleBetweenQuaternions(quat0,quat1)
+        rospy.loginfo('Angle between:')
+        rospy.loginfo(between)
+ 
         # original attempt at moving the arm
         # create the header
         header = Header()
@@ -387,10 +411,11 @@ def test_commandJoints():
         armCmd.active = True
 
         for index in range(len(currJointStates)):
-            if currJointStates[index].type == Constants.JOINT_TYPE_ROTATION:
+            if currJointStates[index].type == Constants.JOINT_TYPE_PITCH:
                 jointCmd = JointCommand()
                 jointCmd.command_type = JointCommand.COMMAND_TYPE_POSITION
-                jointCmd.value = currJointStates[index].position + randomJointMovements[index]
+                jointCmd.value = 0.0
+                #jointCmd.value = currJointStates[index].position + randomJointMovements[index]
 
                 armCmd.joint_types.append(currJointStates[index].type)
                 armCmd.joint_commands.append(jointCmd)
@@ -448,17 +473,32 @@ def test_jointPositions():
         rospy.loginfo(gripperControl.getJointStates())
         rospy.sleep(.5)
 
+def test_angleBetween():
+    rospy.init_node('command_raven',anonymous=True)
+    armName = MyConstants.Arm.Left
+    gripperControl = GripperControlClass(armName, tf.TransformListener())
+    rospy.sleep(4)
+
+    quat0 = leftArmDot.msg.Pose().orientation
+    quat1 = gripperControl.getGripperPose(frame=MyConstants.Frames.Link0).orientation
+
+    between = Util.angleBetweenQuaternions(quat0,quat1)
+
+    code.interact(local=locals())
+    
+    print(between)
+
 if __name__ == '__main__':
     #test_closeGripper()
     #test_moveGripper()
-    test_moveGripperDelta()
+    #test_moveGripperDelta()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
     #test_rotation()
     #test_jointPositions()
     #test_commandJoints()
-
+    #test_angleBetween()
 
 
 

@@ -13,6 +13,8 @@ from geometry_msgs.msg import Twist, PointStamped, PoseStamped, Quaternion, Poin
 import tf
 import tf.transformations as tft
 import operator
+import numpy as np
+import math
 
 import tfx
 
@@ -294,7 +296,18 @@ def rotationFromTo(quat0, quat1):
 
     return Quaternion(*fromToQuat)
     
+def angleBetweenQuaternions(quat0, quat1):
+    """
+    Returns angle between quat0 and quat1 in degrees
+    """
+    q0 = np.array([quat0.x, quat0.y, quat0.z, quat0.w])
+    q1 = np.array([quat1.x, quat1.y, quat1.z, quat1.w])
 
+    theta = math.acos(2*np.dot(q0,q1)**2 - 1)
+
+    theta = theta*(180.0/math.pi)
+
+    return theta
 
 class TimeoutClass():
     def __init__(self, timeoutTime):
