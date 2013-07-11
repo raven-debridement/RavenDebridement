@@ -19,6 +19,8 @@ import tfx
 from raven_2_msgs.msg import *
 from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
 
+import thread
+
 # rename so no conflict with raven_2_msgs.msg.Constants
 import Constants as MyConstants
 import Util
@@ -48,7 +50,8 @@ class GripperControlClass:
 
         #self.pub = rospy.Publisher(self.tooltopic, ToolCommandStamped)
         #self.raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
-        #self.player = TrajectoryPlayer(arms=self.armName)
+        
+        self.player = TrajectoryPlayer(arms=self.armName)
 
         self.jointStates = list()
         rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
@@ -88,53 +91,7 @@ class GripperControlClass:
 
         deltaPose is the difference between the current pose and the final pose
         """
-
-        player = TrajectoryPlayer(arms=self.armName)
-
-        # convert to tfx format
-        startPose = tfx.pose(startPose)
-        deltaPose = tfx.pose(deltaPose)
-
-
-        #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.quaternion + deltaPose.orientation.quaternion)
-        #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.matrix*deltaPose.orientation.matrix)
-
-        #endAngles = tfx.tb_angles(startPose.tb_angles.yaw_deg + deltaPose.tb_angles.yaw_deg, startPose.tb_angles.pitch_deg + deltaPose.tb_angles.pitch_deg, startPose.tb_angles.roll_deg + deltaPose.tb_angles.roll_deg)
-        #endPose = tfx.pose(startPose.position + deltaPose.position, endAngles)
-        # work on orientation combination
-
-        #endPose = Util.addPoses(startPose, deltaPose)
-
-        # convert to tfx format
-        #startPose = tfx.pose(startPose)
-        #endPose = tfx.pose(endPose)
-
-
-        endPosition = startPose.position + deltaPose.position
-        
-        startRot = tfx.rotation_tb(startPose.orientation)
-        deltaRot = tfx.rotation_tb(deltaPose.orientation)
-        endQuatMat = deltaRot.matrix*startRot.matrix
-
-        endPose = tfx.pose(endPosition, endQuatMat)
-
-        #code.interact(local=locals())
-
-        # TEMP!!!!
-        #endPose.orientation = tfx.tb_angles(0,90,0)
-
-        print('moveGripper')
-        print(endPose)
-        print(startPose)
-        print(tfx.pose(deltaPose))
-        print(endPose.orientation.quaternion)
-        print(startPose.orientation.quaternion)
-        print(tfx.pose(deltaPose).orientation.quaternion)
-
-        
-        player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
-
-        return player.play()
+        self.threadGoToGripperPoseDelta(startPose, deltaPose)
         
 
     def closeGripper(self):
@@ -165,7 +122,57 @@ class GripperControlClass:
     def getJointStates(self):
         return self.jointStates
         
+
+    def threadGoToGripperPoseDelta(self, startPose, deltaPose):
+        """
+        Intended to be started on its own thread, so doesn't block
+
+        Given an armName and startPose, move by deltaPose
+        Both startPose and deltaPose are geometry_msgs.msg.Pose
+
+        armName is which arm to move (MyConstants.Arm.Left or MyConstants.Arm.Right)
+
+        startPose is the pose of the gripper WITH RESPECT TO MyConstants.Frames.Link0
+
+        deltaPose is the difference between the current pose and the final pose
+        """
+
+        #player = TrajectoryPlayer(arms=armName)
+        self.player.clear()
+
+        # convert to tfx format
+        startPose = tfx.pose(startPose)
+        deltaPose = tfx.pose(deltaPose)
+
+
+        endPosition = startPose.position + deltaPose.position
+    
+        startRot = tfx.rotation_tb(startPose.orientation)
+        deltaRot = tfx.rotation_tb(deltaPose.orientation)
+        endQuatMat = deltaRot.matrix*startRot.matrix
+    
+        endPose = tfx.pose(endPosition, endQuatMat)
+
+
+        print('moveGripper')
+        print(endPose)
+        print(startPose)
+        print(tfx.pose(deltaPose))
+        print(endPose.orientation.quaternion)
+        print(startPose.orientation.quaternion)
+        print(tfx.pose(deltaPose).orientation.quaternion)
+
+    
+        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
+
+        self.player.play()
         
+
+
+
+
+
+
 #w.r.t. Link0
 #down = tfx.tb_angles(0,66,0)
 down = tfx.tb_angles(0,90,0)
@@ -247,16 +254,6 @@ def test_moveGripperDelta():
     #desPose = tfx.pose(currPose.position, currPose.orientation)
     #desPose.orientation = tfx.tb_angles(-175.1,59.2,-170.9)
 
-    """
-    desPose = PoseStamped()
-    desPose.pose = tfx.pose(tfx.point(-.148,.008,.08), tfx.tb_angles(0,90,0)).msg.Pose()
-    header = Header()
-    header.frame_id = '/frame_bottom_B'
-    header.stamp = rospy.Time.now()
-    desPose.header = header
-    desPose = listener.transformPose(MyConstants.Frames.Link0, desPose)
-    desPose = tfx.pose(desPose)
-    """
 
     #deltaPosition = desPose.position - currPose.position
     #deltaQuat = Util.rotationFromTo(currPose.orientation, desPose.orientation)
@@ -491,7 +488,7 @@ def test_angleBetween():
 if __name__ == '__main__':
     #test_closeGripper()
     #test_moveGripper()
-    #test_moveGripperDelta()
+    test_moveGripperDelta()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
@@ -499,6 +496,26 @@ if __name__ == '__main__':
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()
+
+
+
+
+
+
+"""
+    #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.quaternion + deltaPose.orientation.quaternion)
+    #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.matrix*deltaPose.orientation.matrix)
+
+    #endAngles = tfx.tb_angles(startPose.tb_angles.yaw_deg + deltaPose.tb_angles.yaw_deg, startPose.tb_angles.pitch_deg + deltaPose.tb_angles.pitch_deg, startPose.tb_angles.roll_deg + deltaPose.tb_angles.roll_deg)
+    #endPose = tfx.pose(startPose.position + deltaPose.position, endAngles)
+    # work on orientation combination
+
+    #endPose = Util.addPoses(startPose, deltaPose)
+
+    # convert to tfx format
+    #startPose = tfx.pose(startPose)
+    #endPose = tfx.pose(endPose)
+"""
 
 
 
