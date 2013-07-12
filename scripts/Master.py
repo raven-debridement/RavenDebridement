@@ -69,6 +69,8 @@ class MasterClass():
         """
         Loops through the pipeline
         """
+        self.gripperControl.start()
+
         while not rospy.is_shutdown():
             
             # delay between parts of the pipeline
@@ -127,7 +129,7 @@ class MasterClass():
             rospy.loginfo('Moving to the object point')
             # go to object point
             
-            transBound = .005
+            transBound = .01
             rotBound = float("inf")
             
             #deltaPose = Util.deltaPose(gripperPose.pose, objectPose.pose)
@@ -143,7 +145,7 @@ class MasterClass():
             
             success = True
             timeout.start()
-            while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.listener):
+            while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound):
                 gripperPose = self.imageDetector.getGripperPose(self.gripperName)
                 
                 if timeout.hasTimedOut():
@@ -181,7 +183,7 @@ class MasterClass():
             self.armControl.goToArmPose(vertObjectPose, False)
             """
 
-
+        self.gripperControl.stop()
 
 
 

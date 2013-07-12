@@ -190,7 +190,7 @@ def euclideanDistance(ps0, ps1, listener=None, xPlane=True, yPlane=True, zPlane=
 
     return ((x1-x0)**2 + (y1-y0)**2 + (z1-z0)**2)**.5
 
-def withinBounds(ps0, ps1, transBound, rotBound, listener=None):
+def withinBounds(ps0, ps1, transBound, rotBound):
     """
     Returns if ps0 and ps1 (PoseStamped) are within translation and rotation bounds of each other
 
