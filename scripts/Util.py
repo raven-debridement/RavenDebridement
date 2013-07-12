@@ -208,7 +208,8 @@ def withinBounds(ps0, ps1, transBound, rotBound, listener=None):
         if abs(deltaPos) > transBound:
             return False
 
-    if angleBetweenQuaternions(ps0.msg.Pose().orientation, ps1.msg.Pose().orientation) > rotBound:
+    between = angleBetweenQuaternions(ps0.msg.Pose().orientation, ps1.msg.Pose().orientation)
+    if  between > rotBound:
         return False
     
     return True

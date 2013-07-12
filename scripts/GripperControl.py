@@ -52,7 +52,6 @@ class GripperControlClass:
         #self.pub = rospy.Publisher(self.tooltopic, ToolCommandStamped)
         #self.raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
         
-        #self.player = TrajectoryPlayer(arms=self.armName)
         self.player = MyTrajectoryPlayer(arms=self.armName)
 
         self.jointStates = list()
@@ -72,19 +71,11 @@ class GripperControlClass:
         startPose = tfx.pose(startPose)
         endPose = tfx.pose(endPose)
 
-        player = TrajectoryPlayer(arms=self.armName)
-
-        #player.add_goto_first_pose(endPose, duration=10)
-        player.add_pose_to_pose('goToGripperPose',startPose,endPose)
-
-        print('moveGripper, not delta')
-        print(endPose)
-        print(startPose)
-
-        return player.play()
+        self.player.clear_stages()
+        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose)
         
 
-    def goToGripperPoseDelta(self, startPose, deltaPose, block=True):
+    def goToGripperPoseDelta(self, startPose, deltaPose):
         """
         Given a startPose, move by deltaPose
         Both startPose and deltaPose are geometry_msgs.msg.Pose
@@ -93,21 +84,6 @@ class GripperControlClass:
 
         deltaPose is the difference between the current pose and the final pose
         """
-        """
-        Intended to be started on its own thread, so doesn't block
-
-        Given a startPose, move by deltaPose
-        Both startPose and deltaPose are geometry_msgs.msg.Pose
-
-        armName is which arm to move (MyConstants.Arm.Left or MyConstants.Arm.Right)
-
-        startPose is the pose of the gripper WITH RESPECT TO MyConstants.Frames.Link0
-
-        deltaPose is the difference between the current pose and the final pose
-        """
-
-        #self.player.stop_playing()
-        #self.player.reset()
 
         # convert to tfx format
         startPose = tfx.pose(startPose)
@@ -120,28 +96,29 @@ class GripperControlClass:
 
         endPose = tfx.pose(endPosition, endQuatMat)
     
-        self.player.clear_and_add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
-        #self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
+        self.player.clear_stages()
+        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=4)
 
-        #self.player.play(block=block)
 
     def start(self):
         # start running, no blocking
         return self.player.play(False)
+
+    def pause(self):
+        # pauses by clearing stages
+        self.player.clear_stages()
         
     def stop(self):
         return self.player.stop_playing()
 
     def closeGripper(self):
-        player = TrajectoryPlayer(arms=self.armName)
-        player.add_close_gripper(duration=4)
-        return player.play()
+        self.player.clear_stages()
+        self.player.add_close_gripper(duration=4)
                 
     def openGripper(self):
-        player = TrajectoryPlayer(arms=self.armName)
-        player.add_open_gripper(duration=4)
-        return player.play()
-
+        self.player.clear_stages()
+        self.player.add_open_gripper(duration=4)
+        
     def getGripperPose(self,frame=MyConstants.Frames.World):
         """
         Returns gripper pose w.r.t. frame
@@ -253,7 +230,7 @@ def test_moveGripperDelta():
     rospy.sleep(5)
 
     rospy.loginfo('Running...')
-    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose, block=True)
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose)
 
     rospy.loginfo('Waiting...')
     rospy.sleep(15)
@@ -285,20 +262,24 @@ def test_servo():
 
     
     transBound = .01
-    rotBound = 5
+    rotBound = 25
     
-    rate = rospy.Rate(.2)
+    rate = rospy.Rate(1)
 
     while not Util.withinBounds(currPose, desPose, transBound, rotBound) and not rospy.is_shutdown():
         rospy.loginfo('LOOP!!!!!!!!!')
+        
+        gripperControl.pause()
+
         currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     
         deltaPose = Util.deltaPose(currPose, desPose)
     
-        gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose, block=False)
+        gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose)
         
         rate.sleep()
 	
+
 
         
 

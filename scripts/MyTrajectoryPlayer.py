@@ -123,21 +123,18 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
 
         return False
 
-    def clear_and_add_pose_to_pose(self,name,start,end,arm=None,duration=None,speed=None):
-        """
-        Meant to allow dynamic changing of trajectory
-        """
-        self.stageLock.acquire()
-        self.stages = []
-        self.add_pose_to_pose(name,start,end,arm,duration,speed)
-        self.stageLock.release()
-        
+
     def clear_stages(self):
-        self.stageLock.acquire()
+        """
+        If playing, this effectively pauses the raven
+        """
         self.stages = []
-        self.stageLock.release()
 
     def play(self,block,dry_run=False):
+        """
+        Intended use is to call play once at the beginning
+        and then add stages to move it
+        """
         if not self.isThreadPlaying:
             self.isThreadPlaying = True
             if block:
@@ -188,14 +185,16 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
                 success = True
                 break
 
-            self.stageLock.acquire()
+            #self.stageLock.acquire()
+            stages = self.stages
+
             # when a stage appears, set start_time
-            if numStages == 0 and len(self.stages) > 0:
+            if numStages == 0 and len(stages) > 0:
                 self.start_time = rospy.Time.now()
 
-            numStages = len(self.stages)
-            stage_breaks = Stage.stage_breaks(self.stages)
-            self.stageLock.release()
+            numStages = len(stages)
+            stage_breaks = Stage.stage_breaks(stages)
+            #self.stageLock.release()
             
             now = rospy.Time.now()
 
