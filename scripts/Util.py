@@ -194,39 +194,25 @@ def withinBounds(ps0, ps1, transBound, rotBound, listener=None):
     """
     Returns if ps0 and ps1 (PoseStamped) are within translation and rotation bounds of each other
 
-    Note: rotBound is for euler angles
+    Note: rotBound is in degrees
     """
-    # must be in same reference frame
-    if listener != None:
-        try:
-            ps0, ps1 = convertToSameFrameAndTime(ps0, ps1, listener)
-        except tf.Exception:
+    ps0, ps1 = tfx.pose(ps0), tfx.pose(ps1)
+
+    # convert to same frame if needed
+    if ps0.frame != None and ps1.frame != None:
+        tf0_to_1 = tfx.lookupTransform(ps1.frame, ps0.frame)
+        ps1 = tf0_to_1 * ps0
+
+    deltaPositions = ps0.position - ps1.position
+    for deltaPos in list(deltaPositions):
+        if abs(deltaPos) > transBound:
             return False
 
-    if ps0 == None or ps1 == None:
+    if angleBetweenQuaternions(ps0.msg.Pose().orientation, ps1.msg.Pose().orientation) > rotBound:
         return False
-
-    xtrans0, ytrans0, ztrans0 = ps0.pose.position.x, ps0.pose.position.y, ps0.pose.position.z
-    xtrans1, ytrans1, ztrans1 = ps1.pose.position.x, ps1.pose.position.y, ps1.pose.position.z
-
-    wrot0, xrot0, yrot0, zrot0 = ps0.pose.orientation.w, ps0.pose.orientation.x, ps0.pose.orientation.y, ps0.pose.orientation.z    
-    wrot1, xrot1, yrot1, zrot1 = ps1.pose.orientation.w, ps1.pose.orientation.x, ps1.pose.orientation.y, ps1.pose.orientation.z
-
-    # convert to euler angles
-    ps0rot0, ps0rot1, ps0rot2 = tft.euler_from_quaternion([xrot0, yrot0, zrot0, wrot0])
-    ps1rot0, ps1rot1, ps1rot2 = tft.euler_from_quaternion([xrot1, yrot1, zrot1, wrot1])
-
-    within = True
-
-    within &= abs(xtrans0 - xtrans1) < transBound
-    within &= abs(ytrans0 - ytrans1) < transBound
-    within &= abs(ztrans0 - ztrans1) < transBound
     
-    within &= abs(ps0rot0 - ps1rot0) < rotBound
-    within &= abs(ps0rot1 - ps1rot1) < rotBound
-    within &= abs(ps0rot2 - ps1rot2) < rotBound
-
-    return within
+    return True
+    
 
 
 def combinePoses(pose0, pose1, op=operator.sub):
@@ -274,14 +260,16 @@ def deltaPose(currPose, desPose):
     currPose, desPose = tfx.pose(currPose), tfx.pose(desPose)
 
     deltaPosition = desPose.position - currPose.position
-    deltaQuat = rotationFromTo(currPose.orientation, desPose.orientation)
-    deltaPose = tfx.pose(deltaPosition, deltaQuat)
+    deltaRot = currPose.orientation.rotation_to(desPose.orientation)
+    deltaPose = tfx.pose(deltaPosition, deltaRot)
 
     return deltaPose.msg.Pose()
     
 
 def rotationFromTo(quat0, quat1):
     """
+    DEPRECATED
+
     Returns the quaternion that rotates
     quat0 to quat1
     
@@ -328,3 +316,4 @@ class TimeoutClass():
         greater than the current time
         """
         return rospy.Time.now() > self.endTime 
+

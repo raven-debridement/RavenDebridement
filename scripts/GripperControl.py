@@ -24,6 +24,7 @@ import thread
 # rename so no conflict with raven_2_msgs.msg.Constants
 import Constants as MyConstants
 import Util
+from MyTrajectoryPlayer import MyTrajectoryPlayer
 
 
 class GripperControlClass:
@@ -51,7 +52,8 @@ class GripperControlClass:
         #self.pub = rospy.Publisher(self.tooltopic, ToolCommandStamped)
         #self.raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
         
-        self.player = TrajectoryPlayer(arms=self.armName)
+        #self.player = TrajectoryPlayer(arms=self.armName)
+        self.player = MyTrajectoryPlayer(arms=self.armName)
 
         self.jointStates = list()
         rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
@@ -82,7 +84,7 @@ class GripperControlClass:
         return player.play()
         
 
-    def goToGripperPoseDelta(self, startPose, deltaPose):
+    def goToGripperPoseDelta(self, startPose, deltaPose, block=True):
         """
         Given a startPose, move by deltaPose
         Both startPose and deltaPose are geometry_msgs.msg.Pose
@@ -91,8 +93,44 @@ class GripperControlClass:
 
         deltaPose is the difference between the current pose and the final pose
         """
-        self.threadGoToGripperPoseDelta(startPose, deltaPose)
+        """
+        Intended to be started on its own thread, so doesn't block
+
+        Given a startPose, move by deltaPose
+        Both startPose and deltaPose are geometry_msgs.msg.Pose
+
+        armName is which arm to move (MyConstants.Arm.Left or MyConstants.Arm.Right)
+
+        startPose is the pose of the gripper WITH RESPECT TO MyConstants.Frames.Link0
+
+        deltaPose is the difference between the current pose and the final pose
+        """
+
+        #self.player.stop_playing()
+        #self.player.reset()
+
+        # convert to tfx format
+        startPose = tfx.pose(startPose)
+        deltaPose = tfx.pose(deltaPose)
+
+
+        endPosition = startPose.position + deltaPose.position
+    
+        endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
+
+        endPose = tfx.pose(endPosition, endQuatMat)
+    
+        self.player.clear_and_add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
+        #self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
+
+        #self.player.play(block=block)
+
+    def start(self):
+        # start running, no blocking
+        return self.player.play(False)
         
+    def stop(self):
+        return self.player.stop_playing()
 
     def closeGripper(self):
         player = TrajectoryPlayer(arms=self.armName)
@@ -123,50 +161,6 @@ class GripperControlClass:
         return self.jointStates
         
 
-    def threadGoToGripperPoseDelta(self, startPose, deltaPose):
-        """
-        Intended to be started on its own thread, so doesn't block
-
-        Given an armName and startPose, move by deltaPose
-        Both startPose and deltaPose are geometry_msgs.msg.Pose
-
-        armName is which arm to move (MyConstants.Arm.Left or MyConstants.Arm.Right)
-
-        startPose is the pose of the gripper WITH RESPECT TO MyConstants.Frames.Link0
-
-        deltaPose is the difference between the current pose and the final pose
-        """
-
-        #player = TrajectoryPlayer(arms=armName)
-        self.player.clear()
-
-        # convert to tfx format
-        startPose = tfx.pose(startPose)
-        deltaPose = tfx.pose(deltaPose)
-
-
-        endPosition = startPose.position + deltaPose.position
-    
-        startRot = tfx.rotation_tb(startPose.orientation)
-        deltaRot = tfx.rotation_tb(deltaPose.orientation)
-        endQuatMat = deltaRot.matrix*startRot.matrix
-    
-        endPose = tfx.pose(endPosition, endQuatMat)
-
-
-        print('moveGripper')
-        print(endPose)
-        print(startPose)
-        print(tfx.pose(deltaPose))
-        print(endPose.orientation.quaternion)
-        print(startPose.orientation.quaternion)
-        print(tfx.pose(deltaPose).orientation.quaternion)
-
-    
-        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
-
-        self.player.play()
-        
 
 
 
@@ -177,7 +171,7 @@ class GripperControlClass:
 #down = tfx.tb_angles(0,66,0)
 down = tfx.tb_angles(0,90,0)
 rightArmDot = tfx.pose(tfx.point(-.060, -.039, -.155), down)
-leftArmDot = tfx.pose(tfx.point(.006, -.056, -.158), down)
+leftArmDot = tfx.pose(tfx.point(-.063, -.017, -.114), down)
 leftArmDotOther = tfx.pose(tfx.point(-.034, -.030, -.159), tfx.tb_angles(-9,56.4,-3.4))
 # tfx.tb_angles(0,40,0)
 leftArmFourthDot = tfx.pose(tfx.point(-.084,.003,-.157), down)
@@ -225,16 +219,16 @@ def test_moveGripper():
     desPose = desPose.msg.Pose()
     
     gripperControl.goToGripperPose(currPose,desPose)
+
     
 
 
 
 
 def test_moveGripperDelta():
-    rospy.sleep(4)
     rospy.init_node('gripper_control',anonymous=True)
-    listener = tf.TransformListener()
     gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    rospy.sleep(4)
 
     """
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.World))
@@ -251,43 +245,62 @@ def test_moveGripperDelta():
     # w.r.t. Link0
     desPose = leftArmDot
 
-    #desPose = tfx.pose(currPose.position, currPose.orientation)
-    #desPose.orientation = tfx.tb_angles(-175.1,59.2,-170.9)
-
-
-    #deltaPosition = desPose.position - currPose.position
-    #deltaQuat = Util.rotationFromTo(currPose.orientation, desPose.orientation)
-    #deltaPose = tfx.pose(deltaPosition, deltaQuat)
     deltaPose = Util.deltaPose(currPose, desPose)
 
-    #deltaPose = tfx.pose(Util.subPoses(desPose, currPose))
+    rospy.loginfo('Waiting...')
+    gripperControl.player.play(False)
     
+    rospy.sleep(5)
 
-    #deltaOrientation = tfx.tb_angles(desPose.tb_angles.yaw_deg - currPose.tb_angles.yaw_deg, desPose.tb_angles.pitch_deg - currPose.tb_angles.pitch_deg, desPose.tb_angles.roll_deg - currPose.tb_angles.roll_deg)
-    #deltaPose = tfx.pose(desPose.position - currPose.position, deltaOrientation)
+    rospy.loginfo('Running...')
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose, block=True)
+
+    rospy.loginfo('Waiting...')
+    rospy.sleep(15)
+
+    rospy.loginfo('Stopping...')
+    gripperControl.stop()
     
-    #d = desPose.orientation.quaternion - currPose.orientation.quaternion
-    #deltaQuat = d - np.dot(d, currPose.orientation.quaternion)*currPose.orientation.quaternion
-    #deltaPose = tfx.pose(desPose.position - currPose.position, deltaQuat)
+    rospy.sleep(5)
 
-    #code.interact(local=locals())
+    #while not rospy.is_shutdown():
+    #    rospy.sleep(.1)
 
-    #deltaPose = tfx.pose(desPose.position - currPose.position, desPose.orientation.quaternion - currPose.orientation.quaternion)
+def test_servo():
+    rospy.init_node('gripper_control',anonymous=True)
+    rospy.sleep(2)
+    listener = tf.TransformListener()
+    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    rospy.sleep(2)
+
+    gripperControl.start()
+
+    rospy.loginfo('Press enter')
+    raw_input()
+
+    currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     
+    # w.r.t. Link0
+    desPose = leftArmDot
+
     
-    print('testMoveGripper')
-    print(tfx.pose(desPose))
-    print(tfx.pose(currPose))
-    print(tfx.pose(deltaPose))
-    print(desPose.orientation.quaternion)
-    print(currPose.orientation.quaternion)
-    print(tfx.pose(deltaPose).orientation.quaternion)
+    transBound = .01
+    rotBound = 5
     
-    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose)
+    rate = rospy.Rate(.2)
 
+    while not Util.withinBounds(currPose, desPose, transBound, rotBound) and not rospy.is_shutdown():
+        rospy.loginfo('LOOP!!!!!!!!!')
+        currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
+    
+        deltaPose = Util.deltaPose(currPose, desPose)
+    
+        gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose, block=False)
+        
+        rate.sleep()
+	
 
-
-
+        
 
 def test_gripperPose():
     rospy.init_node('gripper_control',anonymous=True)
@@ -331,9 +344,6 @@ def test_commandRaven():
         quat0 = leftArmDot.msg.Pose().orientation
         quat1 = gripperControl.getGripperPose(frame=MyConstants.Frames.Link0).orientation
 
-        between = Util.angleBetweenQuaternions(quat0,quat1)
-        rospy.loginfo('Angle between:')
-        rospy.loginfo(between)
  
         # original attempt at moving the arm
         # create the header
@@ -344,8 +354,8 @@ def test_commandRaven():
     
         # create the tool pose
         toolCmd = ToolCommand()
-        toolCmd.pose = toolPose
-        toolCmd.pose_option = ToolCommand.POSE_ABSOLUTE
+        toolCmd.pose = tfx.pose([0,0,0]).msg.Pose()
+        toolCmd.pose_option = ToolCommand.POSE_RELATIVE
         toolCmd.grasp_option = ToolCommand.GRASP_OFF
     
         
@@ -488,7 +498,7 @@ def test_angleBetween():
 if __name__ == '__main__':
     #test_closeGripper()
     #test_moveGripper()
-    test_moveGripperDelta()
+    #test_moveGripperDelta()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
@@ -496,10 +506,20 @@ if __name__ == '__main__':
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()
+    test_servo()
 
 
 
 
+"""
+        print('moveGripper')
+        print(endPose)
+        print(startPose)
+        print(tfx.pose(deltaPose))
+        print(endPose.orientation.quaternion)
+        print(startPose.orientation.quaternion)
+        print(tfx.pose(deltaPose).orientation.quaternion)
+"""
 
 
 """
