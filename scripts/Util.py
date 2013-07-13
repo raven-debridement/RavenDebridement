@@ -292,7 +292,10 @@ def angleBetweenQuaternions(quat0, quat1):
     q0 = np.array([quat0.x, quat0.y, quat0.z, quat0.w])
     q1 = np.array([quat1.x, quat1.y, quat1.z, quat1.w])
 
-    theta = math.acos(2*np.dot(q0,q1)**2 - 1)
+    try:
+        theta = math.acos(2*np.dot(q0,q1)**2 - 1)
+    except ValueError:
+        return float("inf")
 
     theta = theta*(180.0/math.pi)
 

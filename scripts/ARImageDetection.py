@@ -86,12 +86,13 @@ class ARImageDetectionClass(ImageDetectionClass):
                     #self.arHandler(marker, "left")
                     self.arHandlerWithOrientation(marker, "left")
                 elif frame == Constants.AR.Frames.Object:
-                    print marker.id
                     point = PointStamped()
                     point.header.stamp = marker.header.stamp
                     point.header.frame_id = marker.header.frame_id
                     point.point = marker.pose.pose.position
                     self.objectPoint = point
+                    #self.normal = marker.pose.pose.orientation
+                    self.normal = Util.reverseQuaternion(marker.pose.pose.orientation)
                 elif ids_to_joints[marker.id] == Constants.Arm.Right:
                     self.arHandlerWithOrientation(marker, "right")
             self.locks['ar_pose'].release() 
@@ -164,9 +165,6 @@ def testFound():
 
 if __name__ == '__main__':
     #testCalibration()
-<<<<<<< HEAD
-    testFound()
-=======
+    #testFound()
     #testFoundGripper()
     testObjectPoint()
->>>>>>> master

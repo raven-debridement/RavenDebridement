@@ -9,7 +9,7 @@ import tf
 import tf.transformations as tft
 import tfx
 
-from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion
+from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion
 
 import Util
 import Constants
@@ -124,22 +124,25 @@ class MasterClass():
             """
             
             
-<<<<<<< HEAD
-
-=======
->>>>>>> master
             rospy.sleep(delay)
             # go to object point
             
             transBound = .01
             rotBound = float("inf")
-            
+        
+            gripperPose = self.listener.transformPose('/stereo_53',gripperPose)
+            objectPose = self.listener.transformPose('/stereo_53',objectPose)
+    
             deltaPose = Util.deltaPose(gripperPose.pose, objectPose.pose)
-<<<<<<< HEAD
-            deltaPose.position.z += .03
-            #deltaPose.orientation = tfx.tb_angles(0,0,0).msg.Pose()
 
-            code.interact(local=locals())
+        
+            #deltaPose = Util.deltaPose(objectPose.pose, gripperPose.pose)
+            deltaPose.position.z += .03
+            #deltaPose.orientation = Quaternion()
+            #deltaPose.orientation.w = 1
+
+            #code.interact(local=locals())
+            
             
             # TEMP
             self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose)
@@ -148,17 +151,6 @@ class MasterClass():
             success = True
             timeout.start()
             while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound):
-=======
-
-            code.interact(local=locals())
-
-            rospy.loginfo('Moving to the object point')
-            self.gripperControl.goToGripperPoseDelta(gripperPose.pose, deltaPose)
-            
-            success = True
-            timeout.start()
-            while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.listener):
->>>>>>> master
                 gripperPose = self.imageDetector.getGripperPose(self.gripperName)
                 
                 if timeout.hasTimedOut():
@@ -171,7 +163,7 @@ class MasterClass():
                 continue
             
             # TEMP
-            continue
+            return
 
             rospy.sleep(delay)
             rospy.loginfo('Closing the gripper')
