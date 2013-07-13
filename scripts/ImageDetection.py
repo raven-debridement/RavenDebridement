@@ -11,6 +11,7 @@ import tfx
 
 from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion
 from raven_2_msgs.msg import *
+from visualization_msgs.msg import Marker
 
 import Util
 import Constants
@@ -42,11 +43,15 @@ class ImageDetectionClass():
         # MAY NEED TO USE LOCKS
         #######################
 
-
         # Temporary. Will eventually be placed with real image detection
         # Will subscribe to camera feeds eventually 
         rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
         #rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
+
+    def registerObjectPublisher(self):
+        object_topic = "object_marker"
+        self.objPublisher = rospy.Publisher(object_topic, Marker)
+        self.objMarker = None
 
     def stereoCallback(self, msg):
         """
@@ -60,7 +65,23 @@ class ImageDetectionClass():
         else:
             #msg.point.z -= .03 # so gripper doesn't pick up right on the edge
             self.objectPoint = msg
-
+            
+            marker = Marker()
+            marker.header.frame_id = msg.header.frame_id
+            marker.type = marker.CUBE
+            marker.action = marker.ADD
+            marker.scale.x = 0.002
+            marker.scale.y = 0.002
+            marker.scale.z = 0.002
+            marker.color.a = 1.0
+            marker.color.r = 255
+            marker.color.g = 255
+            marker.pose.orientation.w = 1.0
+            marker.pose.position.x = msg.point.x
+            marker.pose.position.y = msg.point.y
+            marker.pose.position.z = msg.point.z
+            self.objMarker = marker
+            self.objPublisher.publish(marker)
         
     def ravenStateCallback(self, msg):
         # gripperPoses in own frames

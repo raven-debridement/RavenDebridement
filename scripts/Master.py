@@ -124,15 +124,18 @@ class MasterClass():
             """
             
             
+<<<<<<< HEAD
 
+=======
+>>>>>>> master
             rospy.sleep(delay)
-            rospy.loginfo('Moving to the object point')
             # go to object point
             
             transBound = .01
             rotBound = float("inf")
             
             deltaPose = Util.deltaPose(gripperPose.pose, objectPose.pose)
+<<<<<<< HEAD
             deltaPose.position.z += .03
             #deltaPose.orientation = tfx.tb_angles(0,0,0).msg.Pose()
 
@@ -145,6 +148,17 @@ class MasterClass():
             success = True
             timeout.start()
             while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound):
+=======
+
+            code.interact(local=locals())
+
+            rospy.loginfo('Moving to the object point')
+            self.gripperControl.goToGripperPoseDelta(gripperPose.pose, deltaPose)
+            
+            success = True
+            timeout.start()
+            while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.listener):
+>>>>>>> master
                 gripperPose = self.imageDetector.getGripperPose(self.gripperName)
                 
                 if timeout.hasTimedOut():
