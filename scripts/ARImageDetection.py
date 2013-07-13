@@ -85,7 +85,6 @@ class ARImageDetectionClass(ImageDetectionClass):
                     #self.arHandler(marker, "left")
                     self.arHandlerWithOrientation(marker, "left")
                 elif frame == Constants.AR.Frames.Object:
-                    print marker.id
                     point = PointStamped()
                     point.header.stamp = marker.header.stamp
                     point.header.frame_id = marker.header.frame_id
