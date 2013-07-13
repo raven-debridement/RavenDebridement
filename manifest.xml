@@ -21,6 +21,8 @@
   <depend package="raven_2_trajectory"/>
   <depend package="tfx"/>
   <depend package="tf_conversions"/>
+  <depend package="dynamic_reconfigure"/>
+  <depend package="rospy"/>
 
 </package>
 

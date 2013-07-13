@@ -18,13 +18,13 @@ from ImageDetection import ImageDetectionClass
 
 from threading import Lock
 
-ids_to_joints = {0: Constants.AR.Frames.Grasper1,
-                 1: Constants.AR.Frames.Grasper2,
-                 2: Constants.AR.Frames.Grasper2,
-                 4: Constants.AR.Frames.Cube1,
-                 5: Constants.AR.Frames.Cube2,
-                 6: Constants.AR.Frames.Cube3,
-                 7: Constants.AR.Frames.Cube4}
+ids_to_joints = {73: Constants.AR.Frames.Grasper1,
+                 33: Constants.AR.Frames.Grasper2,
+                 13: Constants.AR.Frames.Cube1,
+                 87: Constants.AR.Frames.Cube2,
+                 93: Constants.AR.Frames.Cube3,
+                 12: Constants.AR.Frames.Cube4,
+                 53: Constants.AR.Frames.Object}
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -66,7 +66,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.locks['ar_pose'] = Lock()
 
             # Temporary. For finding the receptacle
-            rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
+            # rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
             # Get grippers using AR
             self.debugArCount = 0
             rospy.Subscriber(Constants.AR.Stereo, ARMarkers, self.arCallback)
@@ -84,6 +84,13 @@ class ARImageDetectionClass(ImageDetectionClass):
                 if frame == Constants.AR.Frames.Grasper1 or frame == Constants.AR.Frames.Grasper2:
                     #self.arHandler(marker, "left")
                     self.arHandlerWithOrientation(marker, "left")
+                elif frame == Constants.AR.Frames.Object:
+                    print marker.id
+                    point = PointStamped()
+                    point.header.stamp = marker.header.stamp
+                    point.header.frame_id = marker.header.frame_id
+                    point.point = marker.pose.pose.position
+                    self.objectPoint = point
                 elif ids_to_joints[marker.id] == Constants.Arm.Right:
                     self.arHandlerWithOrientation(marker, "right")
             self.locks['ar_pose'].release() 
@@ -114,10 +121,9 @@ class ARImageDetectionClass(ImageDetectionClass):
       def isCalibrated(self):
             return self.state == ARImageDetectionClass.State.Calibrated
 
-def test2():
+def testObjectPoint():
       """
       Prints when an objectPoint has been detected
-      Mostly a test of the ImageProcessing class
       """
       rospy.init_node('image_detection_node')
       imageDetector = ARImageDetectionClass()
@@ -154,4 +160,5 @@ def testFoundGripper():
 
 if __name__ == '__main__':
     #testCalibration()
-    testFoundGripper()
+    #testFoundGripper()
+    testObjectPoint()

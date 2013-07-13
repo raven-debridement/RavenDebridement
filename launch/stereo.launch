@@ -33,8 +33,8 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   <arg name="right_frame_id" default="$(arg left_camera)_optical_frame" />
 
   <!-- Trigger mode: 'streaming' or 'polled' -->
-  <arg name="left_trigger_mode" default="syncin2" />
-  <arg name="right_trigger_mode" default="streaming" />
+  <arg name="left_trigger_mode" default="streaming" />
+  <arg name="right_trigger_mode" default="syncin2" />
   
 
   <!-- The left camera node -->

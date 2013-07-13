@@ -22,6 +22,7 @@ class AR:
         Cube2 = '/cube_2'
         Cube3 = '/cube_3'
         Cube4 = '/cube_4'
+        Object = '/object'
 
 class Arm:
     Left = 'L'
