@@ -91,10 +91,10 @@ class MasterClass():
             rotBound = float("inf")
 
 
-            
-            rospy.loginfo('Searching for the receptacle')
-            if not self.imageDetector.hasFoundReceptacle():
-                continue
+            # TEMP, put back in eventually
+            #rospy.loginfo('Searching for the receptacle')
+            #if not self.imageDetector.hasFoundReceptacle():
+            #    continue
 
 
 
@@ -132,10 +132,9 @@ class MasterClass():
             transBound = .01
             rotBound = float("inf")
             
-            #deltaPose = Util.deltaPose(gripperPose.pose, objectPose.pose)
-            deltaPose = Util.deltaPose(objectPose.pose, gripperPose.pose)
+            deltaPose = Util.deltaPose(gripperPose.pose, objectPose.pose)
             deltaPose.position.z += .03
-            deltaPose.orientation = tfx.tb_angles(0,0,0).msg.Pose()
+            #deltaPose.orientation = tfx.tb_angles(0,0,0).msg.Pose()
 
             code.interact(local=locals())
             
@@ -169,6 +168,9 @@ class MasterClass():
             
             # for debugging purposes
             self.imageDetector.removeObjectPoint()
+
+            # TEMP do only one loop
+            return
 
             """
             rospy.sleep(delay)

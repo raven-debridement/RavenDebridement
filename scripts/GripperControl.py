@@ -147,16 +147,19 @@ class GripperControlClass:
 #w.r.t. Link0
 #down = tfx.tb_angles(0,66,0)
 down = tfx.tb_angles(0,90,0)
-rightArmDot = tfx.pose(tfx.point(-.060, -.039, -.155), down)
-leftArmDot = tfx.pose(tfx.point(-.063, -.017, -.114), down)
+rightArmDot = tfx.pose(tfx.point(-.117, -.020, -.123), down)
+leftArmDot = tfx.pose(tfx.point(.012, -.034, -.119), down)
 leftArmDotOther = tfx.pose(tfx.point(-.034, -.030, -.159), tfx.tb_angles(-9,56.4,-3.4))
 # tfx.tb_angles(0,40,0)
 leftArmFourthDot = tfx.pose(tfx.point(-.084,.003,-.157), down)
 
+armDot = leftArmDot
+arm = MyConstants.Arm.Left
+
 def test_closeGripper():
     rospy.sleep(4)
     rospy.init_node('gripper_control',anonymous=True)
-    gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
 
     rospy.loginfo('Closing the gripper')
     gripperControl.closeGripper()
@@ -166,13 +169,13 @@ def test_closeGripper():
 def test_moveGripper():
     rospy.init_node('gripper_control',anonymous=True)
     listener = tf.TransformListener()
-    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
     rospy.sleep(4)
 
     currPose = tfx.pose(gripperControl.getGripperPose(frame=MyConstants.Frames.Link0))
     
     
-    desPose = leftArmDot
+    desPose = armDot
     #desPose.position.x -= .04
 
     #rospy.loginfo('desPose')
@@ -204,9 +207,11 @@ def test_moveGripper():
 
 def test_moveGripperDelta():
     rospy.init_node('gripper_control',anonymous=True)
-    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
     rospy.sleep(4)
 
+
+    gripperControl.start()
     """
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.World))
 
@@ -220,34 +225,33 @@ def test_moveGripperDelta():
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     
     # w.r.t. Link0
-    desPose = leftArmDot
+    desPose = armDot
+    desPose.position.z += .04
 
     deltaPose = Util.deltaPose(currPose, desPose)
 
-    rospy.loginfo('Waiting...')
-    gripperControl.player.play(False)
+    gripperControl.start()
     
-    rospy.sleep(5)
+    rospy.loginfo('Press enter')
+    raw_input()
 
-    rospy.loginfo('Running...')
+    transBound = .01
+    rotBound = 25
+    
+    rate = rospy.Rate(1)
+
     gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose)
 
-    rospy.loginfo('Waiting...')
-    rospy.sleep(15)
-
-    rospy.loginfo('Stopping...')
-    gripperControl.stop()
-    
-    rospy.sleep(5)
-
-    #while not rospy.is_shutdown():
-    #    rospy.sleep(.1)
+    while not Util.withinBounds(currPose, desPose, transBound, rotBound) and not rospy.is_shutdown():
+        rospy.loginfo('loop')
+        currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))    
+        rate.sleep()
 
 def test_servo():
     rospy.init_node('gripper_control',anonymous=True)
     rospy.sleep(2)
     listener = tf.TransformListener()
-    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
     rospy.sleep(2)
 
     gripperControl.start()
@@ -258,7 +262,7 @@ def test_servo():
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     
     # w.r.t. Link0
-    desPose = leftArmDot
+    desPose = armDot
 
     
     transBound = .01
@@ -285,7 +289,7 @@ def test_servo():
 
 def test_gripperPose():
     rospy.init_node('gripper_control',anonymous=True)
-    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
     """
     point = tfx.point(-.060, -.039, -.150)
     orientation = tfx.tb_angles(0,90,0)
@@ -307,23 +311,19 @@ def test_down():
 
 def test_commandRaven():
     rospy.init_node('command_raven',anonymous=True)
-    armName = MyConstants.Arm.Left
+    armName = arm
     gripperControl = GripperControlClass(armName, tf.TransformListener())
     raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
     rospy.sleep(4)
 
-    toolPose = leftArmDot
-    """
-    toolPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
-    #toolPose.orientation = tfx.tb_angles(0,0,0)
-    toolPose.position.z += .02
-    toolPose = toolPose.msg.Pose()
-    """
-
+    desPose = armDot
+    
     while not rospy.is_shutdown():
-       
-        quat0 = leftArmDot.msg.Pose().orientation
-        quat1 = gripperControl.getGripperPose(frame=MyConstants.Frames.Link0).orientation
+
+        currPose = gripperControl.getGripperPose(MyConstants.Frames.Link0)
+
+        deltaPose = Util.deltaPose(currPose, desPose)
+
 
  
         # original attempt at moving the arm
@@ -335,7 +335,7 @@ def test_commandRaven():
     
         # create the tool pose
         toolCmd = ToolCommand()
-        toolCmd.pose = tfx.pose([0,0,0]).msg.Pose()
+        toolCmd.pose = deltaPose #tfx.pose([0,0,0]).msg.Pose()
         toolCmd.pose_option = ToolCommand.POSE_RELATIVE
         toolCmd.grasp_option = ToolCommand.GRASP_OFF
     
@@ -371,9 +371,59 @@ def test_commandRaven():
 
         rospy.sleep(.05)
 
+def test_commandServo():
+    rospy.init_node('command_servo',anonymous=True)
+    armName = arm
+    gripperControl = GripperControlClass(armName, tf.TransformListener())
+    raven_pub = rospy.Publisher('/raven_command/tool/L', ToolCommandStamped)
+    rospy.sleep(4)
+
+    desPose = armDot
+
+    rate = rospy.Rate(5)
+
+    while not rospy.is_shutdown():
+
+        currPose = gripperControl.getGripperPose(MyConstants.Frames.Link0)
+        deltaPose = Util.deltaPose(currPose, desPose)
+
+
+        currPose = tfx.pose(currPose)
+        deltaPose = tfx.pose(deltaPose)
+
+        endPosition = currPose.position + deltaPose.position
+        endQuatMat = currPose.orientation.matrix * deltaPose.orientation.matrix
+
+        endPose = tfx.pose(endPosition, endQuatMat).msg.Pose()
+
+        
+
+        # original attempt at moving the arm
+        # create the header
+        header = Header()
+        header.frame_id = MyConstants.Frames.Link0
+        header.stamp = rospy.Time.now()
+    
+        # create the tool pose
+        toolCmd = ToolCommand()
+        toolCmd.pose = endPose
+        toolCmd.pose_option = ToolCommand.POSE_ABSOLUTE
+        toolCmd.grasp_option = ToolCommand.GRASP_OFF
+    
+        
+        # create tool pose stamped
+        toolCmdStamped = ToolCommandStamped()
+        toolCmdStamped.header = header
+        toolCmdStamped.command = toolCmd
+
+        raven_pub.publish(toolCmdStamped)
+        
+
+        rate.sleep()
+
 def test_commandJoints():
     rospy.init_node('command_raven',anonymous=True)
-    armName = MyConstants.Arm.Left
+    armName = arm
     gripperControl = GripperControlClass(armName, tf.TransformListener())
     raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
     rospy.sleep(4)
@@ -425,31 +475,6 @@ def test_commandJoints():
         rospy.sleep(.05)
     
 
-def test_rotation():
-    a0 = tfx.tb_angles(0,90,0)
-    a1 = tfx.tb_angles(45,45,45)
-
-    q0 = a0.quaternion
-    q1 = a1.quaternion
-
-    rotQuat = Util.rotation_from_to(q0,q1)
-    print(rotQuat)
-
-    tbRot = tfx.tb_angles(rotQuat)
-    print(tbRot)
-    """
-
-    rot0 = tfx.canonical.CanonicalRotation(q0)
-    rot1 = tfx.canonical.CanonicalRotation(q1)
-
-    print(type(rot0))
-    print(dir(rot0))
-    
-    code.interact(local=locals())
-
-    #out = rot0.rotation_to(rot1)
-    print(out)
-    """
 
 def test_jointPositions():
     rospy.init_node('command_raven',anonymous=True)
@@ -467,7 +492,7 @@ def test_angleBetween():
     gripperControl = GripperControlClass(armName, tf.TransformListener())
     rospy.sleep(4)
 
-    quat0 = leftArmDot.msg.Pose().orientation
+    quat0 = armDot.msg.Pose().orientation
     quat1 = gripperControl.getGripperPose(frame=MyConstants.Frames.Link0).orientation
 
     between = Util.angleBetweenQuaternions(quat0,quat1)
@@ -487,8 +512,8 @@ if __name__ == '__main__':
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()
-    test_servo()
-
+    #test_servo()
+    test_commandServo()
 
 
 
