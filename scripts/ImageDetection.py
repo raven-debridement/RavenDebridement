@@ -63,8 +63,8 @@ class ImageDetectionClass():
         self.objMarker = None
 
     def foamCallback(self, msg):
-        self.listener.waitForTransform('/stereo_53',msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
-        self.objectPoint = self.listener.transformPoint('/stereo_53',msg)
+        self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
+        self.objectPoint = self.listener.transformPoint(Constants.AR.Frames.Base,msg)
         
         # to account for gripper being open
         # and offset of marker from center of gripper
