@@ -29,6 +29,9 @@ class ImageDetectionClass():
         # gripper pose. Must both have frame_id of respective tool frame
         self.leftGripperPose = None
         self.rightGripperPose = None
+
+        self.newLeftGripperPose = False
+        self.newRightGripperPose = False
         #receptacle point. Must have frame_id of global (or main camera) frame
         #is the exact place to drop off (i.e. don't need to do extra calcs to move away
         self.receptaclePoint = None
@@ -39,6 +42,8 @@ class ImageDetectionClass():
             # default to straight up
             self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
 
+        self.listener = tf.TransformListener()
+
         #######################
         # MAY NEED TO USE LOCKS
         #######################
@@ -48,10 +53,20 @@ class ImageDetectionClass():
         rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
         #rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
 
+        rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
+
     def registerObjectPublisher(self):
         object_topic = "object_marker"
         self.objPublisher = rospy.Publisher(object_topic, Marker)
         self.objMarker = None
+
+    def foamCallback(self, msg):
+        self.listener.waitForTransform('/stereo_53',msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
+        self.objectPoint = self.listener.transformPoint('/stereo_53',msg)
+        
+        # to account for gripper being open
+        # and offset of marker from center of gripper
+        self.objectPoint.point.y += .015
 
     def stereoCallback(self, msg):
         """
@@ -146,6 +161,21 @@ class ImageDetectionClass():
         else:
             return (self.rightGripperPose != None)
 
+    def hasFoundNewGripper(self, armName):
+        """
+        armName must be from Constants.Arm
+
+        Returns true if new gripper location since
+        last call to getGripperPose
+        """
+        if not self.hasFoundGripper(armName):
+            return False
+
+        if armName == Constants.Arm.Left:
+            return self.newLeftGripperPose
+        else:
+            return self.newRightGripperPose
+
     def getGripperPose(self, armName):
         """
         armName must be from Constants.Arm
@@ -157,8 +187,10 @@ class ImageDetectionClass():
 
         # may want to make a copy of gripper pose eventually
         if armName == Constants.Arm.Left:
+            self.newLeftGripperPose = False
             return self.leftGripperPose
         else:
+            self.newRightGripperPose = False
             return self.rightGripperPose
 
 

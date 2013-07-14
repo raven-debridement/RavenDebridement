@@ -44,3 +44,6 @@ class RavenTopics:
     RavenState = '/raven_state'
     RavenCommand = '/raven_command'
 
+class Foam:
+    Topic = '/foam_points'
+
