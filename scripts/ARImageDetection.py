@@ -95,13 +95,20 @@ class ARImageDetectionClass(ImageDetectionClass):
                     #self.arHandler(marker, "left")
                     self.arHandlerWithOrientation(marker, "left")
                 elif frame == Constants.AR.Frames.Object:
+                    pose = PoseStamped()
+                    pose.header.stamp = marker.header.stamp
+                    pose.header.frame_id = marker.header.frame_id
+                    pose.pose = marker.pose.pose
+
+                    self.listener.waitForTransform(Constants.AR.Frames.Base,marker.header.frame_id,pose.header.stamp,rospy.Duration(5))
+                    pose = self.listener.transformPose(Constants.AR.Frames.Base,pose)
+
                     point = PointStamped()
                     point.header.stamp = marker.header.stamp
                     point.header.frame_id = marker.header.frame_id
-                    point.point = marker.pose.pose.position
-
-                    self.listener.waitForTransform('/stereo_53',marker.header.frame_id,point.header.stamp,rospy.Duration(5))
-                    point = self.listener.transformPoint('/stereo_53',point)
+                    point.point = pose.pose.position
+                    #self.normal = pose.pose.orientation
+                    #self.normal = Util.reverseQuaternion(pose.pose.orientation)
 
                     #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id)
                     #point = tfx.point(tf_frame_to_53 * tfx.point(point.point)).msg.PointStamped()
@@ -111,10 +118,10 @@ class ARImageDetectionClass(ImageDetectionClass):
                     # commented out since recognize foam now
                     #self.objectPoint = point
                     
-                    self.normal = tfx.tb_angles(marker.pose.pose.orientation).msg
+                    #self.normal = tfx.tb_angles(marker.pose.pose.orientation).msg
                     #self.normal = tfx.tb_angles(tfx.tb_angles(0,90,0).matrix*tfx.tb_angles(marker.pose.pose.orientation).matrix).msg
                     #self.normal = Util.reverseQuaternion(marker.pose.pose.orientation)
-                    #self.normal = tfx.tb_angles(0,90,0).msg
+                    self.normal = tfx.tb_angles(0,0,-90).msg
                 elif ids_to_joints[marker.id] == Constants.Arm.Right:
                     self.arHandlerWithOrientation(marker, "right")
             self.locks['ar_pose'].release() 
@@ -155,8 +162,8 @@ class ARImageDetectionClass(ImageDetectionClass):
         # frame='/stereo_33',stamp=marker.header.stamp
         pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-90).matrix,frame='/stereo_33',stamp=marker.header.stamp)
         #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
-        self.listener.waitForTransform('/stereo_53','/stereo_33',marker.header.stamp,rospy.Duration(5))
-        pose = self.listener.transformPose('/stereo_53',pose.msg.PoseStamped())
+        self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_33',marker.header.stamp,rospy.Duration(5))
+        pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
 
         #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id,True)
         #pose = tfx.pose(tf_frame_to_53 * pose).msg.PoseStamped()
@@ -217,11 +224,10 @@ def testFound():
 
 def testRotation():
     rospy.init_node('ar_image_detection')
-    rospy.sleep(2)
 
     imageDetector = ARImageDetectionClass()
     listener = tf.TransformListener()
-
+    tf_br = tf.TransformBroadcaster()
     
 
     while not rospy.is_shutdown():
@@ -236,6 +242,12 @@ def testRotation():
 
                 obj_tb = tfx.tb_angles(obj.pose.orientation)
                 gripper_tb = tfx.tb_angles(gripper.pose.orientation)
+                pt = gripper.pose.position
+                ori = obj.pose.orientation
+                print "ori", ori
+                tf_br.sendTransform((pt.x, pt.y, pt.z), (ori.x, ori.y, ori.z, ori.w),
+                                    gripper.header.stamp, '/des_pose', Constants.AR.Frames.Base)
+                
                 
                 between = Util.angleBetweenQuaternions(obj_tb.msg, gripper_tb.msg)
                 print('Angle between')
