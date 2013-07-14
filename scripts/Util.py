@@ -13,6 +13,8 @@ from geometry_msgs.msg import Twist, PointStamped, PoseStamped, Quaternion, Poin
 import tf
 import tf.transformations as tft
 import operator
+import numpy as np
+import math
 
 import tfx
 
@@ -188,43 +190,30 @@ def euclideanDistance(ps0, ps1, listener=None, xPlane=True, yPlane=True, zPlane=
 
     return ((x1-x0)**2 + (y1-y0)**2 + (z1-z0)**2)**.5
 
-def withinBounds(ps0, ps1, transBound, rotBound, listener=None):
+def withinBounds(ps0, ps1, transBound, rotBound):
     """
     Returns if ps0 and ps1 (PoseStamped) are within translation and rotation bounds of each other
 
-    Note: rotBound is for euler angles
+    Note: rotBound is in degrees
     """
-    # must be in same reference frame
-    if listener != None:
-        try:
-            ps0, ps1 = convertToSameFrameAndTime(ps0, ps1, listener)
-        except tf.Exception:
+    ps0, ps1 = tfx.pose(ps0), tfx.pose(ps1)
+
+    # convert to same frame if needed
+    if ps0.frame != None and ps1.frame != None:
+        tf0_to_1 = tfx.lookupTransform(ps1.frame, ps0.frame)
+        ps1 = tf0_to_1 * ps0
+
+    deltaPositions = ps0.position - ps1.position
+    for deltaPos in list(deltaPositions):
+        if abs(deltaPos) > transBound:
             return False
 
-    if ps0 == None or ps1 == None:
+    between = angleBetweenQuaternions(ps0.msg.Pose().orientation, ps1.msg.Pose().orientation)
+    if  between > rotBound:
         return False
-
-    xtrans0, ytrans0, ztrans0 = ps0.pose.position.x, ps0.pose.position.y, ps0.pose.position.z
-    xtrans1, ytrans1, ztrans1 = ps1.pose.position.x, ps1.pose.position.y, ps1.pose.position.z
-
-    wrot0, xrot0, yrot0, zrot0 = ps0.pose.orientation.w, ps0.pose.orientation.x, ps0.pose.orientation.y, ps0.pose.orientation.z    
-    wrot1, xrot1, yrot1, zrot1 = ps1.pose.orientation.w, ps1.pose.orientation.x, ps1.pose.orientation.y, ps1.pose.orientation.z
-
-    # convert to euler angles
-    ps0rot0, ps0rot1, ps0rot2 = tft.euler_from_quaternion([xrot0, yrot0, zrot0, wrot0])
-    ps1rot0, ps1rot1, ps1rot2 = tft.euler_from_quaternion([xrot1, yrot1, zrot1, wrot1])
-
-    within = True
-
-    within &= abs(xtrans0 - xtrans1) < transBound
-    within &= abs(ytrans0 - ytrans1) < transBound
-    within &= abs(ztrans0 - ztrans1) < transBound
     
-    within &= abs(ps0rot0 - ps1rot0) < rotBound
-    within &= abs(ps0rot1 - ps1rot1) < rotBound
-    within &= abs(ps0rot2 - ps1rot2) < rotBound
-
-    return within
+    return True
+    
 
 
 def combinePoses(pose0, pose1, op=operator.sub):
@@ -272,14 +261,16 @@ def deltaPose(currPose, desPose):
     currPose, desPose = tfx.pose(currPose), tfx.pose(desPose)
 
     deltaPosition = desPose.position - currPose.position
-    deltaQuat = rotationFromTo(currPose.orientation, desPose.orientation)
-    deltaPose = tfx.pose(deltaPosition, deltaQuat)
+    deltaRot = currPose.orientation.rotation_to(desPose.orientation)
+    deltaPose = tfx.pose(deltaPosition, deltaRot)
 
     return deltaPose.msg.Pose()
     
 
 def rotationFromTo(quat0, quat1):
     """
+    DEPRECATED
+
     Returns the quaternion that rotates
     quat0 to quat1
     
@@ -294,7 +285,21 @@ def rotationFromTo(quat0, quat1):
 
     return Quaternion(*fromToQuat)
     
+def angleBetweenQuaternions(quat0, quat1):
+    """
+    Returns angle between quat0 and quat1 in degrees
+    """
+    q0 = np.array([quat0.x, quat0.y, quat0.z, quat0.w])
+    q1 = np.array([quat1.x, quat1.y, quat1.z, quat1.w])
 
+    try:
+        theta = math.acos(2*np.dot(q0,q1)**2 - 1)
+    except ValueError:
+        return float("inf")
+
+    theta = theta*(180.0/math.pi)
+
+    return theta
 
 class TimeoutClass():
     def __init__(self, timeoutTime):
@@ -315,3 +320,4 @@ class TimeoutClass():
         greater than the current time
         """
         return rospy.Time.now() > self.endTime 
+

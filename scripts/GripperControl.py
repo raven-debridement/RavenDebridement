@@ -19,9 +19,12 @@ import tfx
 from raven_2_msgs.msg import *
 from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
 
+import thread
+
 # rename so no conflict with raven_2_msgs.msg.Constants
 import Constants as MyConstants
 import Util
+from MyTrajectoryPlayer import MyTrajectoryPlayer
 
 
 class GripperControlClass:
@@ -48,7 +51,8 @@ class GripperControlClass:
 
         #self.pub = rospy.Publisher(self.tooltopic, ToolCommandStamped)
         #self.raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
-        #self.player = TrajectoryPlayer(arms=self.armName)
+        
+        self.player = MyTrajectoryPlayer(arms=self.armName)
 
         self.jointStates = list()
         rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
@@ -67,16 +71,8 @@ class GripperControlClass:
         startPose = tfx.pose(startPose)
         endPose = tfx.pose(endPose)
 
-        player = TrajectoryPlayer(arms=self.armName)
-
-        #player.add_goto_first_pose(endPose, duration=10)
-        player.add_pose_to_pose('goToGripperPose',startPose,endPose)
-
-        print('moveGripper, not delta')
-        print(endPose)
-        print(startPose)
-
-        return player.play()
+        self.player.clear_stages()
+        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose)
         
 
     def goToGripperPoseDelta(self, startPose, deltaPose):
@@ -89,64 +85,40 @@ class GripperControlClass:
         deltaPose is the difference between the current pose and the final pose
         """
 
-        player = TrajectoryPlayer(arms=self.armName)
-
         # convert to tfx format
         startPose = tfx.pose(startPose)
         deltaPose = tfx.pose(deltaPose)
 
 
-        #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.quaternion + deltaPose.orientation.quaternion)
-        #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.matrix*deltaPose.orientation.matrix)
-
-        #endAngles = tfx.tb_angles(startPose.tb_angles.yaw_deg + deltaPose.tb_angles.yaw_deg, startPose.tb_angles.pitch_deg + deltaPose.tb_angles.pitch_deg, startPose.tb_angles.roll_deg + deltaPose.tb_angles.roll_deg)
-        #endPose = tfx.pose(startPose.position + deltaPose.position, endAngles)
-        # work on orientation combination
-
-        #endPose = Util.addPoses(startPose, deltaPose)
-
-        # convert to tfx format
-        #startPose = tfx.pose(startPose)
-        #endPose = tfx.pose(endPose)
-
-
         endPosition = startPose.position + deltaPose.position
-        
-        startRot = tfx.rotation_tb(startPose.orientation)
-        deltaRot = tfx.rotation_tb(deltaPose.orientation)
-        endQuatMat = deltaRot.matrix*startRot.matrix
+    
+        endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
 
         endPose = tfx.pose(endPosition, endQuatMat)
+    
+        self.player.clear_stages()
+        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=4)
 
-        #code.interact(local=locals())
 
-        # TEMP!!!!
-        #endPose.orientation = tfx.tb_angles(0,90,0)
+    def start(self):
+        # start running, no blocking
+        return self.player.play(False)
 
-        print('moveGripper')
-        print(endPose)
-        print(startPose)
-        print(tfx.pose(deltaPose))
-        print(endPose.orientation.quaternion)
-        print(startPose.orientation.quaternion)
-        print(tfx.pose(deltaPose).orientation.quaternion)
-
+    def pause(self):
+        # pauses by clearing stages
+        self.player.clear_stages()
         
-        player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=10)
-
-        return player.play()
-        
+    def stop(self):
+        return self.player.stop_playing()
 
     def closeGripper(self):
-        player = TrajectoryPlayer(arms=self.armName)
-        player.add_close_gripper(duration=4)
-        return player.play()
+        self.player.clear_stages()
+        self.player.add_close_gripper(duration=4)
                 
     def openGripper(self):
-        player = TrajectoryPlayer(arms=self.armName)
-        player.add_open_gripper(duration=4)
-        return player.play()
-
+        self.player.clear_stages()
+        self.player.add_open_gripper(duration=4)
+        
     def getGripperPose(self,frame=MyConstants.Frames.World):
         """
         Returns gripper pose w.r.t. frame
@@ -165,18 +137,29 @@ class GripperControlClass:
     def getJointStates(self):
         return self.jointStates
         
-        
+
+
+
+
+
+
+
 #w.r.t. Link0
 #down = tfx.tb_angles(0,66,0)
 down = tfx.tb_angles(0,90,0)
-rightArmDot = tfx.pose(tfx.point(-.060, -.039, -.155), down)
-leftArmDot = tfx.pose(tfx.point(-.036, .001, -.159), tfx.tb_angles(-9,56.4,-3.4))
+rightArmDot = tfx.pose(tfx.point(-.117, -.020, -.123), down)
+leftArmDot = tfx.pose(tfx.point(.012, -.034, -.119), down)
 leftArmDotOther = tfx.pose(tfx.point(-.034, -.030, -.159), tfx.tb_angles(-9,56.4,-3.4))
+# tfx.tb_angles(0,40,0)
+leftArmFourthDot = tfx.pose(tfx.point(-.084,.003,-.157), down)
+
+armDot = leftArmDot
+arm = MyConstants.Arm.Left
 
 def test_closeGripper():
     rospy.sleep(4)
     rospy.init_node('gripper_control',anonymous=True)
-    gripperControl = GripperControlClass(MyConstants.Arm.Right, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
 
     rospy.loginfo('Closing the gripper')
     gripperControl.closeGripper()
@@ -186,13 +169,13 @@ def test_closeGripper():
 def test_moveGripper():
     rospy.init_node('gripper_control',anonymous=True)
     listener = tf.TransformListener()
-    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
     rospy.sleep(4)
 
     currPose = tfx.pose(gripperControl.getGripperPose(frame=MyConstants.Frames.Link0))
     
     
-    desPose = leftArmDot
+    desPose = armDot
     #desPose.position.x -= .04
 
     #rospy.loginfo('desPose')
@@ -216,17 +199,19 @@ def test_moveGripper():
     desPose = desPose.msg.Pose()
     
     gripperControl.goToGripperPose(currPose,desPose)
+
     
 
 
 
 
 def test_moveGripperDelta():
-    rospy.sleep(4)
     rospy.init_node('gripper_control',anonymous=True)
-    listener = tf.TransformListener()
-    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
+    rospy.sleep(4)
 
+
+    gripperControl.start()
     """
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.World))
 
@@ -240,45 +225,71 @@ def test_moveGripperDelta():
     currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
     
     # w.r.t. Link0
-    desPose = leftArmDotOther
+    desPose = armDot
+    desPose.position.z += .04
 
-    #deltaPosition = desPose.position - currPose.position
-    #deltaQuat = Util.rotationFromTo(currPose.orientation, desPose.orientation)
-    #deltaPose = tfx.pose(deltaPosition, deltaQuat)
     deltaPose = Util.deltaPose(currPose, desPose)
 
-    #deltaPose = tfx.pose(Util.subPoses(desPose, currPose))
+    gripperControl.start()
     
+    rospy.loginfo('Press enter')
+    raw_input()
 
-    #deltaOrientation = tfx.tb_angles(desPose.tb_angles.yaw_deg - currPose.tb_angles.yaw_deg, desPose.tb_angles.pitch_deg - currPose.tb_angles.pitch_deg, desPose.tb_angles.roll_deg - currPose.tb_angles.roll_deg)
-    #deltaPose = tfx.pose(desPose.position - currPose.position, deltaOrientation)
+    transBound = .01
+    rotBound = 25
     
-    #d = desPose.orientation.quaternion - currPose.orientation.quaternion
-    #deltaQuat = d - np.dot(d, currPose.orientation.quaternion)*currPose.orientation.quaternion
-    #deltaPose = tfx.pose(desPose.position - currPose.position, deltaQuat)
+    rate = rospy.Rate(1)
 
-    #code.interact(local=locals())
-
-    #deltaPose = tfx.pose(desPose.position - currPose.position, desPose.orientation.quaternion - currPose.orientation.quaternion)
-    
-    
-    print('testMoveGripper')
-    print(tfx.pose(desPose))
-    print(tfx.pose(currPose))
-    print(tfx.pose(deltaPose))
-    print(desPose.orientation.quaternion)
-    print(currPose.orientation.quaternion)
-    print(tfx.pose(deltaPose).orientation.quaternion)
-    
     gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose)
 
+    while not Util.withinBounds(currPose, desPose, transBound, rotBound) and not rospy.is_shutdown():
+        rospy.loginfo('loop')
+        currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))    
+        rate.sleep()
+
+def test_servo():
+    rospy.init_node('gripper_control',anonymous=True)
+    rospy.sleep(2)
+    listener = tf.TransformListener()
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
+    rospy.sleep(2)
+
+    gripperControl.start()
+
+    rospy.loginfo('Press enter')
+    raw_input()
+
+    currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
+    
+    # w.r.t. Link0
+    desPose = armDot
+
+    
+    transBound = .01
+    rotBound = 25
+    
+    rate = rospy.Rate(1)
+
+    while not Util.withinBounds(currPose, desPose, transBound, rotBound) and not rospy.is_shutdown():
+        rospy.loginfo('LOOP!!!!!!!!!')
+        
+        gripperControl.pause()
+
+        currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
+    
+        deltaPose = Util.deltaPose(currPose, desPose)
+    
+        gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose)
+        
+        rate.sleep()
+	
 
 
-
+        
 
 def test_gripperPose():
     rospy.init_node('gripper_control',anonymous=True)
-    gripperControl = GripperControlClass(MyConstants.Arm.Left, tf.TransformListener())
+    gripperControl = GripperControlClass(arm, tf.TransformListener())
     """
     point = tfx.point(-.060, -.039, -.150)
     orientation = tfx.tb_angles(0,90,0)
@@ -300,20 +311,21 @@ def test_down():
 
 def test_commandRaven():
     rospy.init_node('command_raven',anonymous=True)
-    armName = MyConstants.Arm.Left
+    armName = arm
     gripperControl = GripperControlClass(armName, tf.TransformListener())
     raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
     rospy.sleep(4)
 
-    toolPose = leftArmDotOther
-    """
-    toolPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
-    #toolPose.orientation = tfx.tb_angles(0,0,0)
-    toolPose.position.z += .02
-    toolPose = toolPose.msg.Pose()
-    """
-
+    desPose = armDot
+    
     while not rospy.is_shutdown():
+
+        currPose = gripperControl.getGripperPose(MyConstants.Frames.Link0)
+
+        deltaPose = Util.deltaPose(currPose, desPose)
+
+
+ 
         # original attempt at moving the arm
         # create the header
         header = Header()
@@ -323,8 +335,8 @@ def test_commandRaven():
     
         # create the tool pose
         toolCmd = ToolCommand()
-        toolCmd.pose = toolPose
-        toolCmd.pose_option = ToolCommand.POSE_ABSOLUTE
+        toolCmd.pose = deltaPose #tfx.pose([0,0,0]).msg.Pose()
+        toolCmd.pose_option = ToolCommand.POSE_RELATIVE
         toolCmd.grasp_option = ToolCommand.GRASP_OFF
     
         
@@ -359,9 +371,59 @@ def test_commandRaven():
 
         rospy.sleep(.05)
 
+def test_commandServo():
+    rospy.init_node('command_servo',anonymous=True)
+    armName = arm
+    gripperControl = GripperControlClass(armName, tf.TransformListener())
+    raven_pub = rospy.Publisher('/raven_command/tool/L', ToolCommandStamped)
+    rospy.sleep(4)
+
+    desPose = armDot
+
+    rate = rospy.Rate(5)
+
+    while not rospy.is_shutdown():
+
+        currPose = gripperControl.getGripperPose(MyConstants.Frames.Link0)
+        deltaPose = Util.deltaPose(currPose, desPose)
+
+
+        currPose = tfx.pose(currPose)
+        deltaPose = tfx.pose(deltaPose)
+
+        endPosition = currPose.position + deltaPose.position
+        endQuatMat = currPose.orientation.matrix * deltaPose.orientation.matrix
+
+        endPose = tfx.pose(endPosition, endQuatMat).msg.Pose()
+
+        
+
+        # original attempt at moving the arm
+        # create the header
+        header = Header()
+        header.frame_id = MyConstants.Frames.Link0
+        header.stamp = rospy.Time.now()
+    
+        # create the tool pose
+        toolCmd = ToolCommand()
+        toolCmd.pose = endPose
+        toolCmd.pose_option = ToolCommand.POSE_ABSOLUTE
+        toolCmd.grasp_option = ToolCommand.GRASP_OFF
+    
+        
+        # create tool pose stamped
+        toolCmdStamped = ToolCommandStamped()
+        toolCmdStamped.header = header
+        toolCmdStamped.command = toolCmd
+
+        raven_pub.publish(toolCmdStamped)
+        
+
+        rate.sleep()
+
 def test_commandJoints():
     rospy.init_node('command_raven',anonymous=True)
-    armName = MyConstants.Arm.Left
+    armName = arm
     gripperControl = GripperControlClass(armName, tf.TransformListener())
     raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
     rospy.sleep(4)
@@ -387,10 +449,11 @@ def test_commandJoints():
         armCmd.active = True
 
         for index in range(len(currJointStates)):
-            if currJointStates[index].type == Constants.JOINT_TYPE_ROTATION:
+            if currJointStates[index].type == Constants.JOINT_TYPE_PITCH:
                 jointCmd = JointCommand()
                 jointCmd.command_type = JointCommand.COMMAND_TYPE_POSITION
-                jointCmd.value = currJointStates[index].position + randomJointMovements[index]
+                jointCmd.value = 0.0
+                #jointCmd.value = currJointStates[index].position + randomJointMovements[index]
 
                 armCmd.joint_types.append(currJointStates[index].type)
                 armCmd.joint_commands.append(jointCmd)
@@ -412,31 +475,6 @@ def test_commandJoints():
         rospy.sleep(.05)
     
 
-def test_rotation():
-    a0 = tfx.tb_angles(0,90,0)
-    a1 = tfx.tb_angles(45,45,45)
-
-    q0 = a0.quaternion
-    q1 = a1.quaternion
-
-    rotQuat = Util.rotation_from_to(q0,q1)
-    print(rotQuat)
-
-    tbRot = tfx.tb_angles(rotQuat)
-    print(tbRot)
-    """
-
-    rot0 = tfx.canonical.CanonicalRotation(q0)
-    rot1 = tfx.canonical.CanonicalRotation(q1)
-
-    print(type(rot0))
-    print(dir(rot0))
-    
-    code.interact(local=locals())
-
-    #out = rot0.rotation_to(rot1)
-    print(out)
-    """
 
 def test_jointPositions():
     rospy.init_node('command_raven',anonymous=True)
@@ -448,17 +486,62 @@ def test_jointPositions():
         rospy.loginfo(gripperControl.getJointStates())
         rospy.sleep(.5)
 
+def test_angleBetween():
+    rospy.init_node('command_raven',anonymous=True)
+    armName = MyConstants.Arm.Left
+    gripperControl = GripperControlClass(armName, tf.TransformListener())
+    rospy.sleep(4)
+
+    quat0 = armDot.msg.Pose().orientation
+    quat1 = gripperControl.getGripperPose(frame=MyConstants.Frames.Link0).orientation
+
+    between = Util.angleBetweenQuaternions(quat0,quat1)
+
+    code.interact(local=locals())
+    
+    print(between)
+
 if __name__ == '__main__':
     #test_closeGripper()
     #test_moveGripper()
-    test_moveGripperDelta()
+    #test_moveGripperDelta()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
     #test_rotation()
     #test_jointPositions()
     #test_commandJoints()
+    #test_angleBetween()
+    #test_servo()
+    test_commandServo()
 
+
+
+"""
+        print('moveGripper')
+        print(endPose)
+        print(startPose)
+        print(tfx.pose(deltaPose))
+        print(endPose.orientation.quaternion)
+        print(startPose.orientation.quaternion)
+        print(tfx.pose(deltaPose).orientation.quaternion)
+"""
+
+
+"""
+    #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.quaternion + deltaPose.orientation.quaternion)
+    #endPose = tfx.pose(startPose.position + deltaPose.position, startPose.orientation.matrix*deltaPose.orientation.matrix)
+
+    #endAngles = tfx.tb_angles(startPose.tb_angles.yaw_deg + deltaPose.tb_angles.yaw_deg, startPose.tb_angles.pitch_deg + deltaPose.tb_angles.pitch_deg, startPose.tb_angles.roll_deg + deltaPose.tb_angles.roll_deg)
+    #endPose = tfx.pose(startPose.position + deltaPose.position, endAngles)
+    # work on orientation combination
+
+    #endPose = Util.addPoses(startPose, deltaPose)
+
+    # convert to tfx format
+    #startPose = tfx.pose(startPose)
+    #endPose = tfx.pose(endPose)
+"""
 
 
 

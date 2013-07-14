@@ -38,6 +38,7 @@ class ARImageDetectionClass(ImageDetectionClass):
       Used to detect object, grippers, and receptacle
       """
       def __init__(self, normal=None):
+            self.objectPoint = None
             
             self.objectPoint = None
             self.registerObjectPublisher()
@@ -90,6 +91,8 @@ class ARImageDetectionClass(ImageDetectionClass):
                     point.header.frame_id = marker.header.frame_id
                     point.point = marker.pose.pose.position
                     self.objectPoint = point
+                    #self.normal = marker.pose.pose.orientation
+                    self.normal = Util.reverseQuaternion(marker.pose.pose.orientation)
                 elif ids_to_joints[marker.id] == Constants.Arm.Right:
                     self.arHandlerWithOrientation(marker, "right")
             self.locks['ar_pose'].release() 
@@ -143,7 +146,7 @@ def testCalibration():
             imageDetector.setState(ARImageDetectionClass.State.CalibrateLeft)
         rospy.sleep(.5)
 
-def testFoundGripper():
+def testFound():
     rospy.init_node('ar_image_detection')
     imageDetector = ARImageDetectionClass()
       
@@ -153,11 +156,15 @@ def testFoundGripper():
         if imageDetector.hasFoundGripper(Constants.Arm.Right):
             rospy.loginfo('Found right arm')
             
+        if imageDetector.hasFoundObject():
+            rospy.loginfo('Found object')
+            
         rospy.loginfo('Spinning')
         rospy.sleep(.5)
       
 
 if __name__ == '__main__':
     #testCalibration()
+    #testFound()
     #testFoundGripper()
     testObjectPoint()
