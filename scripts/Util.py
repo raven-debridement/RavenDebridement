@@ -18,6 +18,8 @@ import math
 
 import tfx
 
+import code
+
 def positionSubtract(p1, offset):
     pos = Point()
     pos.x = p1.x - offset.x
@@ -199,16 +201,21 @@ def withinBounds(ps0, ps1, transBound, rotBound):
     ps0, ps1 = tfx.pose(ps0), tfx.pose(ps1)
 
     # convert to same frame if needed
-    if ps0.frame != None and ps1.frame != None:
+    if ps0.frame != None and ps1.frame != None and ps0.frame != ps1.frame:
         tf0_to_1 = tfx.lookupTransform(ps1.frame, ps0.frame)
         ps1 = tf0_to_1 * ps0
+        ps0.frame = ps1.frame
 
-    deltaPositions = ps0.position - ps1.position
+    deltaPositions = (ps0.position - ps1.position).list
+    print('deltaPositions')
+    print(deltaPositions)
     for deltaPos in list(deltaPositions):
         if abs(deltaPos) > transBound:
             return False
 
     between = angleBetweenQuaternions(ps0.msg.Pose().orientation, ps1.msg.Pose().orientation)
+    print('angleBetween')
+    print(between)
     if  between > rotBound:
         return False
     
@@ -224,6 +231,7 @@ def combinePoses(pose0, pose1, op=operator.sub):
     """
 
     pose0, pose1 = tfx.pose(pose0), tfx.pose(pose1)
+
     
     deltaAngles = tfx.tb_angles(op(pose0.tb_angles.yaw_deg, pose1.tb_angles.yaw_deg), op(pose0.tb_angles.pitch_deg, pose1.tb_angles.pitch_deg), op(pose0.tb_angles.roll_deg, pose1.tb_angles.roll_deg))
     print('combinePoses-deltaAngles')
@@ -295,7 +303,7 @@ def angleBetweenQuaternions(quat0, quat1):
     try:
         theta = math.acos(2*np.dot(q0,q1)**2 - 1)
     except ValueError:
-        return float("inf")
+        return 0
 
     theta = theta*(180.0/math.pi)
 
