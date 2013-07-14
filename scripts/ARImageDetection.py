@@ -52,9 +52,13 @@ class ARImageDetectionClass(ImageDetectionClass):
 
             self.newLeftGripperPose = False
             self.newRightGripperPose = False
-            #receptacle point. Must have frame_id of global (or main camera) frame
-            #is the exact place to drop off (i.e. don't need to do extra calcs to move away)
-            self.receptaclePoint = None
+
+
+            #receptacle point. Must have frame_id of link_0
+            #is the exact place to drop off (i.e. don't need to do extra calcs to move away
+            self.receptaclePoint = tfx.point([-.18,-.017,-.078],frame=Constants.Frames.Link0).msg.PointStamped()
+            
+
             #table normal. Must be according to global (or main camera) frame
             if normal != None:
                   self.normal = normal

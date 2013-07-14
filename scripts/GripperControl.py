@@ -70,6 +70,9 @@ class GripperControlClass:
         startPose = tfx.pose(startPose)
         endPose = tfx.pose(endPose)
 
+        # TEMP, until fix orientation issue
+        endPose = tfx.pose(endPose.position, tfx.tb_angles(0,90,0))
+
         self.player.clear_stages()
         self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
         
@@ -121,15 +124,15 @@ class GripperControlClass:
     def stop(self):
         return self.player.stop_playing()
 
-    def closeGripper(self):
+    def closeGripper(self,duration=5):
         self.player.clear_stages()
-        self.player.add_close_gripper()
+        self.player.add_close_gripper(duration=duration)
                 
-    def openGripper(self):
+    def openGripper(self,duration=5):
         self.player.clear_stages()
-        self.player.add_open_gripper()
+        self.player.add_open_gripper(duration=duration)
 
-    def setGripper(self, value, duration=2):
+    def setGripper(self, value, duration=5):
         self.player.clear_stages()
         self.player.add_set_gripper(value,duration=duration)
 
@@ -170,15 +173,21 @@ leftArmFourthDot = tfx.pose(tfx.point(-.084,.003,-.157), down)
 armDot = leftArmDot
 arm = MyConstants.Arm.Left
 
-def test_closeGripper():
-    rospy.sleep(4)
+def test_opencloseGripper(close=True,duration=2):
     rospy.init_node('gripper_control',anonymous=True)
+    rospy.sleep(2)
     gripperControl = GripperControlClass(arm, tf.TransformListener())
+    rospy.sleep(2)
 
-    rospy.loginfo('Closing the gripper')
-    gripperControl.closeGripper()
-    rospy.loginfo('Gripper Closed')
+    gripperControl.start()
 
+    rospy.loginfo('Setting the gripper')
+    if close:
+        gripperControl.closeGripper(duration=duration)
+    else:
+        gripperControl.openGripper(duration=duration)
+    
+    raw_input()
 
 def test_moveGripper():
     rospy.init_node('gripper_control',anonymous=True)
@@ -566,8 +575,8 @@ def test_angleBetween():
     print(between)
 
 if __name__ == '__main__':
-    #test_closeGripper()
-    test_moveGripper()
+    test_opencloseGripper(close=True,duration=5)
+    #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()

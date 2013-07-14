@@ -32,9 +32,9 @@ class ImageDetectionClass():
 
         self.newLeftGripperPose = False
         self.newRightGripperPose = False
-        #receptacle point. Must have frame_id of global (or main camera) frame
+        #receptacle point. Must have frame_id of link_0
         #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-        self.receptaclePoint = None
+        self.receptaclePoint = tfx.point([-.18,-.017,-.078],frame=Constants.Frames.Link0).msg.PointStamped()
         #table normal. Must be according to global (or main camera) frame
         if normal != None:
             self.normal = normal
@@ -43,6 +43,8 @@ class ImageDetectionClass():
             self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
 
         self.listener = tf.TransformListener()
+
+        # hardcode receptacle point
 
         #######################
         # MAY NEED TO USE LOCKS
@@ -214,12 +216,14 @@ class ImageDetectionClass():
         Returns PoseStamped with position of centroid of receptacle and
         orientation of the table normal
         """
+        self.receptaclePoint = self.getReceptaclePoint()
         return Util.pointStampedToPoseStamped(self.receptaclePoint, self.normal)
 
     def getReceptaclePoint(self):
         """
         Returns PointStamped of the centroid of the receptacle
         """
+        self.receptaclePoint.header.stamp = rospy.Time.now()
         return self.receptaclePoint
 
 def test():     
