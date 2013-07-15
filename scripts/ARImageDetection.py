@@ -56,7 +56,7 @@ class ARImageDetectionClass(ImageDetectionClass):
 
             #receptacle point. Must have frame_id of link_0
             #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-            self.receptaclePoint = tfx.point([-.18,-.017,-.078],frame=Constants.Frames.Link0).msg.PointStamped()
+            self.receptaclePoint = tfx.point([-.016,-.0009,-.07],frame=Constants.Frames.Link0).msg.PointStamped()
             
 
             #table normal. Must be according to global (or main camera) frame
@@ -164,7 +164,7 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         # try a different way
         # frame='/stereo_33',stamp=marker.header.stamp
-        pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-90).matrix,frame='/stereo_33',stamp=marker.header.stamp)
+        pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_33',stamp=marker.header.stamp)
         #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
         self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_33',marker.header.stamp,rospy.Duration(5))
         pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())

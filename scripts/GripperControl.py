@@ -94,7 +94,9 @@ class GripperControlClass:
 
         endPosition = startPose.position + deltaPose.position
     
-        endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
+        #endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
+        endQuatMat = deltaPose.orientation.matrix * startPose.orientation.matrix
+
 
         endPose = tfx.pose(endPosition, endQuatMat)
         
@@ -574,15 +576,46 @@ def test_angleBetween():
     
     print(between)
 
+def test_rotation():
+    rospy.init_node('gripper_control',anonymous=True)
+    listener = tf.TransformListener()
+    gripperControl = GripperControlClass(arm, listener)
+    imageDetector = ARImageDetectionClass()
+    rospy.sleep(4)
+
+    currPose = imageDetector.getGripperPose(arm)
+    desPose = imageDetector.getObjectPose()    
+    
+    #deltaPose = Util.deltaPose(currPose, desPose)
+    #deltaPose.position.z += .03
+    #deltaPose = tfx.pose(deltaPose.position,[0,0,0,1]).msg.Pose()
+    
+    deltaPose = tfx.pose([0,0,0], tfx.tb_angles(-25,0,0))
+
+    gripperControl.start()
+    
+    rospy.loginfo('Press enter')
+    raw_input()
+
+    
+    rate = rospy.Rate(1)
+
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose, duration=4)
+
+    while not rospy.is_shutdown():
+        rospy.loginfo('loop')
+        currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))    
+        rate.sleep()
+
 if __name__ == '__main__':
-    test_opencloseGripper(close=True,duration=5)
+    #test_opencloseGripper(close=True,duration=5)
     #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
-    #test_rotation()
+    test_rotation()
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()
