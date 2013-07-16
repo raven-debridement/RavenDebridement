@@ -60,7 +60,7 @@ class GripperControlClass:
 
         rospy.sleep(1)
  
-    def goToGripperPose(self, startPose, endPose, duration=None):
+    def goToGripperPose(self, startPose, endPose, duration=None, ignoreOrientation=False):
         """
         Given a startPose, move to endPose
         Both startPose and endPose are geometry_msgs.msg.Pose
@@ -71,13 +71,16 @@ class GripperControlClass:
         endPose = tfx.pose(endPose)
 
         # TEMP, until fix orientation issue
-        endPose = tfx.pose(endPose.position, tfx.tb_angles(180,90,0))
+        #endPose = tfx.pose(endPose.position, tfx.tb_angles(180,90,0))
+
+        if ignoreOrientation:
+            endPose.orientation = startPose.orientation
 
         self.player.clear_stages()
         self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
         
 
-    def goToGripperPoseDelta(self, startPose, deltaPose, duration=None):
+    def goToGripperPoseDelta(self, startPose, deltaPose, duration=None, ignoreOrientation=False):
         """
         Given a startPose, move by deltaPose
         Both startPose and deltaPose are geometry_msgs.msg.Pose
@@ -98,18 +101,13 @@ class GripperControlClass:
         #endQuatMat = deltaPose.orientation.matrix * startPose.orientation.matrix
 
         endPose = tfx.pose(endPosition, endQuatMat)
-        
+   
+        if ignoreOrientation:
+            endPose.orientation = startPose.orientation
+     
         # TEMP, until fix orientation issue
         #endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
-        #endPose = tfx.pose(endPosition, tfx.tb_angles(0,90,0))
-        """
-        desAngle = tfx.tb_angles(0,90,0).msg
-        actualAngle = endPose.orientation.msg.Quaternion()
-        between = Util.angleBetweenQuaternions(desAngle, actualAngle)
-        print('between 0,90,0')
-        print(between)
-        return
-        """
+        
         
 
         #self.player.clear_stages()
