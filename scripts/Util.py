@@ -269,8 +269,15 @@ def deltaPose(currPose, desPose):
     currPose, desPose = tfx.pose(currPose), tfx.pose(desPose)
 
     deltaPosition = desPose.position - currPose.position
-    deltaRot = currPose.orientation.rotation_to(desPose.orientation)
-    deltaPose = tfx.pose(deltaPosition, deltaRot)
+    
+    currQuat, desQuat = currPose.orientation.quaternion, desPose.orientation.quaternion
+    deltaQuat = tft.quaternion_multiply(desQuat, tft.quaternion_inverse(currQuat))
+    
+    deltaPose = tfx.pose(deltaPosition, deltaQuat)
+
+    #deltaRot = currPose.orientation.rotation_to(desPose.orientation)
+    #deltaPose = tfx.pose(deltaPosition, deltaRot)
+    
 
     return deltaPose.msg.Pose()
     

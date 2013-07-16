@@ -100,11 +100,8 @@ class GripperControlClass:
         endPose = tfx.pose(endPosition, endQuatMat)
         
         # TEMP, until fix orientation issue
-<<<<<<< HEAD
-        endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
-=======
+        #endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
         #endPose = tfx.pose(endPosition, tfx.tb_angles(0,90,0))
->>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
         """
         desAngle = tfx.tb_angles(0,90,0).msg
         actualAngle = endPose.orientation.msg.Quaternion()
@@ -578,19 +575,28 @@ def test_rotation():
 
     if arm == MyConstants.Arm.Left:
         frame = MyConstants.Frames.Link0
+        toolframe = MyConstants.Frames.LeftTool
     else:
         frame = MyConstants.Frames.Link0
-    
+        toolframe = MyConstants.Frames.RightTool
+
     rospy.sleep(3)
 
-    while not imageDetector.hasFoundGripper(arm) and not rospy.is_shutdown():
+    while not (imageDetector.hasFoundGripper(arm) and imageDetector.hasFoundObject()) and not rospy.is_shutdown():
         print imageDetector.hasFoundGripper(arm), imageDetector.hasFoundObject()
         print 'searching'
         rospy.sleep(1)
 
+    print imageDetector.hasFoundGripper(arm), imageDetector.hasFoundObject()
+
     currPose = imageDetector.getGripperPose(arm)
+    desPose = imageDetector.getObjectPose(toolframe)
+
+    code.interact(local=locals())
+    """
     desPose = tfx.pose([0,0,0], imageDetector.normal).msg.PoseStamped()
 
+    
     while not listener.canTransform('tool_L', '0_link', rospy.Time()) and not rospy.is_shutdown():
         rospy.sleep(1)
 
@@ -602,9 +608,9 @@ def test_rotation():
     desPose.header.frame_id = '0_link'
     currPose = listener.transformPose('tool_L', currPose)
     desPose = listener.transformPose('tool_L', desPose) 
-    
+    """
+
     deltaPose = Util.deltaPose(currPose, desPose)
-    deltaPose.position.z += .03
     deltaPose = tfx.pose([0,0,0],deltaPose.orientation).msg.PoseStamped()
     deltaPoseTb = tfx.tb_angles(deltaPose.pose.orientation)
     #deltaPose = tfx.pose([0,0,0],deltaPose.orientation).msg.Pose()
@@ -672,13 +678,13 @@ def test_rotation():
 
 if __name__ == '__main__':
     #test_opencloseGripper(close=True,duration=5)
-    test_moveGripper()
+    #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
-    #test_rotation()
+    test_rotation()
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()

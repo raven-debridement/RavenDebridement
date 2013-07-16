@@ -16,6 +16,8 @@ from visualization_msgs.msg import Marker
 import Util
 import Constants
 
+import code
+
 
 class ImageDetectionClass():
     """
@@ -120,7 +122,7 @@ class ImageDetectionClass():
     def hasFoundObject(self):
         return self.objectPoint != None
 
-    def getObjectPose(self):
+    def getObjectPose(self,desFrame=None):
         """
         Returns object point plus the table normal as the orientation
         
@@ -128,11 +130,14 @@ class ImageDetectionClass():
         """
         if not self.hasFoundObject():
             return None
+
+        objectPose = tfx.pose(self.objectPoint, self.normal, stamp=rospy.Time.now())
+        tf_obj_to_tool = tfx.lookupTransform(desFrame, objectPose.frame)
+        objectPose = tf_obj_to_tool * objectPose
         
-        objectPoint = self.getObjectPoint()
-        return Util.pointStampedToPoseStamped(objectPoint, self.normal)
-      
-    def getObjectPoint(self):
+        return objectPose.msg.PoseStamped()
+        
+    def getObjectPoint(self,desFrame=None):
         """
         May update to take argument currPos, and then choose object closest to currPos
             
@@ -144,11 +149,9 @@ class ImageDetectionClass():
             return None
 
         
-        # may want to make a copy of self.objectPoint later
-        objectPoint = self.objectPoint
-        objectPoint.header.stamp = rospy.Time.now()
-        
-        return objectPoint
+        objectPoint = tfx.pose(self.getObjectPose(desFrame)).position
+
+        return objectPoint.msg.PointStamped()
             
       
     def removeObjectPoint(self):
@@ -192,10 +195,18 @@ class ImageDetectionClass():
         # may want to make a copy of gripper pose eventually
         if armName == Constants.Arm.Left:
             self.newLeftGripperPose = False
-            return self.leftGripperPose
+            frame = Constants.Frames.LeftTool
+            gripper = tfx.pose(self.leftGripperPose)
         else:
             self.newRightGripperPose = False
-            return self.rightGripperPose
+            frame = Constants.Frames.RightTool
+            gripper =  tfx.pose(self.rightGripperPose)
+
+        
+        tf_arm_to_tool = tfx.lookupTransform(frame, gripper.frame)
+        gripper = tf_arm_to_tool * gripper
+
+        return gripper.msg.PoseStamped()
 
 
     def getGripperPoint(self, armName):
