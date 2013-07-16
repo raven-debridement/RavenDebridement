@@ -34,7 +34,8 @@ class ImageDetectionClass():
         self.newRightGripperPose = False
         #receptacle point. Must have frame_id of link_0
         #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-        self.receptaclePoint = tfx.point([-.18,-.017,-.078],frame=Constants.Frames.Link0).msg.PointStamped()
+        # WARNING this is hardcoded for the left arm only
+        self.receptaclePoint = tfx.point([-.025,-.004,-.093],frame=Constants.Frames.Link0).msg.PointStamped()
         #table normal. Must be according to global (or main camera) frame
         if normal != None:
             self.normal = normal
@@ -69,7 +70,7 @@ class ImageDetectionClass():
         # to account for gripper being open
         # and offset of marker from center of gripper
         self.objectPoint.point.y += .015
-        self.objectPoint.point.z += .01
+        self.objectPoint.point.z += .03
 
     def stereoCallback(self, msg):
         """

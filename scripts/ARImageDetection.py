@@ -23,12 +23,12 @@ from threading import Lock
 import code
 
 ids_to_joints = {73: Constants.AR.Frames.Grasper1,
-                 33: Constants.AR.Frames.Grasper2,
+                 53: Constants.AR.Frames.Grasper2,
                  13: Constants.AR.Frames.Cube1,
                  87: Constants.AR.Frames.Cube2,
                  93: Constants.AR.Frames.Cube3,
                  12: Constants.AR.Frames.Cube4,
-                 53: Constants.AR.Frames.Object}
+                 33: Constants.AR.Frames.Object}
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -164,9 +164,9 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         # try a different way
         # frame='/stereo_33',stamp=marker.header.stamp
-        pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_33',stamp=marker.header.stamp)
+        pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_53',stamp=marker.header.stamp)
         #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
-        self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_33',marker.header.stamp,rospy.Duration(5))
+        self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
         pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
 
         #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id,True)

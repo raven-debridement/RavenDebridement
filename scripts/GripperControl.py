@@ -71,7 +71,7 @@ class GripperControlClass:
         endPose = tfx.pose(endPose)
 
         # TEMP, until fix orientation issue
-        endPose = tfx.pose(endPose.position, tfx.tb_angles(0,90,0))
+        endPose = tfx.pose(endPose.position, tfx.tb_angles(180,90,0))
 
         self.player.clear_stages()
         self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
@@ -101,7 +101,7 @@ class GripperControlClass:
         endPose = tfx.pose(endPosition, endQuatMat)
         
         # TEMP, until fix orientation issue
-        endPose = tfx.pose(endPosition, tfx.tb_angles(0,90,0))
+        endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
         """
         desAngle = tfx.tb_angles(0,90,0).msg
         actualAngle = endPose.orientation.msg.Quaternion()
@@ -122,6 +122,12 @@ class GripperControlClass:
     def pause(self):
         # pauses by clearing stages
         self.player.clear_stages()
+
+    def isPaused(self):
+        """
+        True if no stages
+        """
+        return len(self.player.stages) == 0
         
     def stop(self):
         return self.player.stop_playing()
@@ -192,7 +198,7 @@ def test_opencloseGripper(close=True,duration=2):
     raw_input()
 
 def test_moveGripper():
-    rospy.init_node('gripper_control',anonymous=True)
+    rospy.init_node('gc',anonymous=True)
     listener = tf.TransformListener()
     gripperControl = GripperControlClass(arm, tf.TransformListener())
     rospy.sleep(4)
@@ -202,32 +208,16 @@ def test_moveGripper():
     currPose = tfx.pose(gripperControl.getGripperPose(frame=MyConstants.Frames.Link0))
     
     
-    desPose = armDot
-    #desPose.position.x -= .04
-
-    #rospy.loginfo('desPose')
-    #rospy.loginfo(desPose)
-    #rospy.loginfo('currPose')
-    #rospy.loginfo(currPose)
-    
-    """
-    common = listener.getLatestCommonTime(MyConstants.Frames.World, MyConstants.Frames.Link0)
-    posestamped = PoseStamped()
-    posestamped.header.stamp = common
-    posestamped.header.frame_id = MyConstants.Frames.World
-    posestamped.pose = currPose
-
-    posestamped = listener.transformPose(MyConstants.Frames.Link0, posestamped)
-
-    pose = posestamped.pose
-    """
+    #desPose = armDot
+    desPose = tfx.pose(currPose.position, tfx.tb_angles(0,90,0))
 
     currPose = currPose.msg.Pose()
     desPose = desPose.msg.Pose()
     
-    gripperControl.goToGripperPose(currPose,desPose)
+    gripperControl.goToGripperPose(currPose,desPose,duration=4)
 
     while not rospy.is_shutdown():
+        rospy.loginfo('spin')
         rospy.sleep(1)
     
 
@@ -609,13 +599,13 @@ def test_rotation():
 
 if __name__ == '__main__':
     #test_opencloseGripper(close=True,duration=5)
-    #test_moveGripper()
+    test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
-    test_rotation()
+    #test_rotation()
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()

@@ -133,27 +133,21 @@ class MasterClass():
             
             duration = 6
         
-            #self.listener.waitForTransform('/stereo_33','/stereo_53',rospy.Time.now(), rospy.Duration(5))
-            #gripperPose = self.listener.transformPose('/stereo_53',gripperPose)
-            #objectPose = self.listener.transformPose('/stereo_53',objectPose)
             nearObjectPose = tfx.pose(objectPose).msg.PoseStamped()
             nearObjectPose.pose.position.z += .03
             deltaPose = Util.deltaPose(gripperPose.pose, nearObjectPose.pose)
-            #deltaPose.orientation = Util.reverseQuaternion(deltaPose.orientation)
-
         
             #deltaPose = Util.deltaPose(objectPose.pose, gripperPose.pose)
             #deltaPose.position.z += .03
             #deltaPose = tfx.pose(deltaPose.position,[0,0,0,1]).msg.Pose()
             #deltaPose.position = Point()
+            
+            
+            code.interact(local=locals())
 
-            #code.interact(local=locals())
-            #return
-            
-            
             # TEMP
             self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration)
-            #self.gripperControl.goToGripperPoseDelta(gripperPose.pose, deltaPose)
+            #self.gripperControl.goToGripperPoseDelta(gripperPose.pose, deltaPose, duration=duration)
             
             rospy.sleep(duration)
             
@@ -164,47 +158,28 @@ class MasterClass():
             rospy.loginfo('Servoing to the object point')
             rospy.loginfo('Press enter')
             #raw_input()
+            code.interact(local=locals())
             # servo to the object point
             
             transBound = .007
             rotBound = float("inf")
-
-            """
-            gripperPose = self.imageDetector.getGripperPose(self.gripperName)
-            deltaPose = Util.deltaPose(gripperPose.pose, objectPose.pose)
-            
-            self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose)
-            
-            
-            success = True
-            while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound):
-
-                gripperPose = self.imageDetector.getGripperPose(self.gripperName)
-                                
-                rospy.sleep(.5)
-
-                if rospy.is_shutdown():
-                    return
-
-            if not success:
-                continue
-            """
             
             
             success = True
             timeout.start()
             while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound):
-                rospy.loginfo('press enter to pause')
+                #rospy.loginfo('press enter to pause')
                 #raw_input()
-                self.gripperControl.pause()
-                rospy.sleep(.5)
-                rospy.loginfo('press enter to move')
+                #self.gripperControl.pause()
+                #rospy.sleep(.5)
+                #rospy.loginfo('press enter to move')
                 #raw_input()
-                if self.imageDetector.hasFoundNewGripper(self.gripperName):
+                
+                if self.gripperControl.isPaused() and self.imageDetector.hasFoundNewGripper(self.gripperName):
+                    rospy.loginfo('paused and found new gripper')
                     gripperPose = self.imageDetector.getGripperPose(self.gripperName)
                     deltaPose = tfx.pose(Util.deltaPose(gripperPose.pose, objectPose.pose))
-                    #deltaPose.capped(deltaPose.position.norm_2*.5)
-                    deltaPose.position = deltaPose.position*1
+                    deltaPose.position = deltaPose.position*.9
                     deltaPose = deltaPose.msg.Pose()
                     self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose)
 
@@ -214,7 +189,7 @@ class MasterClass():
                     success = False
                     break
                 
-                rospy.sleep(6)
+                rospy.sleep(.1)
 
             if not success:
                 continue
@@ -225,8 +200,9 @@ class MasterClass():
             rospy.loginfo('Press enter')
             #raw_input()
             # close gripper (consider not all the way)
-            self.gripperControl.closeGripper()
-            rospy.sleep(5)
+            duration = 5
+            self.gripperControl.closeGripper(duration=duration)
+            rospy.sleep(duration)
 
             
             rospy.sleep(delay)
@@ -273,8 +249,6 @@ def mainloop():
     run loop
     """
     rospy.init_node('master_node',anonymous=True)
-    #code.interact(local=locals())
-    #return
     imageDetector = ARImageDetectionClass()
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.run()
