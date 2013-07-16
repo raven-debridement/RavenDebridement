@@ -276,23 +276,35 @@ def subPoses(pose0, pose1):
     """
     return combinePoses(pose0, pose1, operator.sub)
 
-def deltaPose(currPose, desPose):
+def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     """
     Returns pose0 - pose1
     """
 
     currPose, desPose = tfx.pose(currPose), tfx.pose(desPose)
+    currPos, desPos = currPose.position, desPose.position
+    currRot, desRot = currPose.orientation, desPose.orientation
 
-    deltaPosition = desPose.position - currPose.position
+    if posFrame != None:
+        tf_currPos_to_posFrame = tfx.lookupTransform(posFrame, currPos.frame)
+        currPos = tf_currPos_to_posFrame * currPos
+
+        tf_desPos_to_posFrame = tfx.lookupTransform(posFrame, desPos.frame)
+        desPos = tf_desPos_to_posFrame * desPos
+
+    if rotFrame != None:
+        tf_currRot_to_rotFrame = tfx.lookupTransform(rotFrame, currRot.frame)
+        currRot = tf_currRot_to_rotFrame * currRot
+
+        tf_desRot_to_rotFrame = tfx.lookupTransform(rotFrame, desRot.frame)
+        desRot = tf_desRot_to_rotFrame * desRot
+
+    deltaPosition = desPos - currPos
     
-    currQuat, desQuat = currPose.orientation.quaternion, desPose.orientation.quaternion
+    currQuat, desQuat = currRot.orientation.quaternion, desRot.orientation.quaternion
     deltaQuat = tft.quaternion_multiply(desQuat, tft.quaternion_inverse(currQuat))
     
     deltaPose = tfx.pose(deltaPosition, deltaQuat)
-
-    #deltaRot = currPose.orientation.rotation_to(desPose.orientation)
-    #deltaPose = tfx.pose(deltaPosition, deltaRot)
-    
 
     return deltaPose.msg.Pose()
     
