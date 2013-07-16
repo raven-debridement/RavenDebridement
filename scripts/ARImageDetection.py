@@ -24,19 +24,12 @@ import code
 
 ids_to_joints = {73: Constants.AR.Frames.Grasper1,
                  53: Constants.AR.Frames.Grasper2,
-<<<<<<< HEAD
-=======
                  33: Constants.AR.Frames.Right,
->>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
                  13: Constants.AR.Frames.Cube1,
                  87: Constants.AR.Frames.Cube2,
                  93: Constants.AR.Frames.Cube3,
                  12: Constants.AR.Frames.Cube4,
-<<<<<<< HEAD
-                 33: Constants.AR.Frames.Object}
-=======
                  22: Constants.AR.Frames.Object}
->>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -176,12 +169,11 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         # try a different way
         # frame='/stereo_33',stamp=marker.header.stamp
-<<<<<<< HEAD
-        pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_53',stamp=marker.header.stamp)
+        #pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_53',stamp=marker.header.stamp)
         #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
-        self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
-        pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
-=======
+        #self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
+        #pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
+
         # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_33',stamp=marker.header.stamp)
         # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-90).matrix,frame='/stereo_33',stamp=marker.header.stamp)
         #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
@@ -192,7 +184,6 @@ class ARImageDetectionClass(ImageDetectionClass):
             print e
             return
         # pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
->>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
 
         #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id,True)
         #pose = tfx.pose(tf_frame_to_53 * pose).msg.PoseStamped()

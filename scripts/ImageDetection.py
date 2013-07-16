@@ -16,6 +16,8 @@ from visualization_msgs.msg import Marker
 import Util
 import Constants
 
+import code
+
 
 class ImageDetectionClass():
     """
@@ -69,8 +71,8 @@ class ImageDetectionClass():
         
         # to account for gripper being open
         # and offset of marker from center of gripper
-        self.objectPoint.point.y += .015
-        self.objectPoint.point.z += .03
+        self.objectPoint.point.y += .012
+        self.objectPoint.point.z += .017
 
     def stereoCallback(self, msg):
         """
@@ -80,7 +82,7 @@ class ImageDetectionClass():
         """
         if self.receptaclePoint == None:
             self.receptaclePoint = msg 
-            self.receptaclePoint.point.z += .2
+            self.receptaclePoint.point.z += .1
         else:
             #msg.point.z -= .03 # so gripper doesn't pick up right on the edge
             self.objectPoint = msg
@@ -120,7 +122,7 @@ class ImageDetectionClass():
     def hasFoundObject(self):
         return self.objectPoint != None
 
-    def getObjectPose(self):
+    def getObjectPose(self,desFrame=None):
         """
         Returns object point plus the table normal as the orientation
         
@@ -128,11 +130,18 @@ class ImageDetectionClass():
         """
         if not self.hasFoundObject():
             return None
+
+        objectPose = tfx.pose(self.objectPoint, self.normal, stamp=rospy.Time.now())
+
+        """
+        if desFrame != None:
+            tf_obj_to_tool = tfx.lookupTransform(desFrame, objectPose.frame, wait=5)
+            objectPose = tf_obj_to_tool * objectPose
+        """
+
+        return objectPose.msg.PoseStamped()
         
-        objectPoint = self.getObjectPoint()
-        return Util.pointStampedToPoseStamped(objectPoint, self.normal)
-      
-    def getObjectPoint(self):
+    def getObjectPoint(self,desFrame=None):
         """
         May update to take argument currPos, and then choose object closest to currPos
             
@@ -144,11 +153,9 @@ class ImageDetectionClass():
             return None
 
         
-        # may want to make a copy of self.objectPoint later
-        objectPoint = self.objectPoint
-        objectPoint.header.stamp = rospy.Time.now()
-        
-        return objectPoint
+        objectPoint = tfx.pose(self.getObjectPose(desFrame)).position
+
+        return objectPoint.msg.PointStamped()
             
       
     def removeObjectPoint(self):
@@ -193,10 +200,20 @@ class ImageDetectionClass():
         if armName == Constants.Arm.Left:
             self.newLeftGripperPose = False
             return self.leftGripperPose
+            #frame = Constants.Frames.LeftTool
+            #gripper = tfx.pose(self.leftGripperPose)
         else:
             self.newRightGripperPose = False
             return self.rightGripperPose
+            #frame = Constants.Frames.RightTool
+            #gripper =  tfx.pose(self.rightGripperPose)
 
+        """
+        tf_arm_to_tool = tfx.lookupTransform(frame, gripper.frame, wait=5)
+        gripper = tf_arm_to_tool * gripper
+
+        return gripper.msg.PoseStamped()
+        """
 
     def getGripperPoint(self, armName):
         """
@@ -207,7 +224,7 @@ class ImageDetectionClass():
         if not self.hasFoundGripper(armName):
             return None
 
-        return Util.poseStampedToPointStamped(self.getGripperPose(armName))
+        return tfx.pose(self.getGripperPose(armName)).position.msg.PointStamped()
       
       
     def hasFoundReceptacle(self):
@@ -218,8 +235,9 @@ class ImageDetectionClass():
         Returns PoseStamped with position of centroid of receptacle and
         orientation of the table normal
         """
-        self.receptaclePoint = self.getReceptaclePoint()
-        return Util.pointStampedToPoseStamped(self.receptaclePoint, self.normal)
+        receptaclePoint = self.getReceptaclePoint()
+        return tfx.pose(self.receptaclePoint, self.normal).msg.PoseStamped()
+        #return Util.pointStampedToPoseStamped(self.receptaclePoint, self.normal)
 
     def getReceptaclePoint(self):
         """

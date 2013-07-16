@@ -60,7 +60,7 @@ class GripperControlClass:
 
         rospy.sleep(1)
  
-    def goToGripperPose(self, startPose, endPose, duration=None):
+    def goToGripperPose(self, startPose, endPose, duration=None, ignoreOrientation=False):
         """
         Given a startPose, move to endPose
         Both startPose and endPose are geometry_msgs.msg.Pose
@@ -71,13 +71,16 @@ class GripperControlClass:
         endPose = tfx.pose(endPose)
 
         # TEMP, until fix orientation issue
-        endPose = tfx.pose(endPose.position, tfx.tb_angles(180,90,0))
+        #endPose = tfx.pose(endPose.position, tfx.tb_angles(180,90,0))
+
+        if ignoreOrientation:
+            endPose.orientation = startPose.orientation
 
         self.player.clear_stages()
         self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
         
 
-    def goToGripperPoseDelta(self, startPose, deltaPose, duration=None):
+    def goToGripperPoseDelta(self, startPose, deltaPose, duration=None, ignoreOrientation=False):
         """
         Given a startPose, move by deltaPose
         Both startPose and deltaPose are geometry_msgs.msg.Pose
@@ -98,21 +101,13 @@ class GripperControlClass:
         #endQuatMat = deltaPose.orientation.matrix * startPose.orientation.matrix
 
         endPose = tfx.pose(endPosition, endQuatMat)
-        
+   
+        if ignoreOrientation:
+            endPose.orientation = startPose.orientation
+     
         # TEMP, until fix orientation issue
-<<<<<<< HEAD
-        endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
-=======
-        #endPose = tfx.pose(endPosition, tfx.tb_angles(0,90,0))
->>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
-        """
-        desAngle = tfx.tb_angles(0,90,0).msg
-        actualAngle = endPose.orientation.msg.Quaternion()
-        between = Util.angleBetweenQuaternions(desAngle, actualAngle)
-        print('between 0,90,0')
-        print(between)
-        return
-        """
+        #endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
+        
         
 
         #self.player.clear_stages()
@@ -578,19 +573,28 @@ def test_rotation():
 
     if arm == MyConstants.Arm.Left:
         frame = MyConstants.Frames.Link0
+        toolframe = MyConstants.Frames.LeftTool
     else:
         frame = MyConstants.Frames.Link0
-    
+        toolframe = MyConstants.Frames.RightTool
+
     rospy.sleep(3)
 
-    while not imageDetector.hasFoundGripper(arm) and not rospy.is_shutdown():
+    while not (imageDetector.hasFoundGripper(arm) and imageDetector.hasFoundObject()) and not rospy.is_shutdown():
         print imageDetector.hasFoundGripper(arm), imageDetector.hasFoundObject()
         print 'searching'
         rospy.sleep(1)
 
+    print imageDetector.hasFoundGripper(arm), imageDetector.hasFoundObject()
+
     currPose = imageDetector.getGripperPose(arm)
+    desPose = imageDetector.getObjectPose(toolframe)
+
+    code.interact(local=locals())
+    """
     desPose = tfx.pose([0,0,0], imageDetector.normal).msg.PoseStamped()
 
+    
     while not listener.canTransform('tool_L', '0_link', rospy.Time()) and not rospy.is_shutdown():
         rospy.sleep(1)
 
@@ -602,9 +606,9 @@ def test_rotation():
     desPose.header.frame_id = '0_link'
     currPose = listener.transformPose('tool_L', currPose)
     desPose = listener.transformPose('tool_L', desPose) 
-    
+    """
+
     deltaPose = Util.deltaPose(currPose, desPose)
-    deltaPose.position.z += .03
     deltaPose = tfx.pose([0,0,0],deltaPose.orientation).msg.PoseStamped()
     deltaPoseTb = tfx.tb_angles(deltaPose.pose.orientation)
     #deltaPose = tfx.pose([0,0,0],deltaPose.orientation).msg.Pose()
@@ -672,13 +676,13 @@ def test_rotation():
 
 if __name__ == '__main__':
     #test_opencloseGripper(close=True,duration=5)
-    test_moveGripper()
+    #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
-    #test_rotation()
+    test_rotation()
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()
