@@ -18,6 +18,7 @@ class AR:
     class Frames:
         Grasper1 = '/grasper1_tip'
         Grasper2 = '/grasper2_tip'
+        Right = '/grasper_r'
         Cube1 = '/cube_1'
         Cube2 = '/cube_2'
         Cube3 = '/cube_3'
