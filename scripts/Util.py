@@ -10,6 +10,7 @@ import roslib
 roslib.load_manifest('master-control')
 import rospy
 from geometry_msgs.msg import Twist, PointStamped, PoseStamped, Quaternion, Point, TransformStamped
+from visualization_msgs.msg import Marker
 import tf
 import tf.transformations as tft
 import operator
@@ -19,6 +20,20 @@ import math
 import tfx
 
 import code
+
+def createMarker(pose, id_):
+    marker = Marker()
+    marker.id = id_
+    marker.header.frame_id = pose.header.frame_id
+    marker.type = marker.CUBE
+    marker.action = marker.ADD
+    marker.scale.x = 0.002
+    marker.scale.y = 0.002
+    marker.scale.z = 0.002
+    marker.color.a = 1.0
+    marker.color.r = 255
+    marker.color.g = 255
+    marker.pose = pose.pose
 
 def positionSubtract(p1, offset):
     pos = Point()
