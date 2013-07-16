@@ -279,6 +279,7 @@ def mainloop():
     run loop
     """
     rospy.init_node('master_node',anonymous=True)
+    
     imageDetector = ARImageDetectionClass()
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.run()
