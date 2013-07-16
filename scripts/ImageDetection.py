@@ -46,6 +46,7 @@ class ImageDetectionClass():
             self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
 
         self.listener = tf.TransformListener()
+        self.registerObjectPublisher()
 
         # hardcode receptacle point
 
@@ -68,11 +69,15 @@ class ImageDetectionClass():
     def foamCallback(self, msg):
         self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
         self.objectPoint = self.listener.transformPoint(Constants.AR.Frames.Base,msg)
+        marker = Util.createMarker(self.getObjectPose(), 0)
+        self.objPublisher.publish(marker)
         
         # to account for gripper being open
         # and offset of marker from center of gripper
         self.objectPoint.point.y += .012
         self.objectPoint.point.z += .017
+        marker = Util.createMarker(self.getObjectPose(), 1)
+        self.objPublisher.publish(marker)
 
     def stereoCallback(self, msg):
         """
