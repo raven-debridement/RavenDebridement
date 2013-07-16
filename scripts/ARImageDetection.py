@@ -24,11 +24,19 @@ import code
 
 ids_to_joints = {73: Constants.AR.Frames.Grasper1,
                  53: Constants.AR.Frames.Grasper2,
+<<<<<<< HEAD
+=======
+                 33: Constants.AR.Frames.Right,
+>>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
                  13: Constants.AR.Frames.Cube1,
                  87: Constants.AR.Frames.Cube2,
                  93: Constants.AR.Frames.Cube3,
                  12: Constants.AR.Frames.Cube4,
+<<<<<<< HEAD
                  33: Constants.AR.Frames.Object}
+=======
+                 22: Constants.AR.Frames.Object}
+>>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -64,7 +72,8 @@ class ARImageDetectionClass(ImageDetectionClass):
                   self.normal = normal
             else:
                   # default to straight up
-                  self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
+                  # self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
+                  self.normal = tfx.tb_angles(0,0,-90).msg
 
             self.state = None
             self.transforms = {}
@@ -98,6 +107,8 @@ class ARImageDetectionClass(ImageDetectionClass):
                 if frame == Constants.AR.Frames.Grasper1 or frame == Constants.AR.Frames.Grasper2:
                     #self.arHandler(marker, "left")
                     self.arHandlerWithOrientation(marker, "left")
+                elif frame == Constants.AR.Frames.Right:
+                    self.arHandlerWithOrientation(marker, "right")
                 elif frame == Constants.AR.Frames.Object:
                     pose = PoseStamped()
                     pose.header.stamp = marker.header.stamp
@@ -149,6 +160,7 @@ class ARImageDetectionClass(ImageDetectionClass):
         pose.header.frame_id = marker.header.frame_id
         pose.pose = marker.pose.pose
 
+        """
         # rotation y axis 90 deg z axis -90 deg
         poseMat = tfx.tb_angles(pose.pose.orientation).matrix
         rot = tft.rotation_matrix(-math.pi/2,[1,0,0])[0:3,0:3]
@@ -160,14 +172,27 @@ class ARImageDetectionClass(ImageDetectionClass):
         newOrientation = np.dot(rot1,poseMat)
         #newOrientation = np.dot(tft.rotation_matrix(math.pi/2,[0,0,1])[0:3,0:3],newOrientation)
         pose.pose = tfx.pose(pose.pose.position,newOrientation).msg.Pose()
-
+        """
 
         # try a different way
         # frame='/stereo_33',stamp=marker.header.stamp
+<<<<<<< HEAD
         pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_53',stamp=marker.header.stamp)
         #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
         self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
         pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
+=======
+        # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_33',stamp=marker.header.stamp)
+        # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-90).matrix,frame='/stereo_33',stamp=marker.header.stamp)
+        #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
+        try:
+            self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
+            pose = self.listener.transformPose(Constants.AR.Frames.Base,pose)
+        except Exception as e:
+            print e
+            return
+        # pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
+>>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
 
         #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id,True)
         #pose = tfx.pose(tf_frame_to_53 * pose).msg.PoseStamped()
@@ -235,28 +260,32 @@ def testRotation():
     
 
     while not rospy.is_shutdown():
-          if imageDetector.hasFoundGripper(Constants.Arm.Left) and imageDetector.hasFoundObject():
-                obj = imageDetector.getObjectPose()
+          if imageDetector.hasFoundGripper(Constants.Arm.Left):
+                obj = tfx.pose([0,0,0], imageDetector.normal).msg.PoseStamped()
                 gripper = imageDetector.getGripperPose(Constants.Arm.Left)
 
-                print('obj')
-                print(obj)
                 print('gripper')
                 print(gripper)
 
-                obj_tb = tfx.tb_angles(obj.pose.orientation)
+                # obj_tb = tfx.tb_angles(obj.pose.orientation)
                 gripper_tb = tfx.tb_angles(gripper.pose.orientation)
+                print "gripper ori", gripper_tb
+                obj_tb = tfx.tb_angles(imageDetector.normal)
+                print "obj ori", obj_tb
                 pt = gripper.pose.position
-                ori = obj.pose.orientation
-                print "ori", ori
+                ori = imageDetector.normal
                 tf_br.sendTransform((pt.x, pt.y, pt.z), (ori.x, ori.y, ori.z, ori.w),
                                     gripper.header.stamp, '/des_pose', Constants.AR.Frames.Base)
                 
                 
-                between = Util.angleBetweenQuaternions(obj_tb.msg, gripper_tb.msg)
+                between = Util.angleBetweenQuaternions(ori, gripper_tb.msg)
                 print('Angle between')
                 print(between)
-                
+
+                quat = tft.quaternion_multiply(gripper_tb.quaternion, tft.quaternion_inverse(obj_tb.quaternion))
+                print 'new', tfx.tb_angles(quat)
+
+                #rot = gripper_tb.rotation_to(ori)
                 rot = gripper_tb.rotation_to(obj_tb)
                 print('Rotation from gripper to obj')
                 print(rot)
@@ -264,6 +293,16 @@ def testRotation():
                 deltaPoseTb = tfx.pose(Util.deltaPose(gripper, obj)).orientation
                 print('deltaPose')
                 print(deltaPoseTb)
+
+                deltaPose = tfx.pose([0,0,0], deltaPoseTb).msg.PoseStamped()
+                time = listener.getLatestCommonTime('0_link', 'tool_L')
+                deltaPose.header.stamp = time
+                deltaPose.header.frame_id = '0_link'
+                deltaPose = listener.transformPose('tool_L', deltaPose)
+                print "transformed", tfx.tb_angles(deltaPose.pose.orientation)
+
+                endQuatMat = gripper_tb.matrix * rot.matrix
+                print 'desOri', tfx.tb_angles(endQuatMat)
                 
 
           rospy.sleep(1)

@@ -94,14 +94,17 @@ class GripperControlClass:
 
         endPosition = startPose.position + deltaPose.position
     
-        #endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
-        endQuatMat = deltaPose.orientation.matrix * startPose.orientation.matrix
-
+        endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
+        #endQuatMat = deltaPose.orientation.matrix * startPose.orientation.matrix
 
         endPose = tfx.pose(endPosition, endQuatMat)
         
         # TEMP, until fix orientation issue
+<<<<<<< HEAD
         endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
+=======
+        #endPose = tfx.pose(endPosition, tfx.tb_angles(0,90,0))
+>>>>>>> dfdce4a5422fd60fd4b15d280aab717e1aeeb602
         """
         desAngle = tfx.tb_angles(0,90,0).msg
         actualAngle = endPose.orientation.msg.Quaternion()
@@ -112,7 +115,7 @@ class GripperControlClass:
         """
         
 
-        self.player.clear_stages()
+        #self.player.clear_stages()
         self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
 
     def start(self):
@@ -150,7 +153,7 @@ class GripperControlClass:
 
         geometry_msgs.msg.Pose
         """
-        self.listener.waitForTransform(frame, self.toolframe, rospy.Time.now(), rospy.Duration(5))
+        #self.listener.waitForTransform(frame, self.toolframe, rospy.Time.now(), rospy.Duration(5))
         commonTime = self.listener.getLatestCommonTime(frame, self.toolframe)
         pos, quat = self.listener.lookupTransform(frame, self.toolframe, commonTime)
 
@@ -569,32 +572,102 @@ def test_angleBetween():
 def test_rotation():
     rospy.init_node('gripper_control',anonymous=True)
     listener = tf.TransformListener()
+    tf_br = tf.TransformBroadcaster()
     gripperControl = GripperControlClass(arm, listener)
     imageDetector = ARImageDetectionClass()
-    rospy.sleep(4)
+
+    if arm == MyConstants.Arm.Left:
+        frame = MyConstants.Frames.Link0
+    else:
+        frame = MyConstants.Frames.Link0
+    
+    rospy.sleep(3)
+
+    while not imageDetector.hasFoundGripper(arm) and not rospy.is_shutdown():
+        print imageDetector.hasFoundGripper(arm), imageDetector.hasFoundObject()
+        print 'searching'
+        rospy.sleep(1)
 
     currPose = imageDetector.getGripperPose(arm)
-    desPose = imageDetector.getObjectPose()    
-    
-    #deltaPose = Util.deltaPose(currPose, desPose)
-    #deltaPose.position.z += .03
-    #deltaPose = tfx.pose(deltaPose.position,[0,0,0,1]).msg.Pose()
-    
-    deltaPose = tfx.pose([0,0,0], tfx.tb_angles(-25,0,0))
+    desPose = tfx.pose([0,0,0], imageDetector.normal).msg.PoseStamped()
 
-    gripperControl.start()
-    
-    rospy.loginfo('Press enter')
-    raw_input()
+    while not listener.canTransform('tool_L', '0_link', rospy.Time()) and not rospy.is_shutdown():
+        rospy.sleep(1)
 
+    time = listener.getLatestCommonTime('tool_L', '0_link')
+
+    print currPose.header.frame_id
+    currPose.header.stamp = time
+    desPose.header.stamp = time
+    desPose.header.frame_id = '0_link'
+    currPose = listener.transformPose('tool_L', currPose)
+    desPose = listener.transformPose('tool_L', desPose) 
     
+    deltaPose = Util.deltaPose(currPose, desPose)
+    deltaPose.position.z += .03
+    deltaPose = tfx.pose([0,0,0],deltaPose.orientation).msg.PoseStamped()
+    deltaPoseTb = tfx.tb_angles(deltaPose.pose.orientation)
+    #deltaPose = tfx.pose([0,0,0],deltaPose.orientation).msg.Pose()
+    print 'deltaPoseTb', deltaPoseTb
+    
+    """
+    gripper_tb = tfx.tb_angles(currPose.pose.orientation)
+    obj_tb = tfx.tb_angles(desPose.pose.orientation)
+    print 'actual', gripper_tb
+    print obj_tb
+    deltaPoseTb = tfx.pose(Util.deltaPose(currPose, desPose)).orientation
+    print 'deltaPose', deltaPoseTb
+    endQuatMat = gripper_tb.matrix * deltaPoseTb
+    print 'desOri', tfx.tb_angles(endQuatMat)
+
+    time = listener.getLatestCommonTime('tool_L', '0_link')
+    deltaPose.header.frame_id = '0_link'
+    deltaPose.header.stamp = time
+    deltaPose = listener.transformPose('tool_L', deltaPose)
+    #deltaPose = tfx.pose([0,0,0], deltaPose.orientation).msg.Pose()
+    deltaPoseTb = tfx.tb_angles(deltaPose.pose.orientation)
+    print 'deltaPoseTb', deltaPoseTb
+    currPose = tfx.pose(currPose)
+    endQuatMat = currPose.orientation.matrix * deltaPoseTb.matrix
+    print 'desOri', tfx.tb_angles(endQuatMat)
+    """
+
+    yaw = tfx.pose([0,0,0], tfx.tb_angles(deltaPoseTb.yaw_deg,0,0))
+    pitch = tfx.pose([0,0,0], tfx.tb_angles(0,deltaPoseTb.pitch_deg,0))
+    roll = tfx.pose([0,0,0], tfx.tb_angles(0,0,deltaPoseTb.roll_deg))
+
     rate = rospy.Rate(1)
 
-    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose, duration=4)
+    print "press enter"
+    raw_input()
+
+    """
+    startPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))
+    print 'start', startPose
+    endQuatMat = startPose.orientation.matrix * tfx.tb_angles(deltaPose.orientation).matrix
+    print tfx.tb_angles(endQuatMat)
+    """
+
+    
+    gripperControl.start()
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(frame), deltaPose, duration=4)
+    
+    """
+    #gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(MyConstants.Frames.Link0), deltaPose, duration=4)
+    print 'yaw', yaw
+    raw_input()
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(frame), yaw, duration=4)
+
+    print 'pitch', pitch
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(frame), pitch, duration=4)
+
+    print 'roll', roll
+    gripperControl.goToGripperPoseDelta(gripperControl.getGripperPose(frame), roll, duration=4)
+    """
 
     while not rospy.is_shutdown():
         rospy.loginfo('loop')
-        currPose = tfx.pose(gripperControl.getGripperPose(MyConstants.Frames.Link0))    
+        currPose = tfx.pose(gripperControl.getGripperPose(frame))
         rate.sleep()
 
 if __name__ == '__main__':
