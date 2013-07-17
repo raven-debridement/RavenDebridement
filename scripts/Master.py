@@ -120,14 +120,14 @@ class MasterClass():
             rospy.sleep(delay)
             rospy.loginfo('Moving near the object point')
             rospy.loginfo('Press enter')
-            #raw_input()
+            raw_input()
             # go to near the object point
             
             duration = 6
         
             nearObjectPose = tfx.pose(objectPose).msg.PoseStamped()
-            nearObjectPose.pose.position.z += .03
             deltaPose = Util.deltaPose(gripperPose, nearObjectPose, Constants.Frames.Link0, self.toolframe)
+            deltaPose.position.z += .03
         
             #deltaPose = Util.deltaPose(objectPose.pose, gripperPose.pose)
             #deltaPose.position.z += .03
@@ -179,13 +179,15 @@ class MasterClass():
                     rospy.loginfo('press enter to move')
                     raw_input()
                     tmpGripperPose = self.imageDetector.getGripperPose(self.gripperName)
-                    if gripperPose != tmpGripperPose:
+                    if not Util.withinBounds(gripperPose, tmpGripperPose, .0001, float("inf")):
                         gripperPose = tmpGripperPose
                         deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, Constants.Frames.Link0, self.toolframe))
                         deltaPose.position = deltaPose.position*.9
+                        print('deltaPose!!!!!')
+                        print(deltaPose)
                         deltaPose = deltaPose.msg.Pose()
-                        code.interact(local=locals())
                         self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
+                        #code.interact(local=locals())
                     else:
                         rospy.loginfo('but the same!!!!!!!!!')
                 
@@ -279,7 +281,6 @@ def mainloop():
     run loop
     """
     rospy.init_node('master_node',anonymous=True)
-    
     imageDetector = ARImageDetectionClass()
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.run()
