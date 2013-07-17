@@ -74,15 +74,11 @@ class ImageDetectionClass():
         
         # to account for gripper being open
         # and offset of marker from center of gripper
-<<<<<<< HEAD
         self.objectPoint.point.y += .017
         self.objectPoint.point.z += .014
-=======
-        self.objectPoint.point.y += .012
-        self.objectPoint.point.z += .017
+
         marker = Util.createMarker(self.getObjectPose(), 1)
         self.objPublisher.publish(marker)
->>>>>>> 8807fba3bb02a89ac02a1d93dee47a72b9d1fb62
 
     def stereoCallback(self, msg):
         """

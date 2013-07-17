@@ -32,14 +32,9 @@ def createMarker(pose, id_):
     marker.scale.z = 0.002
     marker.color.a = 1.0
     marker.color.r = 255
-<<<<<<< HEAD
-    marker.color.g = 255
-    marker.pose = pose.pose
-=======
     marker.color.g = (id_) * 127
     marker.pose = pose.pose
     return marker
->>>>>>> 8807fba3bb02a89ac02a1d93dee47a72b9d1fb62
 
 def positionSubtract(p1, offset):
     pos = Point()
