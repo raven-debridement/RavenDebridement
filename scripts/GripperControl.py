@@ -132,7 +132,7 @@ class GripperControlClass:
 
     def closeGripper(self,duration=5):
         self.player.clear_stages()
-        self.player.add_close_gripper(duration=duration)
+        self.player.add_set_gripper(0, duration=duration)
                 
     def openGripper(self,duration=5):
         self.player.clear_stages()
