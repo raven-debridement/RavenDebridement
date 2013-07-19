@@ -60,11 +60,17 @@ class ImageDetectionClass():
         #rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
 
         rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
+        rospy.Subscriber(Constants.GripperTape.Topic, PoseStamped, self.tapeCallback)
 
     def registerObjectPublisher(self):
         object_topic = "object_marker"
         self.objPublisher = rospy.Publisher(object_topic, Marker)
         self.objMarker = None
+
+    def tapeCallback(self, msg):
+        # TEMP hard coded for left gripper
+        self.newLeftGripperPose = True
+        self.leftGripperPose = msg
 
     def foamCallback(self, msg):
         self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
@@ -74,8 +80,8 @@ class ImageDetectionClass():
         
         # to account for gripper being open
         # and offset of marker from center of gripper
-        self.objectPoint.point.y += .017
-        self.objectPoint.point.z += .014
+        #self.objectPoint.point.y += .037
+        self.objectPoint.point.z += .005
 
         marker = Util.createMarker(self.getObjectPose(), 1)
         self.objPublisher.publish(marker)
@@ -137,7 +143,13 @@ class ImageDetectionClass():
         if not self.hasFoundObject():
             return None
 
-        objectPose = tfx.pose(self.objectPoint, self.normal, stamp=rospy.Time.now())
+        objectPoint = tfx.point(self.objectPoint, stamp=rospy.Time.now())
+        tf_point_to_normal = tfx.lookupTransform(Constants.Frames.Link0, objectPoint.frame, wait=10)
+        objectPoint = tf_point_to_normal * objectPoint
+
+
+        objectPose = tfx.pose(self.objectPoint, self.normal)
+
 
         """
         if desFrame != None:
@@ -242,6 +254,7 @@ class ImageDetectionClass():
         orientation of the table normal
         """
         receptaclePoint = self.getReceptaclePoint()
+
         return tfx.pose(self.receptaclePoint, self.normal).msg.PoseStamped()
         #return Util.pointStampedToPoseStamped(self.receptaclePoint, self.normal)
 

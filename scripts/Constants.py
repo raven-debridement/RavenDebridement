@@ -49,3 +49,5 @@ class RavenTopics:
 class Foam:
     Topic = '/foam_points'
 
+class GripperTape:
+    Topic = '/tape_pose'

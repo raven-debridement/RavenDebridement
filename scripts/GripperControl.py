@@ -71,7 +71,8 @@ class GripperControlClass:
         endPose = tfx.pose(endPose)
 
         # TEMP, until fix orientation issue
-        #endPose = tfx.pose(endPose.position, tfx.tb_angles(180,90,0))
+        #endPose = tfx.pose(endPose.position, tfx.tb_angles(0,90,0))
+        #endPose = tfx.pose(endPosition, startPose.orientation)
 
         if ignoreOrientation:
             endPose.orientation = startPose.orientation
@@ -106,9 +107,10 @@ class GripperControlClass:
             endPose.orientation = startPose.orientation
      
         # TEMP, until fix orientation issue
-        #endPose = tfx.pose(endPosition, tfx.tb_angles(180,90,0))
-        
-        
+        #endPose = tfx.pose(endPosition, tfx.tb_angles(-90,90,0))
+        #endPose = tfx.pose(endPosition, startPose.orientation)
+
+                
 
         #self.player.clear_stages()
         self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
@@ -132,7 +134,7 @@ class GripperControlClass:
 
     def closeGripper(self,duration=5):
         self.player.clear_stages()
-        self.player.add_set_gripper(0, duration=duration)
+        self.player.add_close_gripper(duration=duration)
                 
     def openGripper(self,duration=5):
         self.player.clear_stages()
@@ -184,12 +186,9 @@ def test_opencloseGripper(close=True,duration=2):
     rospy.sleep(2)
     gripperControl = GripperControlClass(arm, tf.TransformListener())
     rospy.sleep(2)
-
-    gripperControl.start()
-
     rospy.loginfo('Setting the gripper')
     if close:
-        gripperControl.closeGripper(duration=duration)
+       gripperControl.closeGripper(duration=duration)
     else:
         gripperControl.openGripper(duration=duration)
     
@@ -207,7 +206,7 @@ def test_moveGripper():
     
     
     #desPose = armDot
-    desPose = tfx.pose(currPose.position, tfx.tb_angles(0,90,0))
+    desPose = tfx.pose(currPose.position, tfx.tb_angles(-90,90,0))
 
     currPose = currPose.msg.Pose()
     desPose = desPose.msg.Pose()
@@ -676,13 +675,13 @@ def test_rotation():
 
 if __name__ == '__main__':
     #test_opencloseGripper(close=True,duration=5)
-    #test_moveGripper()
+    test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()
     #test_down()
     #test_commandRaven()
-    test_rotation()
+    #test_rotation()
     #test_jointPositions()
     #test_commandJoints()
     #test_angleBetween()
