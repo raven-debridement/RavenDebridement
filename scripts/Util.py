@@ -232,69 +232,9 @@ def withinBounds(ps0, ps1, transBound, rotBound, transFrame=None, rotFrame=None)
     
     return True
 
-    """
-    ps0, ps1 = tfx.pose(ps0), tfx.pose(ps1)
-
-    # convert to same frame if needed
-    if ps0.frame != None and ps1.frame != None and ps0.frame != ps1.frame:
-        tf0_to_1 = tfx.lookupTransform(ps1.frame, ps0.frame)
-        ps1 = tf0_to_1 * ps0
-        ps0.frame = ps1.frame
-
-    deltaPositions = (ps0.position - ps1.position).list
-    print('deltaPositions')
-    print(deltaPositions)
-    for deltaPos in list(deltaPositions):
-        if abs(deltaPos) > transBound:
-            return False
-
-    between = angleBetweenQuaternions(ps0.msg.Pose().orientation, ps1.msg.Pose().orientation)
-    print('angleBetween')
-    print(between)
-    if  between > rotBound:
-        return False
-    
-    return True
-    """
 
 
-def combinePoses(pose0, pose1, op=operator.sub):
-    """
-    Returns op(pose0,pose1)
 
-    All args and return values are geometry_msgs.msg.Pose
-    """
-
-    pose0, pose1 = tfx.pose(pose0), tfx.pose(pose1)
-
-    
-    deltaAngles = tfx.tb_angles(op(pose0.tb_angles.yaw_deg, pose1.tb_angles.yaw_deg), op(pose0.tb_angles.pitch_deg, pose1.tb_angles.pitch_deg), op(pose0.tb_angles.roll_deg, pose1.tb_angles.roll_deg))
-    print('combinePoses-deltaAngles')
-    print(deltaAngles)
-    deltaPose = tfx.pose(op(pose0.position,pose1.position))#, deltaAngles)
-    deltaPose.orientation = deltaAngles
-    print('combinePoses-deltaPose')
-    print(deltaPose)
-
-    return deltaPose.msg.Pose()
-
-    
-def addPoses(pose0, pose1):
-    """
-    Returns pose0 + pose1
-
-    All args and return values are geometry_msgs.msg.Pose
-    """
-    return combinePoses(pose0, pose1, operator.add)
-    
-
-def subPoses(pose0, pose1):
-    """
-    Returns pose0 - pose1
-
-    All args and return values are geometry_msgs.msg.Pose
-    """
-    return combinePoses(pose0, pose1, operator.sub)
 
 def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     """
