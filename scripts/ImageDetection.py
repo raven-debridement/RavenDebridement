@@ -81,7 +81,7 @@ class ImageDetectionClass():
         # to account for gripper being open
         # and offset of marker from center of gripper
         #self.objectPoint.point.y += .037
-        self.objectPoint.point.z += .015
+        self.objectPoint.point.z += .005
 
         marker = Util.createMarker(self.getObjectPose(), 1)
         self.objPublisher.publish(marker)
