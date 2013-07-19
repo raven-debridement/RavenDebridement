@@ -89,6 +89,11 @@ class MasterClass():
             transBound = float("inf")
             # rotation bound in radians
             rotBound = float("inf")
+
+            # translation frame
+            transFrame = Constants.Frames.Link0
+            # rotation frame
+            rotFrame = self.toolframe
             
 
             rospy.loginfo('Searching for the receptacle')
@@ -126,7 +131,7 @@ class MasterClass():
             duration = 6
         
             nearObjectPose = tfx.pose(objectPose).msg.PoseStamped()
-            deltaPose = Util.deltaPose(gripperPose, nearObjectPose, Constants.Frames.Link0, self.toolframe)
+            deltaPose = Util.deltaPose(gripperPose, nearObjectPose, transFrame, rotFrame)
             deltaPose.position.z += .03
         
             #deltaPose = Util.deltaPose(objectPose.pose, gripperPose.pose)
@@ -134,7 +139,20 @@ class MasterClass():
             #deltaPose = tfx.pose(deltaPose.position,[0,0,0,1]).msg.Pose()
             #deltaPose.position = Point()
             
-            
+            desAngle = tfx.pose(objectPose).orientation.msg.Quaternion()
+            toolGripperPose = tfx.pose(gripperPose,frame=self.toolframe)
+            #tf_toolframe_to_objframe = tfx.lookupTransform(objectPose.header.frame_id, self.toolframe, wait=10)
+            #toolGripperPose = tf_toolframe_to_objframe * toolGripperPose
+            currAngle = tfx.pose(toolGripperPose).orientation.msg.Quaternion()
+            between = Util.angleBetweenQuaternions(desAngle,currAngle)
+            print('normal')
+            print(tfx.tb_angles(desAngle))
+            print('gripper')
+            print(tfx.tb_angles(currAngle))
+            print('between')
+            print(between)
+            code.interact(local=locals())
+            #return
 
             # TEMP
             self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration)
@@ -142,6 +160,8 @@ class MasterClass():
             
             rospy.sleep(duration)
             
+            raw_input()
+            return
   
 
             rospy.loginfo('Opening the gripper')
@@ -166,7 +186,7 @@ class MasterClass():
             
             success = True
             timeout.start()
-            while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound):
+            while not Util.withinBounds(gripperPose, objectPose, transBound, rotBound, transFrame, rotFrame):
                 
                 if self.gripperControl.isPaused():
                     rospy.loginfo('is paused!')
@@ -179,17 +199,17 @@ class MasterClass():
                     rospy.loginfo('press enter to move')
                     raw_input()
                     tmpGripperPose = self.imageDetector.getGripperPose(self.gripperName)
-                    if not Util.withinBounds(gripperPose, tmpGripperPose, .0001, float("inf")):
-                        gripperPose = tmpGripperPose
-                        deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, Constants.Frames.Link0, self.toolframe))
-                        deltaPose.position = deltaPose.position*.9
-                        print('deltaPose!!!!!')
-                        print(deltaPose)
-                        deltaPose = deltaPose.msg.Pose()
-                        self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
-                        #code.interact(local=locals())
-                    else:
-                        rospy.loginfo('but the same!!!!!!!!!')
+                    #if not Util.withinBounds(gripperPose, tmpGripperPose, .0001, float("inf")):
+                    gripperPose = tmpGripperPose
+                    deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, Constants.Frames.Link0, self.toolframe))
+                    deltaPose.position = deltaPose.position*.9
+                    print('deltaPose!!!!!')
+                    print(deltaPose)
+                    code.interact(local=locals())
+                    deltaPose = deltaPose.msg.Pose()
+                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
+                    #else:
+                    #    rospy.loginfo('but the same!!!!!!!!!')
                 
                 if timeout.hasTimedOut() or rospy.is_shutdown():
                     rospy.loginfo('Timed Out')

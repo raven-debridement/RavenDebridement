@@ -208,11 +208,30 @@ def euclideanDistance(ps0, ps1, listener=None, xPlane=True, yPlane=True, zPlane=
 
     return ((x1-x0)**2 + (y1-y0)**2 + (z1-z0)**2)**.5
 
-def withinBounds(ps0, ps1, transBound, rotBound):
+def withinBounds(ps0, ps1, transBound, rotBound, transFrame=None, rotFrame=None):
     """
     Returns if ps0 and ps1 (PoseStamped) are within translation and rotation bounds of each other
 
     Note: rotBound is in degrees
+    """
+
+    dPose = tfx.pose(deltaPose(ps0, ps1, transFrame, rotFrame))
+    
+    deltaPositions = dPose.position.list
+    print('deltaPositions')
+    print(deltaPositions)
+    for deltaPos in deltaPositions:
+        if abs(deltaPos) > transBound:
+            return False
+
+    between = angleBetweenQuaternions(tfx.tb_angles([0,0,0,1]).msg, dPose.orientation)
+    print('angleBetween')
+    print(between)
+    if between > rotBound:
+        return False
+    
+    return True
+
     """
     ps0, ps1 = tfx.pose(ps0), tfx.pose(ps1)
 
@@ -236,7 +255,7 @@ def withinBounds(ps0, ps1, transBound, rotBound):
         return False
     
     return True
-    
+    """
 
 
 def combinePoses(pose0, pose1, op=operator.sub):

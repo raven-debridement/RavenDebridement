@@ -24,12 +24,12 @@ import code
 
 ids_to_joints = {73: Constants.AR.Frames.Grasper1,
                  53: Constants.AR.Frames.Grasper2,
-                 33: Constants.AR.Frames.Right,
+                 22: Constants.AR.Frames.Right,
                  13: Constants.AR.Frames.Cube1,
                  87: Constants.AR.Frames.Cube2,
                  93: Constants.AR.Frames.Cube3,
                  12: Constants.AR.Frames.Cube4,
-                 22: Constants.AR.Frames.Object}
+                 33: Constants.AR.Frames.Object}
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -66,7 +66,8 @@ class ARImageDetectionClass(ImageDetectionClass):
             else:
                   # default to straight up
                   # self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
-                  self.normal = tfx.tb_angles(0,0,-90).msg
+                  #self.normal = tfx.tb_angles(0,0,-90).msg
+                  self.normal = tfx.tb_angles(-90,90,0).msg
 
             self.state = None
             self.transforms = {}
@@ -84,9 +85,15 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.debugArCount = 0
             rospy.Subscriber(Constants.AR.Stereo, ARMarkers, self.arCallback)
 
+            # foam callback
+            # will bring back after debugging foam segmentation
+            #rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
 
-            rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
+            # tape callback
+            rospy.Subscriber(Constants.GripperTape.Topic, PoseStamped, self.tapeCallback)
 
+            rospy.sleep(2)
+        
       def setState(self, state):
             self.state = state
 
@@ -108,13 +115,21 @@ class ARImageDetectionClass(ImageDetectionClass):
                     pose.header.frame_id = marker.header.frame_id
                     pose.pose = marker.pose.pose
 
-                    self.listener.waitForTransform(Constants.AR.Frames.Base,marker.header.frame_id,pose.header.stamp,rospy.Duration(5))
-                    pose = self.listener.transformPose(Constants.AR.Frames.Base,pose)
+                    #self.listener.waitForTransform(Constants.AR.Frames.Base,marker.header.frame_id,pose.header.stamp,rospy.Duration(5))
+                    #pose = self.listener.transformPose(Constants.AR.Frames.Base,pose)
+
+                    tf_frame_to_base = tfx.lookupTransform(Constants.AR.Frames.Base, marker.header.frame_id, wait=10)
+                    pose = tf_frame_to_base * tfx.pose(pose)
+                    pose = pose.msg.PoseStamped()
+                    
 
                     point = PointStamped()
                     point.header.stamp = marker.header.stamp
-                    point.header.frame_id = marker.header.frame_id
+                    point.header.frame_id = Constants.AR.Frames.Base
                     point.point = pose.pose.position
+                    # move pick-up position back
+                    point.point.y -= .01
+                    point.point.z += .01
                     #self.normal = pose.pose.orientation
                     #self.normal = Util.reverseQuaternion(pose.pose.orientation)
 
@@ -123,13 +138,14 @@ class ARImageDetectionClass(ImageDetectionClass):
                     #point.header.frame_id = '/stereo_53'
                     #point.header.stamp = marker.header.stamp
 
-                    # commented out since recognize foam now
-                    #self.objectPoint = point
+                    # TEMP
+                    self.objectPoint = point
                     
                     #self.normal = tfx.tb_angles(marker.pose.pose.orientation).msg
                     #self.normal = tfx.tb_angles(tfx.tb_angles(0,90,0).matrix*tfx.tb_angles(marker.pose.pose.orientation).matrix).msg
                     #self.normal = Util.reverseQuaternion(marker.pose.pose.orientation)
-                    self.normal = tfx.tb_angles(0,0,-90).msg
+
+                    #self.normal = tfx.tb_angles(0,0,-90).msg
                 elif ids_to_joints[marker.id] == Constants.Arm.Right:
                     self.arHandlerWithOrientation(marker, "right")
             self.locks['ar_pose'].release() 
@@ -177,12 +193,16 @@ class ARImageDetectionClass(ImageDetectionClass):
         # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_33',stamp=marker.header.stamp)
         # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-90).matrix,frame='/stereo_33',stamp=marker.header.stamp)
         #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
+
+        """
         try:
             self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
             pose = self.listener.transformPose(Constants.AR.Frames.Base,pose)
         except Exception as e:
             print e
             return
+        """
+
         # pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
 
         #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id,True)
