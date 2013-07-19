@@ -68,6 +68,8 @@ class ARImageDetectionClass(ImageDetectionClass):
                   # self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
                   #self.normal = tfx.tb_angles(0,0,-90).msg
                   self.normal = tfx.tb_angles(-90,90,0).msg
+                  #self.normal = tfx.tb_angles(0,0,90).msg
+
 
             self.state = None
             self.transforms = {}
@@ -87,7 +89,7 @@ class ARImageDetectionClass(ImageDetectionClass):
 
             # foam callback
             # will bring back after debugging foam segmentation
-            #rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
+            rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
 
             # tape callback
             rospy.Subscriber(Constants.GripperTape.Topic, PoseStamped, self.tapeCallback)

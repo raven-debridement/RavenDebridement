@@ -74,6 +74,8 @@ class GripperControlClass:
         #endPose = tfx.pose(endPose.position, tfx.tb_angles(0,90,0))
         #endPose = tfx.pose(endPosition, startPose.orientation)
 
+        code.interact(local=locals())
+
         if ignoreOrientation:
             endPose.orientation = startPose.orientation
 
@@ -107,8 +109,14 @@ class GripperControlClass:
             endPose.orientation = startPose.orientation
      
         # TEMP, until fix orientation issue
-        #endPose = tfx.pose(endPosition, tfx.tb_angles(0,90,0))
+        #endPose = tfx.pose(endPosition, tfx.tb_angles(-90,90,0))
         #endPose = tfx.pose(endPosition, startPose.orientation)
+
+        print(endPose)
+        print(Util.angleBetweenQuaternions(tfx.tb_angles(0,90,90).msg,tfx.tb_angles(endPose.orientation).msg))
+        # should be .5 .5 -.5 .5
+        print(endPose.orientation.quaternion)
+        code.interact(local=locals())
         
 
         #self.player.clear_stages()
@@ -185,9 +193,6 @@ def test_opencloseGripper(close=True,duration=2):
     rospy.sleep(2)
     gripperControl = GripperControlClass(arm, tf.TransformListener())
     rospy.sleep(2)
-
-    gripperControl.start()
-
     rospy.loginfo('Setting the gripper')
     if close:
        gripperControl.closeGripper(duration=duration)
