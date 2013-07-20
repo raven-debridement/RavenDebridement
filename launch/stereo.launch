@@ -22,13 +22,13 @@ You can uncomment the viewer at bottom if you want to view the image stream.
        By default, when neither argument is set, open the first camera found.
        If both are set, open by IP address and verify the GUID matches.
   -->
-  <arg name="left_guid" default="139217" />
-  <!--<arg name="left_guid" default="104897" /> -->
+  <!--<arg name="left_guid" default="139217" />-->
+  <arg name="left_guid" default="104897" /> -->
   <!-- tf frame id associated with this camera -->
   <arg name="left_frame_id" default="$(arg left_camera)_optical_frame" />
 
-  <arg name="right_guid" default="143047" />
-  <!--<arg name="right_guid" default="139569" /> -->
+  <!--<arg name="right_guid" default="143047" />-->
+  <arg name="right_guid" default="139569" /> -->
   <!-- tf frame id associated with this camera -->
   <arg name="right_frame_id" default="$(arg left_camera)_optical_frame" />
 
