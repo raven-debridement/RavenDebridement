@@ -70,10 +70,12 @@ class ImageDetectionClass():
     def tapeCallback(self, msg):
         # TEMP hard coded for left gripper
         self.newLeftGripperPose = True
+        self.tapeMsg = msg
         self.leftGripperPose = msg
+        self.gripperPoseIsEstimate = False
 
     def foamCallback(self, msg):
-        self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
+        self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,rospy.Time.now(),rospy.Duration(5))
         self.objectPoint = self.listener.transformPoint(Constants.AR.Frames.Base,msg)
         marker = Util.createMarker(self.getObjectPose(), 0)
         self.objPublisher.publish(marker)
@@ -130,6 +132,8 @@ class ImageDetectionClass():
         lgp.pose.orientation.w = 1
         self.leftGripperPose = lgp
 
+    def gripperPoseEstimated(self):
+        return self.gripperPoseIsEstimate
 
     def hasFoundObject(self):
         return self.objectPoint != None

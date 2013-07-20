@@ -22,14 +22,7 @@ from threading import Lock
 
 import code
 
-ids_to_joints = {73: Constants.AR.Frames.Grasper1,
-                 53: Constants.AR.Frames.Grasper2,
-                 22: Constants.AR.Frames.Right,
-                 13: Constants.AR.Frames.Cube1,
-                 87: Constants.AR.Frames.Cube2,
-                 93: Constants.AR.Frames.Cube3,
-                 12: Constants.AR.Frames.Cube4,
-                 33: Constants.AR.Frames.Object}
+APPROX_TIME = 0.1 # in sec
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -73,22 +66,19 @@ class ARImageDetectionClass(ImageDetectionClass):
 
             self.state = None
             self.transforms = {}
+            self.tapeMsg = None
+            self.gripperPoseIsEstimate = False
 
-            # image processing to find object
             self.listener = tf.TransformListener()
-            #self.objectProcessing = ImageProcessingClass()
 
             self.locks = dict()
             self.locks['ar_pose'] = Lock()
 
-            # Temporary. For finding the receptacle
-            # rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
-            # Get grippers using AR
+            # Make gripper location more robust using AR
             self.debugArCount = 0
             rospy.Subscriber(Constants.AR.Stereo, ARMarkers, self.arCallback)
 
             # foam callback
-            # will bring back after debugging foam segmentation
             rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
 
             # tape callback
@@ -102,54 +92,9 @@ class ARImageDetectionClass(ImageDetectionClass):
       def arCallback(self, msg):
             self.locks['ar_pose'].acquire()
             markers = msg.markers
-            #rospy.loginfo(len(markers))
             for marker in markers:
                 #arframe = Constants.StereoAR + "_" + str(marker.id)
-                frame = ids_to_joints[marker.id]
-                if frame == Constants.AR.Frames.Grasper1 or frame == Constants.AR.Frames.Grasper2:
-                    #self.arHandler(marker, "left")
-                    self.arHandlerWithOrientation(marker, "left")
-                elif frame == Constants.AR.Frames.Right:
-                    self.arHandlerWithOrientation(marker, "right")
-                elif frame == Constants.AR.Frames.Object:
-                    pose = PoseStamped()
-                    pose.header.stamp = marker.header.stamp
-                    pose.header.frame_id = marker.header.frame_id
-                    pose.pose = marker.pose.pose
-
-                    #self.listener.waitForTransform(Constants.AR.Frames.Base,marker.header.frame_id,pose.header.stamp,rospy.Duration(5))
-                    #pose = self.listener.transformPose(Constants.AR.Frames.Base,pose)
-
-                    tf_frame_to_base = tfx.lookupTransform(Constants.AR.Frames.Base, marker.header.frame_id, wait=10)
-                    pose = tf_frame_to_base * tfx.pose(pose)
-                    pose = pose.msg.PoseStamped()
-                    
-
-                    point = PointStamped()
-                    point.header.stamp = marker.header.stamp
-                    point.header.frame_id = Constants.AR.Frames.Base
-                    point.point = pose.pose.position
-                    # move pick-up position back
-                    point.point.y -= .01
-                    point.point.z += .01
-                    #self.normal = pose.pose.orientation
-                    #self.normal = Util.reverseQuaternion(pose.pose.orientation)
-
-                    #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id)
-                    #point = tfx.point(tf_frame_to_53 * tfx.point(point.point)).msg.PointStamped()
-                    #point.header.frame_id = '/stereo_53'
-                    #point.header.stamp = marker.header.stamp
-
-                    # TEMP
-                    self.objectPoint = point
-                    
-                    #self.normal = tfx.tb_angles(marker.pose.pose.orientation).msg
-                    #self.normal = tfx.tb_angles(tfx.tb_angles(0,90,0).matrix*tfx.tb_angles(marker.pose.pose.orientation).matrix).msg
-                    #self.normal = Util.reverseQuaternion(marker.pose.pose.orientation)
-
-                    #self.normal = tfx.tb_angles(0,0,-90).msg
-                elif ids_to_joints[marker.id] == Constants.Arm.Right:
-                    self.arHandlerWithOrientation(marker, "right")
+                self.arHandlerWithOrientation(marker, "left")
             self.locks['ar_pose'].release() 
 
       def calibrate(self, markers):
@@ -158,7 +103,6 @@ class ARImageDetectionClass(ImageDetectionClass):
              d[marker.id] = marker
           if d[2] and d[6]:
              transforms[(6,2)] = Utils.transform(d[6], d[2])
-          
 
       def debugAr(self, gp):
         self.debugArCount += 1
@@ -171,59 +115,55 @@ class ARImageDetectionClass(ImageDetectionClass):
         pose.header.frame_id = marker.header.frame_id
         pose.pose = marker.pose.pose
 
-        """
-        # rotation y axis 90 deg z axis -90 deg
-        poseMat = tfx.tb_angles(pose.pose.orientation).matrix
-        rot = tft.rotation_matrix(-math.pi/2,[1,0,0])[0:3,0:3]
-        #print('rot')
-        #print(rot)
-        rot1 = tfx.tb_angles(0,0,-90).matrix
-        #print('rot1')
-        #print(rot1)
-        newOrientation = np.dot(rot1,poseMat)
-        #newOrientation = np.dot(tft.rotation_matrix(math.pi/2,[0,0,1])[0:3,0:3],newOrientation)
-        pose.pose = tfx.pose(pose.pose.position,newOrientation).msg.Pose()
-        """
+        self.markerPose = pose
 
-        # try a different way
-        # frame='/stereo_33',stamp=marker.header.stamp
-        #pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_53',stamp=marker.header.stamp)
-        #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
-        #self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
-        #pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
+        print 'check recent'
+        if self.tapePoseRecent(marker.header.stamp, APPROX_TIME):
+            self.registerTransform(pose, marker.id)
+        elif not self.tapePoseRecent(rospy.Time.now(), 1):
+            transform = self.transforms.setdefault(marker.id) # gets the transform or returns None
+            if transform:
+                poseTfx = tfx.pose(pose)
+                estimatedPose = (transform * poseTfx).msg.PoseStamped()
+                if armname == "left":
+                    self.leftGripperPose = estimatedPose
+                    self.newLeftGripperPose = True
+                else:
+                    self.rightGripperPose = estimatedPose
+                    self.newRightGripperPose = True
+                self.gripperPoseIsEstimate = True
 
-        # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-0).matrix,frame='/stereo_33',stamp=marker.header.stamp)
-        # pose = tfx.pose([0,0,0],tfx.tb_angles(0,0,-90).matrix,frame='/stereo_33',stamp=marker.header.stamp)
-        #pose = self.listener.transformPose('left_optical_frame',pose.msg.PoseStamped())
+      def registerTransform(self, pose, id_):
+        poseTfx = tfx.pose(pose)
+        tapeTfx = tfx.pose(self.tapeMsg)
+        transform = tfx.transform(tapeTfx.matrix * poseTfx.inverse().matrix)
+        self.transforms[id_] = transform
+        print (transform * poseTfx).msg.PoseStamped()
 
-        """
-        try:
-            self.listener.waitForTransform(Constants.AR.Frames.Base,'/stereo_53',marker.header.stamp,rospy.Duration(5))
-            pose = self.listener.transformPose(Constants.AR.Frames.Base,pose)
-        except Exception as e:
-            print e
-            return
-        """
+      def tapePoseRecent(self, comparisonStamp, maxTime):
+        if not self.tapeMsg:
+            return False
 
-        # pose = self.listener.transformPose(Constants.AR.Frames.Base,pose.msg.PoseStamped())
-
-        #tf_frame_to_53 = tfx.lookupTransform('/stereo_53',marker.header.frame_id,True)
-        #pose = tfx.pose(tf_frame_to_53 * pose).msg.PoseStamped()
-        #pose.header.frame_id = '/stereo_53'
-        #pose.header.stamp = marker.header.stamp
-
-        #pose.pose.orientation = Util.reverseQuaternion(pose.pose.orientation)
-
-
-        if armname == "left":
-            self.leftGripperPose = pose
-            self.newLeftGripperPose = True
-        else:
-            self.rightGripperPose = pose
-            self.newRightGripperPose = True
+        tapeStamp = self.tapeMsg.header.stamp
+        timeDiff = (comparisonStamp - tapeStamp).to_sec()
+        print 'time diff', timeDiff
+        return timeDiff < maxTime
 
       def isCalibrated(self):
             return self.state == ARImageDetectionClass.State.Calibrated
+
+def testTransforms():
+    rospy.init_node('ar_image_detection')
+    imageDetector = ARImageDetectionClass()
+    imageDetector.markerPose = None
+
+    while not rospy.is_shutdown():
+        if imageDetector.markerPose:
+            imageDetector.tapeMsg = imageDetector.markerPose
+            imageDetector.tapeMsg.pose.position.x += 0.1
+            imageDetector.tapeMsg.pose.orientation.y += 0.1
+            print imageDetector.tapeMsg.pose.position.x, imageDetector.markerPose.pose.position.x    
+        rospy.sleep(.5)
 
 def testObjectPoint():
       """
@@ -325,4 +265,5 @@ if __name__ == '__main__':
     #testFound()
     #testFoundGripper()
     #testObjectPoint()
-    testRotation()
+    #testRotation()
+    testTransforms()
