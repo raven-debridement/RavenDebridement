@@ -31,6 +31,7 @@ class Arm:
     Right = 'R'
 
 class Frames:
+    Camera = '/left_optical_frame'
     LeftTool = '/tool_L'
     RightTool = '/tool_R'
     World = '/world'

@@ -68,6 +68,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.transforms = {}
             self.tapeMsg = None
             self.gripperPoseIsEstimate = False
+            self.estimatedPosePub = rospy.Publisher('estimated_pose', PoseStamped)
 
             self.listener = tf.TransformListener()
 
@@ -97,13 +98,6 @@ class ARImageDetectionClass(ImageDetectionClass):
                 self.arHandlerWithOrientation(marker, "left")
             self.locks['ar_pose'].release() 
 
-      def calibrate(self, markers):
-          d = {}
-          for marker in markers:
-             d[marker.id] = marker
-          if d[2] and d[6]:
-             transforms[(6,2)] = Utils.transform(d[6], d[2])
-
       def debugAr(self, gp):
         self.debugArCount += 1
         if self.debugArCount % 10 == 0:
@@ -117,14 +111,14 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         self.markerPose = pose
 
-        print 'check recent'
         if self.tapePoseRecent(marker.header.stamp, APPROX_TIME):
             self.registerTransform(pose, marker.id)
-        elif not self.tapePoseRecent(rospy.Time.now(), 1):
+        elif not self.tapePoseRecent(rospy.Time.now(), 0):
             transform = self.transforms.setdefault(marker.id) # gets the transform or returns None
-            if transform:
-                poseTfx = tfx.pose(pose)
-                estimatedPose = (transform * poseTfx).msg.PoseStamped()
+            if transform != None:
+                estimatedPose = transform
+                estimatedPose.header.stamp = rospy.Time.now()
+                self.estimatedPosePub.publish(estimatedPose)
                 if armname == "left":
                     self.leftGripperPose = estimatedPose
                     self.newLeftGripperPose = True
@@ -134,11 +128,10 @@ class ARImageDetectionClass(ImageDetectionClass):
                 self.gripperPoseIsEstimate = True
 
       def registerTransform(self, pose, id_):
-        poseTfx = tfx.pose(pose)
-        tapeTfx = tfx.pose(self.tapeMsg)
-        transform = tfx.transform(tapeTfx.matrix * poseTfx.inverse().matrix)
+        stereoFrame = 'stereo_' + str(id_)
+        self.tapeMsg.header.stamp = self.listener.getLatestCommonTime(stereoFrame, self.tapeMsg.header.frame_id)
+        transform = self.listener.transformPose(stereoFrame, self.tapeMsg)
         self.transforms[id_] = transform
-        print (transform * poseTfx).msg.PoseStamped()
 
       def tapePoseRecent(self, comparisonStamp, maxTime):
         if not self.tapeMsg:
@@ -157,6 +150,8 @@ def testTransforms():
     imageDetector = ARImageDetectionClass()
     imageDetector.markerPose = None
 
+    print 'about to spin'
+    rospy.spin()
     while not rospy.is_shutdown():
         if imageDetector.markerPose:
             imageDetector.tapeMsg = imageDetector.markerPose
