@@ -50,8 +50,6 @@ class GripperControlClass:
             listener = tf.TransformListener()
         self.listener = listener
 
-        #self.pub = rospy.Publisher(self.tooltopic, ToolCommandStamped)
-        #self.raven_pub = rospy.Publisher(MyConstants.RavenTopics.RavenCommand, RavenCommand)
         
         self.player = MyTrajectoryPlayer(arms=self.armName)
 
@@ -110,9 +108,7 @@ class GripperControlClass:
         #endPose = tfx.pose(endPosition, tfx.tb_angles(-90,90,0))
         #endPose = tfx.pose(endPosition, startPose.orientation)
 
-                
-
-        #self.player.clear_stages()
+        self.player.clear_stages()
         self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
 
     def start(self):
@@ -185,6 +181,7 @@ def test_opencloseGripper(close=True,duration=2):
     rospy.init_node('gripper_control',anonymous=True)
     rospy.sleep(2)
     gripperControl = GripperControlClass(arm, tf.TransformListener())
+    gripperControl.start()
     rospy.sleep(2)
     rospy.loginfo('Setting the gripper')
     if close:
@@ -674,8 +671,8 @@ def test_rotation():
         rate.sleep()
 
 if __name__ == '__main__':
-    #test_opencloseGripper(close=True,duration=5)
-    test_moveGripper()
+    test_opencloseGripper(close=False,duration=5)
+    #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()

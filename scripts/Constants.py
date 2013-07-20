@@ -51,3 +51,6 @@ class Foam:
 
 class GripperTape:
     Topic = '/tape_pose'
+
+class Services:
+    isFoamGrasped = 'thresh_red'

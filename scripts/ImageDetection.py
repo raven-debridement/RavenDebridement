@@ -73,15 +73,21 @@ class ImageDetectionClass():
         self.leftGripperPose = msg
 
     def foamCallback(self, msg):
-        self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
-        self.objectPoint = self.listener.transformPoint(Constants.AR.Frames.Base,msg)
+        #self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
+        #self.objectPoint = self.listener.transformPoint(Constants.AR.Frames.Base,msg)
+
+        tfxMsg = tfx.point(msg)
+        tf_msgframe_to_base = tfx.lookupTransform(Constants.AR.Frames.Base, tfxMsg.frame, wait=10)
+        tfxMsg = tf_msgframe_to_base * tfxMsg
+        self.objectPoint = tfxMsg.msg.PointStamped()
+
         marker = Util.createMarker(self.getObjectPose(), 0)
         self.objPublisher.publish(marker)
         
         # to account for gripper being open
         # and offset of marker from center of gripper
         #self.objectPoint.point.y += .037
-        self.objectPoint.point.z += .005
+        self.objectPoint.point.z += .004
 
         marker = Util.createMarker(self.getObjectPose(), 1)
         self.objPublisher.publish(marker)
