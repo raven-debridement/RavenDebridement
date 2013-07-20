@@ -181,6 +181,7 @@ def test_opencloseGripper(close=True,duration=2):
     rospy.init_node('gripper_control',anonymous=True)
     rospy.sleep(2)
     gripperControl = GripperControlClass(arm, tf.TransformListener())
+    gripperControl.start()
     rospy.sleep(2)
     rospy.loginfo('Setting the gripper')
     if close:
@@ -670,8 +671,8 @@ def test_rotation():
         rate.sleep()
 
 if __name__ == '__main__':
-    #test_opencloseGripper(close=True,duration=5)
-    test_moveGripper()
+    test_opencloseGripper(close=False,duration=5)
+    #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
     #test_gripperPose()

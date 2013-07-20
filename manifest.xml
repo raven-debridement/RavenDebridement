@@ -24,6 +24,8 @@
   <depend package="dynamic_reconfigure"/>
   <depend package="rospy"/>
 
+  <depend package="raven_pose_estimator"/>
+
 </package>
 
 
