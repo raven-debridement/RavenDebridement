@@ -23,6 +23,7 @@ from threading import Lock
 import code
 
 APPROX_TIME = 0.1 # in sec
+id_map = {32: Constants.AR.Frames.Object}
 
 class ARImageDetectionClass(ImageDetectionClass):
     
@@ -91,11 +92,9 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.state = state
 
       def arCallback(self, msg):
-            rospy.loginfo('AR callback')
             self.locks['ar_pose'].acquire()
             markers = msg.markers
             for marker in markers:
-                #arframe = Constants.StereoAR + "_" + str(marker.id)
                 self.arHandlerWithOrientation(marker, "left")
             self.locks['ar_pose'].release() 
 
@@ -112,12 +111,9 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         self.markerPose = pose
 
-        rospy.loginfo('Handling AR')
-
         if self.tapePoseRecent(marker.header.stamp, APPROX_TIME):
-            #rospy.loginfo('tape pose recent')
             self.registerTransform(pose, marker.id)
-        elif not self.tapePoseRecent(rospy.Time.now(), 0):
+        elif not self.tapePoseRecent(rospy.Time.now(), 0.5):
             transform = self.transforms.setdefault(marker.id) # gets the transform or returns None
             if transform != None:
                 estimatedPose = transform
@@ -132,7 +128,7 @@ class ARImageDetectionClass(ImageDetectionClass):
                 self.gripperPoseIsEstimate = True
 
       def registerTransform(self, pose, id_):
-        rospy.loginfo('register transform')
+        rospy.loginfo('registering transform')
         stereoFrame = 'stereo_' + str(id_)
         self.tapeMsg.header.stamp = self.listener.getLatestCommonTime(stereoFrame, self.tapeMsg.header.frame_id)
         transform = self.listener.transformPose(stereoFrame, self.tapeMsg)
@@ -144,7 +140,6 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         tapeStamp = self.tapeMsg.header.stamp
         timeDiff = (comparisonStamp - tapeStamp).to_sec()
-        print 'time diff', timeDiff
         return timeDiff < maxTime
 
       def isCalibrated(self):
