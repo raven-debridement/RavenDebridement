@@ -91,6 +91,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.state = state
 
       def arCallback(self, msg):
+            rospy.loginfo('AR callback')
             self.locks['ar_pose'].acquire()
             markers = msg.markers
             for marker in markers:
@@ -111,7 +112,10 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         self.markerPose = pose
 
+        rospy.loginfo('Handling AR')
+
         if self.tapePoseRecent(marker.header.stamp, APPROX_TIME):
+            #rospy.loginfo('tape pose recent')
             self.registerTransform(pose, marker.id)
         elif not self.tapePoseRecent(rospy.Time.now(), 0):
             transform = self.transforms.setdefault(marker.id) # gets the transform or returns None
@@ -128,6 +132,7 @@ class ARImageDetectionClass(ImageDetectionClass):
                 self.gripperPoseIsEstimate = True
 
       def registerTransform(self, pose, id_):
+        rospy.loginfo('register transform')
         stereoFrame = 'stereo_' + str(id_)
         self.tapeMsg.header.stamp = self.listener.getLatestCommonTime(stereoFrame, self.tapeMsg.header.frame_id)
         transform = self.listener.transformPose(stereoFrame, self.tapeMsg)
@@ -150,8 +155,8 @@ def testTransforms():
     imageDetector = ARImageDetectionClass()
     imageDetector.markerPose = None
 
-    print 'about to spin'
-    rospy.spin()
+    #print 'about to spin'
+    #rospy.spin()
     while not rospy.is_shutdown():
         if imageDetector.markerPose:
             imageDetector.tapeMsg = imageDetector.markerPose
