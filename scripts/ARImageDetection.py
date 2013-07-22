@@ -95,6 +95,9 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.locks['ar_pose'].acquire()
             markers = msg.markers
             for marker in markers:
+                markerType = id_map.get(marker.id)
+                if markerType != None:
+                    continue
                 self.arHandlerWithOrientation(marker, "left")
             self.locks['ar_pose'].release() 
 
@@ -113,7 +116,7 @@ class ARImageDetectionClass(ImageDetectionClass):
 
         if self.tapePoseRecent(marker.header.stamp, APPROX_TIME):
             self.registerTransform(pose, marker.id)
-        elif not self.tapePoseRecent(rospy.Time.now(), 0.5):
+        elif not self.tapePoseRecent(rospy.Time.now(), 0):
             transform = self.transforms.setdefault(marker.id) # gets the transform or returns None
             if transform != None:
                 estimatedPose = transform
@@ -128,7 +131,7 @@ class ARImageDetectionClass(ImageDetectionClass):
                 self.gripperPoseIsEstimate = True
 
       def registerTransform(self, pose, id_):
-        rospy.loginfo('registering transform')
+        rospy.loginfo('registering transform for id %d', id_)
         stereoFrame = 'stereo_' + str(id_)
         self.tapeMsg.header.stamp = self.listener.getLatestCommonTime(stereoFrame, self.tapeMsg.header.frame_id)
         transform = self.listener.transformPose(stereoFrame, self.tapeMsg)

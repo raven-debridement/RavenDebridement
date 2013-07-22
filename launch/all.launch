@@ -22,7 +22,7 @@
 	-->
 
         <include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />
-        <node name="color_gripper_segmenter" pkg="raven_pose_estimator" type="color_gripper_segmenter.new" respawn="false" output="screen" />
+    <!-- <node name="color_gripper_segmenter" pkg="raven_pose_estimator" type="color_gripper_segmenter.new" respawn="false" output="screen" />-->
 	<!--<include file="$(find raven_pose_estimator)/launch/chessboard_prosilica.launch" />-->
 	<!--<include file="$(find stereo_click)/launch/stereo_click_control.launch" />-->
 

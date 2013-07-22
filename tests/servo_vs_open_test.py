@@ -41,24 +41,45 @@ class ServoVsOpenTest():
         # ar_frame is the target
         self.ar_frame = '/stereo_32'
         self.objectPose = tfx.pose([0,0,0],tfx.tb_angles(-90,90,0),frame=self.ar_frame)
+        
+        self.tf_br = tf.TransformBroadcaster()
+        self.delta_pub = rospy.Publisher('delta_pose', PoseStamped)
 
         rospy.sleep(3)
+
+    def publishObjPose(self, pose):
+        pos = pose.position
+        ori = pose.orientation
+        self.tf_br.sendTransform((pos.x, pos.y, pos.z), (ori.x, ori.y, ori.z, ori.w),
+                                 rospy.Time.now(), 'object_frame', pose.frame)
+
+    def publishDeltaPose(self, delta_pose, gripper_pose):
+        pose = PoseStamped()
+        pose.header.frame_id = Constants.Frames.Link0
+        pose.header.stamp = rospy.Time.now()
+        pose.pose.position = (gripper_pose.position + delta_pose.position).msg.Point()
+        pose.pose.orientation = delta_pose.orientation.msg.Quaternion()
+        self.delta_pub.publish(pose)
         
     def openTest(self):
         self.gripperControl.start()
 
         while not rospy.is_shutdown():
             if self.imageDetector.hasFoundGripper(self.arm):
-                rospy.loginfo('Press enter to move to ' + self.ar_frame)
-                raw_input()
 
                 gripperPose = self.imageDetector.getGripperPose(self.arm)
                 objectPose = tfx.pose(self.objectPose,stamp=rospy.Time.now())
+                
+                self.publishObjPose(self.objectPose)
 
                 deltaPose = Util.deltaPose(gripperPose, objectPose, self.transFrame, self.rotFrame)
                 deltaPose.position.z += .02
 
                 ravenGripperPose = self.gripperControl.getGripperPose(Constants.Frames.Link0)
+
+                rospy.loginfo('Press enter to move to ' + self.ar_frame)
+                raw_input()
+
                 self.gripperControl.goToGripperPoseDelta(ravenGripperPose, deltaPose)
                 break
             
@@ -79,9 +100,10 @@ class ServoVsOpenTest():
 
         maxMovement = .01
 
-        while not Util.withinBounds(gripperPose, self.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        while not Util.withinBounds(gripperPose, self.objectPose, transBound, rotBound, self.transFrame, self.rotFrame) and not rospy.is_shutdown():
             if self.gripperControl.isPaused():
                 rospy.sleep(1)
+                self.publishObjPose(self.objectPose)
                 rospy.loginfo('pres enter to move')
                 raw_input()
                 if self.imageDetector.hasFoundNewGripper(self.arm):
@@ -89,6 +111,8 @@ class ServoVsOpenTest():
                     gripperPose = self.imageDetector.getGripperPose(self.arm)
                     deltaPose = tfx.pose(Util.deltaPose(gripperPose, self.objectPose, Constants.Frames.Link0, self.toolframe))
                     deltaPose.position = deltaPose.position.capped(maxMovement)
+                    deltaPose0Link = tfx.pose(Util.deltaPose(gripperPose, self.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
+                    self.publishDeltaPose(deltaPose0Link, tfx.pose(gripperPose))
                     self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
                     
 

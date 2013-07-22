@@ -46,6 +46,7 @@ class ImageDetectionClass():
             self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
 
         self.listener = tf.TransformListener()
+        self.tf_br = tf.TransformBroadcaster()
         self.registerObjectPublisher()
 
         # hardcode receptacle point
@@ -85,6 +86,11 @@ class ImageDetectionClass():
         self.objectPoint = tfxMsg.msg.PointStamped()
         """
 
+        pose = self.getObjectPose()
+        pos = pose.position
+        ori = pose.orientation
+        self.tf_br.sendTransform((pos.x, pos.y, pos.z), (ori.x, ori.y, ori.z, ori.w),
+                                 rospy.Time.now(), 'object_frame', pose.header.frame_id)
         marker = Util.createMarker(self.getObjectPose(), 0)
         self.objPublisher.publish(marker)
         
