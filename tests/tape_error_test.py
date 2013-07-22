@@ -128,6 +128,27 @@ class TapeErrorTest():
         return estimatedPoseList, tapePoseList, deltaPoseList, deltaTransNormList, deltaRotNormList
                 
 
+def pose_error(pose_hat, pose):
+    pose_hat = tfx.pose(pose_hat)
+    pose = tfx.pose(pose)
+
+    X_hat = pose_hat.matrix
+    X = pose.matrix
+
+    R_hat = np.array(pose_hat.rotation.matrix)
+    R = np.array(pose.rotation.matrix)
+
+    p_hat = np.array(pose_hat.position.vector3)
+    p = np.array(pose.position.vector3)
+
+    X_bar = np.hstack((np.dot(R_hat.T,R), np.dot(R_hat.T, p-p_hat)))
+    X_bar = np.vstack((X_bar, np.array([0,0,0,1])))
+
+    code.interact(local=locals())
+
+    return X_bar
+    
+
 def test_tape_error():
     rospy.init_node('test_tape_error',anonymous=True)
     tapeErrorTest = TapeErrorTest()
@@ -156,9 +177,32 @@ def test_tape_error():
 
     pylab.show()
 
+def test_pose_error():
+    estimatedPoseMatrix = np.array(
+        [[  1.14865522e-01,   9.91918767e-01,  -5.38801529e-02,   8.19362143e-04],
+         [  9.66254755e-01,  -9.89757417e-02,   2.37814111e-01,   2.63457680e-02],
+         [  2.30559451e-01,  -7.93785957e-02,  -9.69815126e-01,   3.25400622e-03],
+         [  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,   1.00000000e+00]])
+
+    tapePoseMatrix = np.array(
+        [[-0.06660568,  0.99063038,  0.1192272,  -0.00285434],
+         [-0.14934233,  0.10824874, -0.98284235, -0.02663261],
+         [-0.98653969, -0.08326855,  0.14073307, -0.09168835],
+         [ 0.        ,  0.        ,  0.        ,  1.        ]])
+
+    estimatedPose = tfx.pose(estimatedPoseMatrix)
+    tapePose = tfx.pose(tapePoseMatrix)
+
+    poseErrorMatrix = pose_error(estimatedPose, tapePose)
+    
+    print(poseErrorMatrix)
+    
+
+    code.interact(local=locals())
+
 if __name__ == '__main__':
     test_tape_error()
-
+    #test_pose_error()
 
 """
 Below are records of the test:
