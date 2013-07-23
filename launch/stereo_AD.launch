@@ -5,6 +5,9 @@ You can uncomment the viewer at bottom if you want to view the image stream.
 -->
 
 <launch>
+
+  <machine name="surgical5" address="surgical5.cs.berkeley.edu" env-loader="/opt/ros/fuerte/env.sh" user="annal"/>
+
   <arg name="left_ip_address" default="" /> 
   <arg name="right_ip_address" default="" /> 
 
@@ -37,7 +40,7 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   
 
   <!-- The left camera node -->
-  <node name="$(arg left_camera)_driver" ns="$(arg namespace)" pkg="prosilica_camera" type="prosilica_node" output="screen">
+  <node machine="surgical5" name="$(arg left_camera)_driver" ns="$(arg namespace)" pkg="prosilica_camera" type="prosilica_node" output="screen">
     <remap from="camera" to="$(arg left_camera)" />
 
     <param name="guid" type="str" value="$(arg left_guid)" />
@@ -50,7 +53,7 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   </node>
 
   <!-- The right camera node -->
-  <node name="$(arg right_camera)_driver" ns="$(arg namespace)" pkg="prosilica_camera" type="prosilica_node" output="screen">
+  <node machine="surgical5" name="$(arg right_camera)_driver" ns="$(arg namespace)" pkg="prosilica_camera" type="prosilica_node" output="screen">
     <remap from="camera" to="$(arg right_camera)" />
 
     <param name="guid" type="str" value="$(arg right_guid)" />
