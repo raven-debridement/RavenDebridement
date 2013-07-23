@@ -50,6 +50,7 @@ class GripperControlClass:
             listener = tf.TransformListener()
         self.listener = listener
 
+        self.homePose = None
         
         self.player = MyTrajectoryPlayer(arms=self.armName)
 
@@ -151,6 +152,18 @@ class GripperControlClass:
         pos, quat = self.listener.lookupTransform(frame, self.toolframe, commonTime)
 
         return tfx.pose(pos,quat).msg.Pose()
+
+    def setHomePose(self, pose=None):
+        if pose == None:
+            pose = self.getGripperPose(MyConstants.Frames.Link0)
+        self.homePose = pose
+    
+    def goToHomePose(self):
+        startPose = self.getGripperPose(MyConstants.Frames.Link0)
+        self.goToGripperPose(startPose, self.homePose, duration=6)
+
+    def getHomePose(self):
+        return tfx.pose(self.homePose)
 
     def ravenStateCallback(self, msg):
         self.jointStates =  msg.arms[0].joints
