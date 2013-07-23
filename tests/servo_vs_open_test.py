@@ -59,7 +59,7 @@ class ServoVsOpenTest():
                 deltaPose.position.z += .02
 
                 ravenGripperPose = self.gripperControl.getGripperPose(Constants.Frames.Link0)
-                self.gripperControl.goToGripperPoseDelta(ravenGripperPose, deltaPose)
+                self.gripperControl.goToGripperPoseDelta(ravenGripperPose, deltaPose, ignoreOrientation=True)
                 break
             
             rospy.sleep(.1)
@@ -67,11 +67,14 @@ class ServoVsOpenTest():
         rospy.spin()
 
     def servoTest(self):
+
         self.gripperControl.start()
 
-        while not self.imageDetector.hasFoundGripper(self.arm):
+        while not self.imageDetector.hasFoundGripper(self.arm) and not rospy.is_shutdown():
+            rospy.loginfo('Searching for gripper')
             rospy.sleep(.1)
 
+        rospy.loginfo('Found gripper')
         gripperPose = self.imageDetector.getGripperPose(self.arm)
 
         transBound = .008
@@ -79,17 +82,17 @@ class ServoVsOpenTest():
 
         maxMovement = .01
 
-        while not Util.withinBounds(gripperPose, self.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        while not Util.withinBounds(gripperPose, self.objectPose, transBound, rotBound, self.transFrame, self.rotFrame) and not rospy.is_shutdown():
             if self.gripperControl.isPaused():
                 rospy.sleep(1)
-                rospy.loginfo('pres enter to move')
+                rospy.loginfo('press enter to move')
                 raw_input()
                 if self.imageDetector.hasFoundNewGripper(self.arm):
                     rospy.loginfo('paused and found new gripper')
                     gripperPose = self.imageDetector.getGripperPose(self.arm)
                     deltaPose = tfx.pose(Util.deltaPose(gripperPose, self.objectPose, Constants.Frames.Link0, self.toolframe))
                     deltaPose.position = deltaPose.position.capped(maxMovement)
-                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
+                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=False)
                     
 
             rospy.sleep(.1)
@@ -103,6 +106,7 @@ def servo_test():
     rospy.init_node('servo_test',anonymous=True)
     test = ServoVsOpenTest()
     test.servoTest()
+
 
 if __name__ == '__main__':
     #open_test()

@@ -58,11 +58,8 @@ class ARImageDetectionClass(ImageDetectionClass):
                   self.normal = normal
             else:
                   # default to straight up
-                  # self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
-                  #self.normal = tfx.tb_angles(0,0,-90).msg
-                  self.normal = tfx.tb_angles(-90,90,0).msg
-                  #self.normal = tfx.tb_angles(0,0,90).msg
-
+                  #self.normal = tfx.tb_angles(-90,90,0).msg
+                  self.normal = tfx.tb_angles(0,90,0).msg
 
             self.state = None
             self.transforms = {}
