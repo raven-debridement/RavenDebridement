@@ -8,18 +8,18 @@
             <param name="queue_size" type="int" value="20" />
         </node>
 
-        <node pkg="transforms" type="transform_server.py" name="transform_broadcaster" />
+    <node pkg="transforms" type="transform_server.py" name="transform_broadcaster" />
 	<!-- <node pkg="tf" type="static_transform_publisher" name="camera_to_world" args="0 0 0 0 0 0 world stereo_frame 100" />
 	<node pkg="tf" type="static_transform_publisher" name="left_to_right" args="0 0 0 0 0 0 stereo_frame left_optical_frame 10" />
 	<node pkg="tf" type="static_transform_publisher" name="right_to_right" args="0 0 0 0 0 0 stereo_frame right_optical_frame 10" /> -->
 	<!-- <node pkg="tf" type="static_transform_publisher" name="left_to_right" args="0.05137 0 0.00136 0 0.108380311 0 stereo_frame left_optical_frame 10" /> -->
 
-	<!--
+	
 	<node name="foam_poses" type="bgm_segmenter" pkg="raven_pose_estimator" output="screen">
 	    <remap from="left" to="left" />
 	    <remap from="right" to="right" />
 	</node>
-	-->
+	
 
         <include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />
     <!-- <node name="color_gripper_segmenter" pkg="raven_pose_estimator" type="color_gripper_segmenter.new" respawn="false" output="screen" />-->

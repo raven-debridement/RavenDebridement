@@ -45,14 +45,18 @@ class ServoVsOpenTest():
         self.listener = tf.TransformListener()
         self.tf_br = tf.TransformBroadcaster()
         self.delta_pub = rospy.Publisher('delta_pose', PoseStamped)
+        self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
 
         rospy.sleep(3)
 
     def publishObjPose(self, pose):
+        self.obj_pub.publish(pose)
+        """
         pos = pose.position
         ori = pose.orientation
         self.tf_br.sendTransform((pos.x, pos.y, pos.z), (ori.x, ori.y, ori.z, ori.w),
                                  rospy.Time.now(), 'object_frame', pose.frame)
+        """
 
     def publishDeltaPose(self, delta_pose, gripper_pose):
         frame = gripper_pose.frame
@@ -108,6 +112,12 @@ class ServoVsOpenTest():
             rospy.sleep(.1)
 
         gripperPose = self.imageDetector.getGripperPose(self.arm)
+
+        while not self.imageDetector.hasFoundObject() and not rospy.is_shutdown():
+            rospy.sleep(.1)
+
+        self.objectPose = self.imageDetector.getObjectPose() # in link 0
+        self.objectPose.pose.position.z += 0.02
 
         transBound = .008
         rotBound = float("inf")
