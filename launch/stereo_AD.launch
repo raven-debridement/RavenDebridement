@@ -9,8 +9,9 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   <arg name="right_ip_address" default="" /> 
 
   <!-- Namespace to publish in -->
-  <arg name="left_camera" default="left_AD" />
-  <arg name="right_camera" default="right_AD" />
+  <arg name="left_camera" default="left" />
+  <arg name="right_camera" default="right" />
+  <arg name="namespace" default="AD" />
 
   <!-- You can select the camera to open by its GUID or IP address. In some cases
        if the camera is connected through a switch (not visible to ListCameras),
@@ -36,7 +37,7 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   
 
   <!-- The left camera node -->
-  <node name="$(arg left_camera)_driver" pkg="prosilica_camera" type="prosilica_node" output="screen">
+  <node name="$(arg left_camera)_driver" ns="$(arg namespace)" pkg="prosilica_camera" type="prosilica_node" output="screen">
     <remap from="camera" to="$(arg left_camera)" />
 
     <param name="guid" type="str" value="$(arg left_guid)" />
@@ -49,7 +50,7 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   </node>
 
   <!-- The right camera node -->
-  <node name="$(arg right_camera)_driver" pkg="prosilica_camera" type="prosilica_node" output="screen">
+  <node name="$(arg right_camera)_driver" ns="$(arg namespace)" pkg="prosilica_camera" type="prosilica_node" output="screen">
     <remap from="camera" to="$(arg right_camera)" />
 
     <param name="guid" type="str" value="$(arg right_guid)" />
