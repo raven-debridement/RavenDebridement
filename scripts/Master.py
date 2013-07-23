@@ -148,7 +148,7 @@ class MasterClass():
         """
         In close-loop, servos to the object. Then, closes the gripper.
         """
-        failMethod = failMethod or (lambda: self.moveVertical(self.moveToReceptacle, self.servoToObject))
+        failMethod = failMethod or (lambda: self.moveVertical(self.moveToReceptacle, self.findObject(self.moveToReceptacle, self.findGripper(self.moveToReceptacle, self.servoToObject))))
         successMethod = successMethod or self.moveVertical
 
         rospy.loginfo('Servoing to the object point')

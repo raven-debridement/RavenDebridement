@@ -101,16 +101,23 @@ class ServoVsOpenTest():
         rospy.spin()
 
     def servoTest(self):
+
         self.gripperControl.start()
 
+<<<<<<< HEAD
         homePose = tfx.pose([-0.047, -0.029, -0.116],{'yaw':79.9, 'pitch':47.1, 'roll':-1.7}, frame=Constants.Frames.Link0)
         self.gripperControl.setHomePose(homePose)
         print 'home pose', self.gripperControl.getHomePose()
         self.gripperControl.goToHomePose()
 
         while not self.imageDetector.hasFoundGripper(self.arm) and not rospy.is_shutdown():
+=======
+        while not self.imageDetector.hasFoundGripper(self.arm) and not rospy.is_shutdown():
+            rospy.loginfo('Searching for gripper')
+>>>>>>> 1e665458eb78882fe15a555f651d7d19c5a14310
             rospy.sleep(.1)
 
+        rospy.loginfo('Found gripper')
         gripperPose = self.imageDetector.getGripperPose(self.arm)
 
         while not self.imageDetector.hasFoundObject() and not rospy.is_shutdown():
@@ -138,8 +145,7 @@ class ServoVsOpenTest():
                     self.publishDeltaPose(deltaPose0Link, tfx.pose(gripperPose))
                     rospy.loginfo('pres enter to move')
                     raw_input()
-                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True, duration=6)
-                    
+                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True, duration=4)
 
             rospy.sleep(.1)
 
@@ -152,6 +158,7 @@ def servo_test():
     rospy.init_node('servo_test',anonymous=True)
     test = ServoVsOpenTest()
     test.servoTest()
+
 
 if __name__ == '__main__':
     #open_test()
