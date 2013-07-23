@@ -276,6 +276,7 @@ class MasterClass():
 
                 return failMethod
         except:
+            rospy.loginfo('Service exception, assuming successful pickup')
             return successMethod
             
             
