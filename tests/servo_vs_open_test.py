@@ -88,11 +88,14 @@ class ServoVsOpenTest():
         rospy.spin()
 
     def servoTest(self):
+
         self.gripperControl.start()
 
-        while not self.imageDetector.hasFoundGripper(self.arm):
+        while not self.imageDetector.hasFoundGripper(self.arm) and not rospy.is_shutdown():
+            rospy.loginfo('Searching for gripper')
             rospy.sleep(.1)
 
+        rospy.loginfo('Found gripper')
         gripperPose = self.imageDetector.getGripperPose(self.arm)
 
         transBound = .008
@@ -104,7 +107,7 @@ class ServoVsOpenTest():
             if self.gripperControl.isPaused():
                 rospy.sleep(1)
                 self.publishObjPose(self.objectPose)
-                rospy.loginfo('pres enter to move')
+                rospy.loginfo('press enter to move')
                 raw_input()
                 if self.imageDetector.hasFoundNewGripper(self.arm):
                     rospy.loginfo('paused and found new gripper')
@@ -114,6 +117,7 @@ class ServoVsOpenTest():
                     deltaPose0Link = tfx.pose(Util.deltaPose(gripperPose, self.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
                     self.publishDeltaPose(deltaPose0Link, tfx.pose(gripperPose))
                     self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
+
                     
 
             rospy.sleep(.1)
@@ -127,6 +131,7 @@ def servo_test():
     rospy.init_node('servo_test',anonymous=True)
     test = ServoVsOpenTest()
     test.servoTest()
+
 
 if __name__ == '__main__':
     #open_test()
