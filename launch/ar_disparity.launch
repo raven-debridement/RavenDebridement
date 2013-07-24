@@ -1,9 +1,0 @@
-<launch>
-	<node name="ar_kinect" pkg="ar_kinect" type="ar_kinect" respawn="false" output="screen">
-                <remap from="points" to="points2"/>
-                <remap from="ar_pose_markers" to="stereo_pose"/>
-		<param name="marker_pattern_list" type="string" value="$(find ar_pose)/data/object_4x4"/>
-		<param name="marker_data_directory" type="string" value="$(find ar_pose)"/>
-		<param name="threshold" type="int" value="100"/>
-	</node>
-</launch>
