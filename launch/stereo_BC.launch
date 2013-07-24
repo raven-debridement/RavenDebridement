@@ -25,11 +25,11 @@ You can uncomment the viewer at bottom if you want to view the image stream.
   -->
   <arg name="left_guid" default="139217" />
   <!-- tf frame id associated with this camera -->
-  <arg name="left_frame_id" default="$(arg left_camera)_optical_frame" />
+  <arg name="left_frame_id" default="left_BC" />
 
   <arg name="right_guid" default="143047" />
   <!-- tf frame id associated with this camera -->
-  <arg name="right_frame_id" default="$(arg left_camera)_optical_frame" />
+  <arg name="right_frame_id" default="right_BC" />
 
   <!-- Trigger mode: 'streaming' or 'polled' -->
   <arg name="left_trigger_mode" default="streaming" />

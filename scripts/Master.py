@@ -24,23 +24,7 @@ class MasterClass():
     """
     Contains the master pipeline for master-control in the run method
 
-    The general pipeline is as follows:
-    - identify the receptacle, object, and gripper
-    - open the gripper
-    - move to a point near the object
-    - servo to the object
-    - close the gripper
-    - move up with the object
-    - move to the receptacle
-    - open the gripper
-    ... repeat
-
-    The whole pipeline is not currently implemented. The above
-    is the final objective.
-
-    If any of the steps fails, the loop goes back to the beginning
-
-    Each pipeline staged is logged using rospy.loginfo
+    See control_pipeline.jpeg for the pipeline overview
     """
     def __init__(self, armName, imageDetector):
         """
@@ -133,7 +117,7 @@ class MasterClass():
         rospy.loginfo('Rotating the gripper by ' + str(rotateBy) + ' degrees')
         duration = .5
         deltaPose = tfx.pose([0,0,0], tfx.tb_Angles(rotateBy,0,0))
-        self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration))
+        self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration)
         rospy.sleep(duration)
 
         return successMethod
@@ -206,7 +190,7 @@ class MasterClass():
                     self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
                 else:
                     rospy.loginfo('paused but did NOT find new gripper')
-                    deltaPose.position = deltaPose.position - uncappedDeltaPose.position
+                    deltaPose.position = uncappedDeltaPose.position - deltaPose.position
                     self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
                     break
                 
