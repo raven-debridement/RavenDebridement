@@ -104,25 +104,23 @@ class ServoVsOpenTest():
 
         self.gripperControl.start()
 
-<<<<<<< HEAD
         homePose = tfx.pose([-0.047, -0.029, -0.116],{'yaw':79.9, 'pitch':47.1, 'roll':-1.7}, frame=Constants.Frames.Link0)
         self.gripperControl.setHomePose(homePose)
         print 'home pose', self.gripperControl.getHomePose()
         self.gripperControl.goToHomePose()
 
         while not self.imageDetector.hasFoundGripper(self.arm) and not rospy.is_shutdown():
-=======
-        while not self.imageDetector.hasFoundGripper(self.arm) and not rospy.is_shutdown():
             rospy.loginfo('Searching for gripper')
->>>>>>> 1e665458eb78882fe15a555f651d7d19c5a14310
             rospy.sleep(.1)
 
         rospy.loginfo('Found gripper')
         gripperPose = self.imageDetector.getGripperPose(self.arm)
 
         while not self.imageDetector.hasFoundObject() and not rospy.is_shutdown():
+            rospy.loginfo('Searching for object')
             rospy.sleep(.1)
 
+        rospy.loginfo('Found object')
         self.objectPose = self.imageDetector.getObjectPose() # in link 0
         self.objectPose.pose.position.z += 0.02
 

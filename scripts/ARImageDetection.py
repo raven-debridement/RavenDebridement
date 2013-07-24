@@ -69,6 +69,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.estimatedPosePub = rospy.Publisher('estimated_pose', PoseStamped)
 
             self.listener = tf.TransformListener()
+            self.tf_br = tf.TransformBroadcaster()
 
             self.locks = dict()
             self.locks['ar_pose'] = Lock()

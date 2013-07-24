@@ -76,7 +76,8 @@ class ImageDetectionClass():
         self.gripperPoseIsEstimate = False
 
     def foamCallback(self, msg):
-        self.listener.waitForTransform(Constants.AR.Frames.Base,msg.header.frame_id,msg.header.stamp,rospy.Duration(5))
+        time = self.listener.getLatestCommonTime(Constants.AR.Frames.Base, msg.header.frame_id)
+        msg.header.stamp = time
         self.objectPoint = self.listener.transformPoint(Constants.AR.Frames.Base,msg)
 
         """
@@ -87,8 +88,8 @@ class ImageDetectionClass():
         """
 
         pose = self.getObjectPose()
-        pos = pose.position
-        ori = pose.orientation
+        pos = pose.pose.position
+        ori = pose.pose.orientation
         self.tf_br.sendTransform((pos.x, pos.y, pos.z), (ori.x, ori.y, ori.z, ori.w),
                                  rospy.Time.now(), 'object_frame', pose.header.frame_id)
         marker = Util.createMarker(self.getObjectPose(), 0)
