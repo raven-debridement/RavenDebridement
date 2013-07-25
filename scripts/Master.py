@@ -78,6 +78,10 @@ class MasterClass():
         # height offset for foam
         self.objectHeightOffset = .004
 
+        # debugging outputs
+        self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
+        self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
+
         self.timeout = Util.TimeoutClass(999999999)
 
     def findReceptacle(self, failMethod=None, successMethod=None):
@@ -105,6 +109,7 @@ class MasterClass():
         # get object w.r.t. toolframe
         self.objectPose = self.imageDetector.getObjectPose(self.toolframe)
         self.objectPose.pose.position.z += self.objectHeightOffset
+        self.publishObjectPose(self.objectPose)
 
         rospy.loginfo('Found object')
         return successMethod
@@ -133,7 +138,7 @@ class MasterClass():
         rospy.loginfo('Rotating the gripper by ' + str(rotateBy) + ' degrees')
         duration = .5
         deltaPose = tfx.pose([0,0,0], tfx.tb_Angles(rotateBy,0,0))
-        self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration))
+        self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration)
         rospy.sleep(duration)
 
         return successMethod
@@ -195,14 +200,19 @@ class MasterClass():
 
             if self.gripperControl.isPaused():
                 rospy.sleep(1)
-                rospy.loginfo('press enter to move')
-                raw_input()
                 if self.imageDetector.hasFoundNewGripper(self.gripperName):
                     rospy.loginfo('paused and found new gripper')
                     self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
                     deltaPose = uncappedDeltaPose = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, self.toolframe))
                     deltaPose.position = deltaPose.position.capped(maxMovement)
+
+                    deltaPose0Link = tfx.pose(Util.deltaPose(gripperPose, self.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
+                    deltaPose0Link.position = deltaPose.position.capped(maxMovement)
+                    self.publishDesiredPose(deltaPose0Link, tfx.pose(gripperPose))
+
                     #code.interact(local=locals())
+                    rospy.loginfo('press enter to move')
+                    raw_input()
                     self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
                 else:
                     rospy.loginfo('paused but did NOT find new gripper')
@@ -330,7 +340,25 @@ class MasterClass():
             raw_input()
             currentStage = currentStage()
             rospy.sleep(delay)
-            
+
+    def publishObjectPose(self, pose):
+        self.obj_pub.publish(pose)
+
+    def publishDesiredPose(self, delta_pose, gripper_pose):
+        frame = gripper_pose.frame
+        time = self.listener.getLatestCommonTime(frame, Constants.Frames.Link0)
+        pose_stamped = gripper_pose.msg.PoseStamped()
+        pose_stamped.header.stamp = time
+        gripper_pose = self.listener.transformPose(Constants.Frames.Link0, gripper_pose.msg.PoseStamped())
+
+        pose = PoseStamped()
+        pose.header.frame_id = Constants.Frames.Link0
+        pose.header.stamp = rospy.Time.now()
+        pose.pose.position = (gripper_pose.pose.position + delta_pose.position).msg.Point()
+
+        ori = tfx.pose(gripper_pose).orientation.matrix * delta_pose.orientation.matrix
+        pose.pose.orientation = tfx.pose([0,0,0], ori).orientation.msg.Quaternion()
+        self.des_pose_pub.publish(pose)
 
     def runOLD(self):
         """
