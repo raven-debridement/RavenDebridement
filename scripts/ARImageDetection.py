@@ -60,7 +60,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             else:
                   # default to straight up
                   #self.normal = tfx.tb_angles(-90,90,0).msg
-                  self.normal = tfx.tb_angles(0,90,0).msg
+                  self.normal = tfx.tb_angles(90,90,0).msg
 
             self.state = None
             self.transforms = {}
