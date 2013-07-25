@@ -100,7 +100,16 @@ class GripperControlClass:
         endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
         #endQuatMat = deltaPose.orientation.matrix * startPose.orientation.matrix
 
-        endPose = tfx.pose(endPosition, endQuatMat)
+        startQuat = tfx.tb_angles(startPose.orientation.matrix).quaternion
+        endQuat = tfx.tb_angles(endQuatMat).quaternion
+
+        if np.dot(startQuat, endQuat) < 0:
+            rospy.loginfo('QUAT IS NEGATIVE')
+            endQuat = list(endQuat)
+            endQuat[-1] = -endQuat[-1]
+
+        endPose = tfx.pose(endPosition, endQuat)
+        #endPose = tfx.pose(endPosition, endQuatMat)
    
         if ignoreOrientation:
             endPose.orientation = startPose.orientation
@@ -203,6 +212,27 @@ def test_opencloseGripper(close=True,duration=2):
         gripperControl.openGripper(duration=duration)
     
     raw_input()
+
+def test_moveToReceptacle():
+    rospy.init_node('gripper_control',anonymous=True)
+    listener = tf.TransformListener()
+    gripperControl = GripperControlClass(arm, listener)
+    imageDetector = ARImageDetectionClass()
+    rospy.sleep(4)
+    
+    desPose = imageDetector.getReceptaclePose()
+    
+    gripperControl.start()
+    
+    rospy.loginfo('Press enter')
+    raw_input()
+
+    duration = 6
+    gripperControl.goToGripperPose(gripperControl.getGripperPose(MyConstants.Frames.Link0), desPose, duration=duration)
+    rospy.sleep(duration)
+
+    raw_input()
+
 
 def test_moveGripper():
     rospy.init_node('gc',anonymous=True)
@@ -684,7 +714,8 @@ def test_rotation():
         rate.sleep()
 
 if __name__ == '__main__':
-    test_opencloseGripper(close=False,duration=5)
+    #test_opencloseGripper(close=False,duration=5)
+    test_moveToReceptacle()
     #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
