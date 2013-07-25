@@ -159,11 +159,11 @@ class MasterClass():
         transBound = .008
         rotBound = float("inf")
 
-        maxMovement = .01
+        maxMovement = .015
         deltaPose = uncappedDeltaPose = tfx.pose([0,0,0])
 
         # if can't find gripper at start, go back to receptacle
-        if self.imageDetector.hasFoundGripper(self.gripperName):
+        if self.imageDetector.hasFoundGripper(self.gripperName) and self.imageDetector.hasFoundNewGripper(self.gripperName):
             self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
         else:
             return self.moveToReceptacle
@@ -187,7 +187,7 @@ class MasterClass():
                     deltaPose = uncappedDeltaPose = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, self.toolframe))
                     deltaPose.position = deltaPose.position.capped(maxMovement)
                     #code.interact(local=locals())
-                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=True)
+                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=False)
                 else:
                     rospy.loginfo('paused but did NOT find new gripper')
                     deltaPose.position = uncappedDeltaPose.position - deltaPose.position
@@ -236,7 +236,7 @@ class MasterClass():
         """
         Checks if the grasper picked up a red foam piece
         """
-        failMethod = failMethod or self.servoToObject
+        failMethod = failMethod or (lambda: self.findObject(self.moveToReceptacle, self.findGripper(self.moveToReceptacle, self.servoToObject)))#self.servoToObject
         successMethod = successMethod or self.moveToReceptacle
 
         rospy.loginfo('Check if red foam piece successfully picked up')
@@ -275,7 +275,7 @@ class MasterClass():
 
         rospy.loginfo('Moving to receptacle')
         # move to receptacle with object
-        duration = 10
+        duration = 8
 
         #if self.imageDetector.hasFoundGripper(self.gripperName):
         #    self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
