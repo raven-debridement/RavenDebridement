@@ -59,7 +59,7 @@ class GripperControlClass:
 
         rospy.sleep(1)
  
-    def goToGripperPose(self, startPose, endPose, duration=None, ignoreOrientation=False):
+    def goToGripperPose(self, startPose, endPose, duration=None, speed=None, ignoreOrientation=False):
         """
         Given a startPose, move to endPose
         Both startPose and endPose are geometry_msgs.msg.Pose
@@ -77,10 +77,10 @@ class GripperControlClass:
             endPose.orientation = startPose.orientation
 
         self.player.clear_stages()
-        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
+        self.player.add_pose_to_pose('goToGripperPose', startPose, endPose, duration=duration, speed=speed)
         
 
-    def goToGripperPoseDelta(self, startPose, deltaPose, duration=None, ignoreOrientation=False):
+    def goToGripperPoseDelta(self, startPose, deltaPose, duration=None, speed=None, ignoreOrientation=False):
         """
         Given a startPose, move by deltaPose
         Both startPose and deltaPose are geometry_msgs.msg.Pose
@@ -108,9 +108,20 @@ class GripperControlClass:
             endQuat = list(endQuat)
             endQuat[-1] = -endQuat[-1]
 
+        rospy.loginfo('startQuat')
+        rospy.loginfo(list(startQuat))
+        rospy.loginfo('endQuat')
+        rospy.loginfo(endQuat)
+        
+
         endPose = tfx.pose(endPosition, endQuat)
         #endPose = tfx.pose(endPosition, endQuatMat)
    
+        rospy.loginfo('startPose')
+        rospy.loginfo(startPose)
+        rospy.loginfo('endPose')
+        rospy.loginfo(endPose)
+
         if ignoreOrientation:
             endPose.orientation = startPose.orientation
      
@@ -119,7 +130,7 @@ class GripperControlClass:
         #endPose = tfx.pose(endPosition, startPose.orientation)
 
         self.player.clear_stages()
-        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration)
+        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration, speed=speed)
 
     def start(self):
         # start running, no blocking

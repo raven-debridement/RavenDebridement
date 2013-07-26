@@ -128,7 +128,9 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
         """
         If playing, this effectively pauses the raven
         """
+        self.stageLock.acquire()
         self.stages = []
+        self.stageLock.release()
 
     def play(self,block,dry_run=False):
         """
@@ -185,8 +187,9 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
                 success = True
                 break
 
-            #self.stageLock.acquire()
+            self.stageLock.acquire()
             stages = self.stages
+            self.stageLock.release()
 
             # when a stage appears, set start_time
             if numStages == 0 and len(stages) > 0:
@@ -194,7 +197,6 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
 
             numStages = len(stages)
             stage_breaks = Stage.stage_breaks(stages)
-            #self.stageLock.release()
             
             now = rospy.Time.now()
 

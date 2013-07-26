@@ -194,7 +194,9 @@ class ImageDetectionClass():
             
       
     def removeObjectPoint(self):
-        #Debug tool to remove object point
+        """
+        Call this in order to wait for the newest object point
+        """
         self.objectPoint = None
       
 

@@ -218,15 +218,15 @@ def withinBounds(ps0, ps1, transBound, rotBound, transFrame=None, rotFrame=None)
     dPose = tfx.pose(deltaPose(ps0, ps1, transFrame, rotFrame))
     
     deltaPositions = dPose.position.list
-    print('deltaPositions')
-    print(deltaPositions)
+    #print('deltaPositions')
+    #print(deltaPositions)
     for deltaPos in deltaPositions:
         if abs(deltaPos) > transBound:
             return False
 
     between = angleBetweenQuaternions(tfx.tb_angles([0,0,0,1]).msg, dPose.orientation)
-    print('angleBetween')
-    print(between)
+    #print('angleBetween')
+    #print(between)
     if between > rotBound:
         return False
     
@@ -264,8 +264,8 @@ def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     currQuat, desQuat = currRot.orientation.quaternion, desRot.orientation.quaternion
     #deltaQuat = tft.quaternion_multiply(desQuat, tft.quaternion_inverse(currQuat))
     deltaQuat = tft.quaternion_multiply(tft.quaternion_inverse(currQuat), desQuat)
-    print('deltaQuat')
-    print(deltaQuat)
+    #print('deltaQuat')
+    #print(deltaQuat)
 
     deltaPose = tfx.pose(deltaPosition, deltaQuat)
 
