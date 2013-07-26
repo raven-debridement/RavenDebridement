@@ -1,38 +1,29 @@
 <!-- a general launch file that should work on most systems -->
-
 <launch>
 
+    <!-- Launches cameras -->
     <include file="$(find master-control)/launch/stereo_BC.launch" />
     <!--<include file="$(find master-control)/launch/stereo_AD.launch" />-->
 
+    <!-- Rectifies images, produces disparity image and point cloud -->
     <node ns="BC" pkg="stereo_image_proc" type="stereo_image_proc" name="stereo_image_proc">
         <param name="approximate_sync" type="bool" value="true" />
         <param name="queue_size" type="int" value="20" />
     </node>
 
-    <node pkg="transforms" type="transform_server.py" name="transform_broadcaster" /> 
-	<!-- <node pkg="tf" type="static_transform_publisher" name="camera_to_world" args="0 0 0 0 0 0 world stereo_frame 100" />
-	<node pkg="tf" type="static_transform_publisher" name="left_to_right" args="0 0 0 0 0 0 stereo_frame left_optical_frame 10" />
-	<node pkg="tf" type="static_transform_publisher" name="right_to_right" args="0 0 0 0 0 0 stereo_frame right_optical_frame 10" /> -->
-	<!-- <node pkg="tf" type="static_transform_publisher" name="left_to_right" args="0.05137 0 0.00136 0 0.108380311 0 stereo_frame left_optical_frame 10" /> -->
+    <!-- Creates static transform from world to left_BC. Changeable using reconfigure -->
+    <node pkg="transforms" type="transform_server.py" name="transform_broadcaster" />
 
-	
-	<node name="foam_poses" type="bgm_segmenter" pkg="raven_pose_estimator" output="screen">
+    <!-- Foam pose detection -->
+    <node name="foam_poses" type="bgm_segmenter" pkg="raven_pose_estimator" output="screen">
         <remap from="disparity" to="BC/disparity" />
         <remap from="left/camera_info" to="BC/left/camera_info" />
         <remap from="right/camera_info" to="BC/right/camera_info" />
         <remap from="left/image_rect_color" to="BC/left/image_rect_color" />
         <remap from="right/image_rect_color" to="BC/right/image_rect_color" />
-	</node>
-	
+    </node>
 
+    <!-- For AR marker detection -->
     <include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />
-    <!-- <node name="color_gripper_segmenter" pkg="raven_pose_estimator" type="color_gripper_segmenter.new" respawn="false" output="screen" />-->
-	<!--<include file="$(find raven_pose_estimator)/launch/chessboard_prosilica.launch" />-->
-	<!--<include file="$(find stereo_click)/launch/stereo_click_control.launch" />-->
-
-	<group ns="control">
-		
-	</group>
 
 </launch>
