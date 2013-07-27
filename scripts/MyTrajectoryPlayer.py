@@ -7,7 +7,10 @@ from geometry_msgs.msg import *
 from math import *
 from std_msgs.msg import Header
 import copy
-import sys, os.path
+import sys, os
+
+import openravepy as rave
+import numpy as np
 
 
 from raven_2_msgs.msg import *
@@ -22,6 +25,8 @@ import threading
 
 import Util
 import Constants as MyConstants
+
+import code
 
 class MyTrajectoryPlayer(TrajectoryPlayer):
     def __init__(self,tf_listener=None,arms=['R']):
@@ -260,3 +265,16 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
             
         self.isThreadPlaying = False
         return success
+
+    def add_go_to_pose_using_joints(self, name, startJoints, endPose, arm=None, duration=None, speed=None):
+        """
+        Calculate the the joints for endPose using openrave IK
+
+        Then, return callback function for moving with linear angular velocity
+        from startJoints to endJoints
+        """
+        #env = raven.Environment()
+        #modelPath = os
+        #env.Load()
+
+        code.interact(local=locals())

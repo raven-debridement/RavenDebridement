@@ -49,8 +49,6 @@ class GripperControlClass:
         if listener == None:
             listener = tf.TransformListener()
         self.listener = listener
-
-        self.homePose = None
         
         self.player = MyTrajectoryPlayer(arms=self.armName)
 
@@ -106,21 +104,10 @@ class GripperControlClass:
         if np.dot(startQuat, endQuat) < 0:
             rospy.loginfo('QUAT IS NEGATIVE')
             endQuat = list(endQuat)
-            endQuat[-1] = -endQuat[-1]
-
-        rospy.loginfo('startQuat')
-        rospy.loginfo(list(startQuat))
-        rospy.loginfo('endQuat')
-        rospy.loginfo(endQuat)
-        
+            endQuat[-1] = -endQuat[-1]        
 
         endPose = tfx.pose(endPosition, endQuat)
         #endPose = tfx.pose(endPosition, endQuatMat)
-   
-        rospy.loginfo('startPose')
-        rospy.loginfo(startPose)
-        rospy.loginfo('endPose')
-        rospy.loginfo(endPose)
 
         if ignoreOrientation:
             endPose.orientation = startPose.orientation
@@ -129,13 +116,13 @@ class GripperControlClass:
         #endPose = tfx.pose(endPosition, tfx.tb_angles(-90,90,0))
         #endPose = tfx.pose(endPosition, startPose.orientation)
 
-        #self.player.clear_stages()
-        #self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration, speed=speed)
+        self.player.clear_stages()
+        self.player.add_pose_to_pose('goToGripperPose',startPose,endPose,duration=duration, speed=speed)
 
             
-        player = TrajectoryPlayer(arms=self.armName)
-        player.add_pose_to_pose('goToGripperPose',startPose,endPose)
-        player.play()
+    def goToGripperPoseUsingJoints(self, endPose, duration=None, speed=None):
+        self.player.clear_stages()
+        self.player.add_go_to_pose_using_joints('goToGripperPoseUsingJoints', self.jointStates, endPose, duration=duration, speed=speed)
 
     def start(self):
         # start running, no blocking
@@ -177,18 +164,6 @@ class GripperControlClass:
         pos, quat = self.listener.lookupTransform(frame, self.toolframe, commonTime)
 
         return tfx.pose(pos,quat).msg.Pose()
-
-    def setHomePose(self, pose=None):
-        if pose == None:
-            pose = self.getGripperPose(MyConstants.Frames.Link0)
-        self.homePose = pose
-    
-    def goToHomePose(self):
-        startPose = self.getGripperPose(MyConstants.Frames.Link0)
-        self.goToGripperPose(startPose, self.homePose, duration=6)
-
-    def getHomePose(self):
-        return tfx.pose(self.homePose)
 
     def ravenStateCallback(self, msg):
         self.jointStates =  msg.arms[0].joints

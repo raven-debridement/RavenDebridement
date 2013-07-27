@@ -171,7 +171,7 @@ class MasterClass():
         #self.gripperControl.goToGripperPoseDelta(self.gripperPose.pose, deltaPose, duration=duration)    
         #rospy.sleep(duration)
 
-        while not self.gripperControl.isPaused():
+        while not self.gripperControl.isPaused() and not rospy.is_shutdown():
             rospy.sleep(.1)
 
         return successMethod
@@ -278,7 +278,7 @@ class MasterClass():
         self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, speed=self.openLoopSpeed)
         #rospy.sleep(duration)
         
-        while not self.gripperControl.isPaused():
+        while not self.gripperControl.isPaused() and not rospy.is_shutdown():
             rospy.sleep(.1)
 
         return successMethod
@@ -337,7 +337,7 @@ class MasterClass():
         self.gripperControl.goToGripperPose(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), self.receptaclePose.pose, ignoreOrientation=True, speed=self.openLoopSpeed)
 
 
-        while not self.gripperControl.isPaused():
+        while not self.gripperControl.isPaused() and not rospy.is_shutdown():
             rospy.sleep(.1)
 
         #rospy.sleep(duration+2)
