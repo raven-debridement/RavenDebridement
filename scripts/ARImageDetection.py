@@ -49,17 +49,20 @@ class ARImageDetectionClass(ImageDetectionClass):
             self.newRightGripperPose = False
 
 
+            # home position. likely in front of the camera, close
+            self.homePoint = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
+            
             #receptacle point. Must have frame_id of link_0
             #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-            self.receptaclePoint = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
-            
+            self.receptaclePoint = tfx.point([.038, .041, -.164],frame=Constants.Frames.Link0).msg.PointStamped()
 
             #table normal. Must be according to global (or main camera) frame
             if normal != None:
                   self.normal = normal
             else:
-                  # default to straight up
+                  # for non-tape side
                   #self.normal = tfx.tb_angles(-90,90,0).msg
+                  # for tape side
                   self.normal = tfx.tb_angles(90,90,0).msg
 
             self.state = None

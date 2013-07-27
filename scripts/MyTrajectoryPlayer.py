@@ -128,9 +128,9 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
         """
         If playing, this effectively pauses the raven
         """
-        self.stageLock.acquire()
+        #self.stageLock.acquire()
         self.stages = []
-        self.stageLock.release()
+        #self.stageLock.release()
 
     def play(self,block,dry_run=False):
         """
@@ -187,9 +187,9 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
                 success = True
                 break
 
-            self.stageLock.acquire()
+            #self.stageLock.acquire()
             stages = self.stages
-            self.stageLock.release()
+            #self.stageLock.release()
 
             # when a stage appears, set start_time
             if numStages == 0 and len(stages) > 0:
@@ -215,7 +215,7 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
                 stage_changed = stage_ind != last_stage_ind
                 last_stage_ind = stage_ind
             
-                stage = self.stages[stage_ind]
+                stage = stages[stage_ind]
             
                 if stage.duration.is_zero():
                     t = 1
@@ -223,7 +223,7 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
                     t = (dur_from_start - stage_breaks[stage_ind]).to_sec() / stage.duration.to_sec()
                 
                 if stage_changed:
-                        rospy.loginfo("Stage #%i/%i [%4.1fs] %s",stage_ind+1,len(self.stages),stage.duration.to_sec(),stage.name)
+                        rospy.loginfo("Stage #%i/%i [%4.1fs] %s",stage_ind+1,len(stages),stage.duration.to_sec(),stage.name)
                 else:
                     sys.stdout.write("%.3f" % t)
                     if dry_run:

@@ -38,6 +38,8 @@ class ImageDetectionClass():
         #is the exact place to drop off (i.e. don't need to do extra calcs to move away
         # WARNING this is hardcoded for the left arm only
         self.receptaclePoint = tfx.point([-.025,-.004,-.093],frame=Constants.Frames.Link0).msg.PointStamped()
+        # home position. likely in front of the camera, close
+        self.homePoint = tfx.point([-.025,-.004,-.093],frame=Constants.Frames.Link0).msg.PointStamped()
         #table normal. Must be according to global (or main camera) frame
         if normal != None:
             self.normal = normal
@@ -224,6 +226,12 @@ class ImageDetectionClass():
         else:
             return self.newRightGripperPose
 
+    def ignoreOldGripper(self, armName):
+        if armName == Constants.Arm.Left:
+            self.newLeftGripperPose = False
+        else:
+            self.newRightGripperPose = False
+
     def getGripperPose(self, armName):
         """
         armName must be from Constants.Arm
@@ -283,6 +291,26 @@ class ImageDetectionClass():
         """
         self.receptaclePoint.header.stamp = rospy.Time.now()
         return self.receptaclePoint
+
+    def hasFoundHome(self):
+        return (self.homePoint != None)
+
+    def getHomePose(self):
+        """
+        Returns PoseStamped with position of the home position and
+        orientation of the table normal
+        """
+        homePoint = self.getHomePoint()
+
+        return tfx.pose(self.homePoint, self.normal).msg.PoseStamped()
+        
+    def getHomePoint(self):
+        """
+        Returns PointStamped of the home position
+        """
+        self.homePoint.header.stamp = rospy.Time.now()
+        return self.homePoint
+
 
 def test():     
     rospy.init_node('image_detection_node')

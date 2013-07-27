@@ -4,6 +4,7 @@
 import roslib
 roslib.load_manifest('master-control')
 import rospy
+import math
 
 import tf
 import tf.transformations as tft
@@ -51,6 +52,7 @@ class MasterClass():
         self.gripperControl = GripperControlClass(self.armName, self.listener)
 
         self.receptaclePose = None
+        self.homePose = None
         self.objectPose = None
         self.gripperPose = None
 
@@ -65,6 +67,8 @@ class MasterClass():
         # in cm/sec, I think
         self.openLoopSpeed = .02
 
+        self.gripperOpenCloseDuration = 2.5
+
         # debugging outputs
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
@@ -73,7 +77,7 @@ class MasterClass():
 
     def findReceptacle(self, failMethod=None, successMethod=None):
         failMethod = failMethod or self.findReceptacle
-        successMethod = successMethod or self.moveToReceptacle
+        successMethod = successMethod or self.findHome
 
         rospy.loginfo('Searching for the receptacle')
         if not self.imageDetector.hasFoundReceptacle():
@@ -83,6 +87,20 @@ class MasterClass():
 
         rospy.loginfo('Found receptacle')
         return successMethod
+
+    def findHome(self, failMethod=None, successMethod=None):
+        failMethod = failMethod or self.findHome
+        successMethod = successMethod or self.moveToReceptacle
+
+        rospy.loginfo('Searching for the home position')
+        if not self.imageDetector.hasFoundHome():
+            rospy.loginfo('Did not find home position')
+            return failMethod
+        self.homePose = self.imageDetector.getHomePose()
+
+        rospy.loginfo('Found home position')
+        return successMethod
+
 
     def findObject(self, failMethod=None, successMethod=None):
         failMethod = failMethod or self.findObject
@@ -107,8 +125,9 @@ class MasterClass():
 
         rospy.loginfo('Searching for ' + self.gripperName)
         # find gripper point
+        self.imageDetector.ignoreOldGripper(self.gripperName)
         rospy.sleep(1)
-        if not self.imageDetector.hasFoundGripper(self.gripperName):
+        if (not self.imageDetector.hasFoundGripper(self.gripperName)) or (not self.imageDetector.hasFoundNewGripper(self.gripperName)):
             rospy.loginfo('Did not find gripper')
             return failMethod
         self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
@@ -120,11 +139,11 @@ class MasterClass():
         failMethod = failMethod or self.findGripper
         successMethod = successMethod or self.findGripper
 
-        rotateBy = 30
+        rotateBy = -30
         
         rospy.loginfo('Rotating the gripper by ' + str(rotateBy) + ' degrees')
-        duration = .5
-        deltaPose = tfx.pose([0,0,0], tfx.tb_angles(0,0,rotateBy))
+        duration = 2
+        deltaPose = tfx.pose([0,0,.001], tfx.tb_angles(0,0,rotateBy))
         self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration)
         rospy.sleep(duration)
 
@@ -161,7 +180,10 @@ class MasterClass():
         """
         In close-loop, servos to the object. Then, closes the gripper.
         """
-        failMethod = failMethod or (lambda: self.moveVertical(self.moveToReceptacle, self.findObject(self.moveToReceptacle, self.findGripper(self.moveToReceptacle, self.servoToObject))))
+        failMethod2 = lambda: self.findGripper(self.moveToHome, self.servoToObject)
+        failMethod1 = lambda: self.findObject(self.moveToHome, failMethod2)
+        failMethod0 = lambda vertAmount: self.moveVertical(self.moveToReceptacle, failMethod1, vertAmount)
+        failMethod = failMethod or failMethod0
         successMethod = successMethod or self.moveVertical
 
         rospy.loginfo('Servoing to the object point')
@@ -171,13 +193,15 @@ class MasterClass():
         rotBound = float("inf")
 
         maxMovement = .015
+        maxRotation = 10*(math.pi/180.0)
+        ignoreOrientation = False
         deltaPose = uncappedDeltaPose = tfx.pose([0,0,0])
 
         # if can't find gripper at start, go back to receptacle
         if self.imageDetector.hasFoundGripper(self.gripperName) and self.imageDetector.hasFoundNewGripper(self.gripperName):
             self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
         else:
-            return self.moveToReceptacle
+            return self.moveToHome
             
         self.timeout.start()
         while not Util.withinBounds(self.gripperPose, self.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
@@ -197,15 +221,24 @@ class MasterClass():
                     self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
                     deltaPose = uncappedDeltaPose = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, self.toolframe))
                     deltaPose.position = deltaPose.position.capped(maxMovement)
+                    #deltaPose.orientation = deltaPose.orientation.capped(maxRotation)
 
                     deltaPose0Link = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
                     deltaPose0Link.position = deltaPose.position.capped(maxMovement)
                     self.publishDesiredPose(deltaPose0Link, tfx.pose(self.gripperPose))
 
                     #code.interact(local=locals())
-                    #rospy.loginfo('press enter to move')
-                    #raw_input()
-                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=False)
+                    rospy.loginfo('uncapped delta pose')
+                    rospy.loginfo(uncappedDeltaPose)
+                    
+                    rospy.loginfo('press enter to move')
+                    raw_input()
+
+                    #if abs(uncappedDeltaPose.position.z) < .015:
+                    #    rospy.loginfo('now ignoring orientation')
+                    #    ignoreOrientation = True
+
+                    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, ignoreOrientation=ignoreOrientation)
                 else:
                     rospy.loginfo('paused but did NOT find new gripper')
                     deltaPose.position = uncappedDeltaPose.position - deltaPose.position
@@ -213,27 +246,24 @@ class MasterClass():
                     break
                 
                 
-                print('deltaPose')
-                print(deltaPose)
                     
                 
                     
             if self.timeout.hasTimedOut() or rospy.is_shutdown():
                 rospy.loginfo('Timed out')
                 self.objectHeightOffset = self.objectHeightOffset - .001 if self.objectHeightOffset > 0 else 0
-                return failMethod
+                return failMethod(.02)
                 
             rospy.sleep(.1)
 
         rospy.loginfo('Closing the gripper')
         # close gripper (consider not all the way)
-        duration = 5
-        self.gripperControl.closeGripper(duration=duration)
-        rospy.sleep(duration)
+        self.gripperControl.closeGripper(duration=self.gripperOpenCloseDuration)
+        rospy.sleep(self.gripperOpenCloseDuration)
             
         return successMethod
 
-    def moveVertical(self, failMethod=None, successMethod=None):
+    def moveVertical(self, failMethod=None, successMethod=None, vertAmount=.05):
         """
         Move vertical in open-loop
         """
@@ -242,7 +272,7 @@ class MasterClass():
 
         rospy.loginfo('Moving vertical with the object')
         # move vertical with the object
-        deltaPose = tfx.pose([0,0,.05]).msg.Pose()
+        deltaPose = tfx.pose([0,0,vertAmount]).msg.Pose()
         #duration = 5
 
         self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, speed=self.openLoopSpeed)
@@ -257,8 +287,8 @@ class MasterClass():
         """
         Checks if the grasper picked up a red foam piece
         """
-        failMethod = failMethod or (lambda: self.findObject(self.moveToReceptacle, self.findGripper(self.moveToReceptacle, self.servoToObject)))#self.servoToObject
-        successMethod = successMethod or self.moveToReceptacle
+        failMethod = failMethod or (lambda: self.findObject(self.moveToHome, (lambda: self.findGripper(self.moveToHome, self.servoToObject))))
+        successMethod = successMethod or (lambda: self.moveToHome(self.moveToReceptacle, self.moveToReceptacle))
 
         rospy.loginfo('Check if red foam piece successfully picked up')
 
@@ -275,9 +305,8 @@ class MasterClass():
                 
                 rospy.loginfo('Opening the gripper')
                 # open gripper (consider not all the way)
-                duration = 5
-                self.gripperControl.openGripper(duration=duration)
-                rospy.sleep(duration)
+                self.gripperControl.openGripper(duration=self.gripperOpenCloseDuration)
+                rospy.sleep(self.gripperOpenCloseDuration)
 
                 return failMethod
         except:
@@ -291,8 +320,8 @@ class MasterClass():
         Move to the receptacle in open-loop
         Then, open the gripper
         """
-        failMethod = failMethod or self.moveToReceptacle
-        successMethod = successMethod or self.findObject
+        failMethod = failMethod or self.moveToHome
+        successMethod = successMethod or self.moveToHome
 
         rospy.loginfo('Moving to receptacle')
         # move to receptacle with object
@@ -316,9 +345,37 @@ class MasterClass():
 
         rospy.loginfo('Opening the gripper')
         # open gripper (consider not all the way)
-        duration = 5
-        self.gripperControl.openGripper(duration=duration)
-        rospy.sleep(duration)
+        self.gripperControl.openGripper(duration=self.gripperOpenCloseDuration)
+        rospy.sleep(self.gripperOpenCloseDuration)
+
+        
+        return successMethod
+
+    def moveToHome(self, failMethod=None, successMethod=None):
+        """
+        Move to the home position in open-loop
+        """
+        failMethod = failMethod or self.findObject
+        successMethod = successMethod or self.findObject
+
+        rospy.loginfo('Moving to home position')
+        # move to home position
+        #duration = 6
+
+        #if self.imageDetector.hasFoundGripper(self.gripperName):
+        #    self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
+        #    deltaPose = Util.deltaPose(self.gripperPose, self.receptaclePose, Constants.Frames.Link0, self.toolframe)
+
+        #    self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration)
+        #else:
+        
+        self.gripperControl.goToGripperPose(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), self.homePose.pose, ignoreOrientation=True, speed=self.openLoopSpeed)
+
+
+        while not self.gripperControl.isPaused() and not rospy.is_shutdown():
+            rospy.sleep(.1)
+
+        #rospy.sleep(duration+2)
 
         self.imageDetector.removeObjectPoint()
         
@@ -338,6 +395,7 @@ class MasterClass():
 
         while not rospy.is_shutdown():
             rospy.loginfo('Next stage')
+            #rospy.loginfo('Press enter')
             #raw_input()
             currentStage = currentStage()
             rospy.sleep(delay)
@@ -559,5 +617,15 @@ def mainloop():
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.run()
 
+def rotateTest():
+    rospy.init_node('master_node',anonymous=True)
+    imageDetector = ARImageDetectionClass()
+    master = MasterClass(Constants.Arm.Left, imageDetector)
+    master.gripperControl.start()
+    master.rotateGripper()
+
+
 if __name__ == '__main__':
     mainloop()
+    #rotateTest()
+    
