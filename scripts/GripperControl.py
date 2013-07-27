@@ -685,9 +685,17 @@ def test_rotation():
         currPose = tfx.pose(gripperControl.getGripperPose(frame))
         rate.sleep()
 
+def test_goToGripperPoseUsingJoints():
+    rospy.init_node('gripper_control',anonymous=True)
+    listener = tf.TransformListener()
+    gripperControl = GripperControlClass(arm, listener)
+    rospy.sleep(2)
+
+    gripperControl.goToGripperPoseUsingJoints(tfx.pose([0,0,0]).msg.Pose())
+
 if __name__ == '__main__':
     #test_opencloseGripper(close=False,duration=2.5)
-    test_moveToHome()
+    #test_moveToHome()
     #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
@@ -700,7 +708,7 @@ if __name__ == '__main__':
     #test_angleBetween()
     #test_servo()
     #test_commandServo()
-
+    test_goToGripperPoseUsingJoints()
 
 
 """

@@ -273,8 +273,9 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
         Then, return callback function for moving with linear angular velocity
         from startJoints to endJoints
         """
-        #env = raven.Environment()
-        #modelPath = os
-        #env.Load()
+        env = rave.Environment()
+        ravenFile = os.path.dirname(__file__) + '/../models/raven2.zae'
+        env.Load(ravenFile)
+        robot = env.GetRobots()[0]
 
         code.interact(local=locals())
