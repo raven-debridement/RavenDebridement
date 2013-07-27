@@ -695,7 +695,7 @@ def test_goToGripperPoseUsingJoints():
 
 if __name__ == '__main__':
     #test_opencloseGripper(close=False,duration=2.5)
-    #test_moveToHome()
+    test_moveToHome()
     #test_moveGripper()
     #test_moveGripperDelta()
     #test_moveGripperDeltaAR()
@@ -708,7 +708,7 @@ if __name__ == '__main__':
     #test_angleBetween()
     #test_servo()
     #test_commandServo()
-    test_goToGripperPoseUsingJoints()
+    #test_goToGripperPoseUsingJoints()
 
 
 """
