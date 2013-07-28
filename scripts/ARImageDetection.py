@@ -60,9 +60,9 @@ class ARImageDetectionClass(ImageDetectionClass):
             if normal != None:
                   self.normal = normal
             else:
-                  # for non-tape side
-                  self.normal = tfx.tb_angles(-90,90,0).msg
                   # for tape side
+                  self.normal = tfx.tb_angles(-90,90,0).msg
+                  # for non-tape side
                   #self.normal = tfx.tb_angles(90,90,0).msg
 
             self.state = None
