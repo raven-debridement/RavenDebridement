@@ -65,7 +65,7 @@ class MasterClass():
         self.objectHeightOffset = .005
 
         # in cm/sec, I think
-        self.openLoopSpeed = .03
+        self.openLoopSpeed = .04
 
         self.gripperOpenCloseDuration = 2.5
 
@@ -74,6 +74,9 @@ class MasterClass():
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
 
         self.timeout = Util.TimeoutClass(999999999)
+        self.findGripperTimeout = Util.TimeoutClass(1)
+
+        self.rotateBy = -30
 
     def findReceptacle(self, failMethod=None, successMethod=None):
         failMethod = failMethod or self.findReceptacle
@@ -106,6 +109,9 @@ class MasterClass():
         failMethod = failMethod or self.findObject
         successMethod = successMethod or self.findGripper
 
+        # reset rotateBy
+        self.rotateBy = -30
+
         rospy.loginfo('Searching for object point')
         # find object point and pose
         if not self.imageDetector.hasFoundObject():
@@ -126,10 +132,14 @@ class MasterClass():
         rospy.loginfo('Searching for ' + self.gripperName)
         # find gripper point
         self.imageDetector.ignoreOldGripper(self.gripperName)
-        rospy.sleep(1)
-        if (not self.imageDetector.hasFoundGripper(self.gripperName)) or (not self.imageDetector.hasFoundNewGripper(self.gripperName)):
-            rospy.loginfo('Did not find gripper')
-            return failMethod
+
+        self.findGripperTimeout.start()
+        while (not self.imageDetector.hasFoundGripper(self.gripperName)) or (not self.imageDetector.hasFoundNewGripper(self.gripperName)):
+            if self.findGripperTimeout.hasTimedOut():
+                rospy.loginfo('Did not find gripper')
+                return failMethod
+            rospy.sleep(.05)
+
         self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
 
         rospy.loginfo('Found gripper')
@@ -138,14 +148,14 @@ class MasterClass():
     def rotateGripper(self, failMethod=None, successMethod=None):
         failMethod = failMethod or self.findGripper
         successMethod = successMethod or self.findGripper
-
-        rotateBy = -30
         
-        rospy.loginfo('Rotating the gripper by ' + str(rotateBy) + ' degrees')
+        rospy.loginfo('Rotating the gripper by ' + str(self.rotateBy) + ' degrees')
         duration = 2
-        deltaPose = tfx.pose([0,0,.001], tfx.tb_angles(0,0,rotateBy))
+        deltaPose = tfx.pose([0,0,.001], tfx.tb_angles(0,0,self.rotateBy))
         self.gripperControl.goToGripperPoseDelta(self.gripperControl.getGripperPose(frame=Constants.Frames.Link0), deltaPose, duration=duration)
         rospy.sleep(duration)
+
+        self.rotateBy = -math.copysign(abs(self.rotateBy)+5, self.rotateBy)
 
         return successMethod
     

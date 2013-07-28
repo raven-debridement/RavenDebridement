@@ -54,7 +54,7 @@ class ARImageDetectionClass(ImageDetectionClass):
             
             #receptacle point. Must have frame_id of link_0
             #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-            self.receptaclePoint = tfx.point([.036, .046, -.168],frame=Constants.Frames.Link0).msg.PointStamped()
+            self.receptaclePoint = tfx.point([.039, .045, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
 
             #table normal. Must be according to global (or main camera) frame
             if normal != None:
