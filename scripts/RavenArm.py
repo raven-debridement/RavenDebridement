@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+"""
+Adapted from Ben Kehoe's trajectory_player
+"""
+
 import roslib
 roslib.load_manifest('master-control')
 import rospy
@@ -33,22 +37,22 @@ class Stage(object):
         self.cb = cb
 		
     @staticmethod
-    def stage_breaks(stages):
-        stage_breaks = [rospy.Duration(0)]
+    def stageBreaks(stages):
+        stageBreaks = [rospy.Duration(0)]
         for stage in stages:
-            stage_breaks.append(stage.duration + stage_breaks[-1])
-        return stage_breaks
+            stageBreaks.append(stage.duration + stageBreaks[-1])
+        return stageBreaks
 
 class RavenArm():
-    def __init__(self, arm, tf_listener=None):
+    def __init__(self, arm, tfListener=None):
         self.arm = arm
 
-        self.tf_listener = tf_listener
-        if self.tf_listener is None:
-            self.tf_listener = tfx.TransformListener.instance()
+        self.tfListener = tfListener
+        if self.tfListener is None:
+            self.tfListener = tfx.TransformListener.instance()
         rospy.loginfo('waiting for transform')
         
-        self.tf_listener.waitForTransform('/0_link','/tool_'+self.arm,rospy.Time(0),rospy.Duration(5))
+        self.tfListener.waitForTransform('/0_link','/tool_'+self.arm,rospy.Time(0),rospy.Duration(5))
 
         self.stopRunning = threading.Event()
 
@@ -56,9 +60,9 @@ class RavenArm():
         self.reset()
 		
 			
-        self.pub_cmd = rospy.Publisher('raven_command', RavenCommand)
+        self.pubCmd = rospy.Publisher('raven_command', RavenCommand)
 		
-        self.state_sub = rospy.Subscriber('raven_state',raven_2_msgs.msg.RavenState,self._state_callback)
+        self.stateSub = rospy.Subscriber('raven_state',raven_2_msgs.msg.RavenState,self._stateCallback)
 	
         self.header = Header()
         self.header.frame_id = '/0_link'
@@ -95,12 +99,12 @@ class RavenArm():
         self.ravenPauseCmd = ravenPauseCmd
         
     
-    def _state_callback(self, msg):
-        self.current_state = msg
+    def _stateCallback(self, msg):
+        self.currentState = msg
         for arm in msg.arms:
             if arm.name == self.arm:
-                self.current_pose = tfx.pose(arm.tool.pose, header=msg.header)
-                self.current_grasp = arm.tool.grasp 
+                self.currentPose = tfx.pose(arm.tool.pose, header=msg.header)
+                self.currentGrasp = arm.tool.grasp 
 
 
     ###############################################
@@ -114,14 +118,14 @@ class RavenArm():
         called when start is called.
         """
         self.stages = []
-        self.start_time = None
+        self.startTime = None
 
-        self.default_speed = .01
+        self.defaultSpeed = .01
 
 		
-        self.current_state = None
-        self.current_poses = {}
-        self.current_grasps = {}
+        self.currentState = None
+        self.currentPose = None
+        self.currentGrasp = None
 		
         # ADDED
         self.stopRunning.clear()
@@ -147,7 +151,7 @@ class RavenArm():
         return False
 
 
-    def clear_stages(self):
+    def clearStages(self):
         """
         If playing, this effectively pauses the raven
         """
@@ -172,15 +176,15 @@ class RavenArm():
 		
         cmd = None
 		
-        while self.current_state is None and not rospy.is_shutdown():
+        while self.currentState is None and not rospy.is_shutdown():
             rate.sleep()
 		
-        if self.current_state.runlevel == 0:
+        if self.currentState.runlevel == 0:
             rospy.loginfo("Raven in E-STOP, waiting")
-            while self.current_state.runlevel == 0 and not rospy.is_shutdown():
+            while self.currentState.runlevel == 0 and not rospy.is_shutdown():
                 rate.sleep()
 		
-        self.start_time = rospy.Time.now()
+        self.startTime = rospy.Time.now()
         numStages = 0
 		
         success = None
@@ -190,10 +194,10 @@ class RavenArm():
         # ADDED
         self.stopRunning.clear()
 		
-        last_stage_ind = -1
+        lastStageIndex = -1
         while not rospy.is_shutdown():
 			
-            if self.current_state.runlevel == 0:
+            if self.currentState.runlevel == 0:
                 rospy.logerr('Raven in E-STOP, exiting')
                 success = False
                 break
@@ -206,35 +210,35 @@ class RavenArm():
 
             stages = self.stages
 
-            # when a stage appears, set start_time
+            # when a stage appears, set startTime
             if numStages == 0 and len(stages) > 0:
-                self.start_time = rospy.Time.now()
+                self.startTime = rospy.Time.now()
 
             numStages = len(stages)
-            stage_breaks = Stage.stage_breaks(stages)
+            stageBreaks = Stage.stageBreaks(stages)
             
             now = rospy.Time.now()
 
             if numStages > 0:
-                dur_from_start = now - self.start_time
-                stage_ind = 0
-                for idx,stage_break in enumerate(stage_breaks):
-                    if stage_break > dur_from_start:
-                        stage_ind = idx-1
+                durFromStart = now - self.startTime
+                stageIndex = 0
+                for idx,stageBreak in enumerate(stageBreaks):
+                    if stageBreak > durFromStart:
+                        stageIndex = idx-1
                         break
                 else:
-                    self.clear_stages()
+                    self.clearStages()
                     continue
-                stage_ind = min(stage_ind,last_stage_ind + 1)
+                stageIndex = min(stageIndex,lastStageIndex + 1)
             
-                last_stage_ind = stage_ind
+                lastStageIndex = stageIndex
             
-                stage = stages[stage_ind]
+                stage = stages[stageIndex]
             
                 if stage.duration.is_zero():
                     t = 1
                 else:
-                    t = (dur_from_start - stage_breaks[stage_ind]).to_sec() / stage.duration.to_sec()
+                    t = (durFromStart - stageBreaks[stageIndex]).to_sec() / stage.duration.to_sec()
             
             
                 cmd = RavenCommand()
@@ -249,7 +253,7 @@ class RavenArm():
             self.header.stamp = now
             cmd.header = self.header
 			
-            self.pub_cmd.publish(cmd)
+            self.pubCmd.publish(cmd)
 			
             rate.sleep()
             
@@ -260,30 +264,48 @@ class RavenArm():
     # Commanding the raven arm #
     ############################
 
-    def add_stage(self, name, duration, cb):
+    def addStage(self, name, duration, cb):
         self.stages.append(Stage(name,duration,cb))
 
-    def go_to_pose(self, end, start=None, duration=None, speed=None):
+    def goToPose(self, end, start=None, duration=None, speed=None):
         if start == None:
-            start = self.current_pose
+            start = self.currentPose
 
         start = tfx.pose(start)
         end = tfx.pose(end)
         
         if duration is None:
             if speed is None:
-                speed = self.default_speed
+                speed = self.defaultSpeed
             duration = end.position.distance(start.position) / speed
 
         def fn(cmd, t):
             pose = start.interpolate(end, t)
             
-            tool_pose = pose.msg.Pose()
+            toolPose = pose.msg.Pose()
 
-            RavenPose.add_arm_pose_cmd(cmd, self.arm, tool_pose)
+            RavenPose.addArmPoseCmd(cmd, self.arm, toolPose)
 
-        self.add_stage('go_to_pose', duration, fn)
+        self.addStage('goToPose', duration, fn)
         
+    ###############################
+    # setting the gripper grasp   #
+    ###############################
+
+    def openGripper(self,duration=2):
+        def fn(cmd,t):
+            RavenArm.addArmGraspCmd(cmd, self.arm, grasp=1, graspOption=ToolCommand.GRASP_INCREMENT_SIGN)
+        self.addStage('Open gripper',duration,fn)
+	
+    def closeGripper(self,duration=2):
+        def fn(cmd,t):
+            RavenArm.addArmGraspCmd(cmd, self.arm, grasp=-1, graspOption=ToolCommand.GRASP_INCREMENT_SIGN)
+        self.addStage('Close gripper',duration,fn)
+
+    def setGripper(self,value,duration=2):
+        def fn(cmd,t):
+            RavenArm.addArmGraspCmd(cmd, self.arm, grasp=value, graspOption=ToolCommand.GRASP_SET_NORMALIZED)
+        self.addStage('Set gripper',duration,fn)
 
 
     ###############################################
@@ -291,18 +313,18 @@ class RavenArm():
     ###############################################
 
     @staticmethod
-    def add_arm_cmd(cmd,arm_name,tool_pose=None,pose_option=ToolCommand.POSE_OFF,grasp=0,grasp_option=ToolCommand.GRASP_OFF):
-        cmd.arm_names.append(arm_name)
+    def addArmCmd(cmd,armName,toolPose=None,poseOption=ToolCommand.POSE_OFF,grasp=0,graspOption=ToolCommand.GRASP_OFF):
+        cmd.arm_names.append(armName)
 
         arm_cmd = ArmCommand()
         arm_cmd.active = True
 
         tool_cmd = ToolCommand()
-        tool_cmd.pose_option = pose_option
-        if tool_pose is not None:
-            tool_cmd.pose = tool_pose
+        tool_cmd.pose_option = poseOption
+        if toolPose is not None:
+            tool_cmd.pose = toolPose
             
-        tool_cmd.grasp_option = grasp_option
+        tool_cmd.grasp_option = graspOption
         tool_cmd.grasp = grasp
 
         arm_cmd.tool_command = tool_cmd
@@ -310,12 +332,12 @@ class RavenArm():
         cmd.arms.append(arm_cmd)
 
     @staticmethod
-    def add_arm_pose_cmd(cmd,arm_name,tool_pose,pose_option=ToolCommand.POSE_ABSOLUTE):
-        return RavenArm.add_arm_cmd(cmd, arm_name, tool_pose=tool_pose, pose_option=pose_option, grasp_option=ToolCommand.GRASP_OFF)
+    def addArmPoseCmd(cmd,armName,toolPose,poseOption=ToolCommand.POSE_ABSOLUTE):
+        return RavenArm.addArmCmd(cmd, armName, toolPose=toolPose, poseOption=poseOption, graspOption=ToolCommand.GRASP_OFF)
 
     @staticmethod
-    def add_arm_grasp_cmd(cmd,arm_name,grasp,grasp_option=ToolCommand.GRASP_INCREMENT_SIGN):
-        return RavenArm.add_arm_cmd(cmd, arm_name, grasp=grasp, grasp_option=grasp_option, pose_option=ToolCommand.POSE_OFF)
+    def addArmGraspCmd(cmd,armName,grasp,graspOption=ToolCommand.GRASP_INCREMENT_SIGN):
+        return RavenArm.addArmCmd(cmd, armName, grasp=grasp, graspOption=graspOption, poseOption=ToolCommand.POSE_OFF)
 
 
 

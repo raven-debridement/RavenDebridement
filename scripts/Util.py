@@ -306,6 +306,16 @@ def angleBetweenQuaternions(quat0, quat1):
 
     return theta
 
+def convertToFrame(p, frame):
+    """
+    Takes in a tfx point/pose stamped and returns it in frame
+    """
+    if p.frame != frame:
+        tf_pframe_to_frame = tfx.lookupTransform(frame, p.frame, wait=10)
+        p = tf_pframe_to_frame * p
+
+    return p
+
 
 
 class TimeoutClass():
