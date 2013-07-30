@@ -51,7 +51,7 @@ class MyTrajectoryPlayer(TrajectoryPlayer):
         self.header = Header()
         self.header.frame_id = '/0_link'
         
-        self.timeout = Util.TimeoutClass(4)
+        self.timeout = Util.Timeout(4)
 
         self.stageLock = threading.Lock()
 

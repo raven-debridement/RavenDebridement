@@ -73,7 +73,7 @@ class MasterClass():
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
 
-        self.timeout = Util.TimeoutClass(999999999)
+        self.timeout = Util.Timeout(999999999)
 
     def findReceptacle(self, failMethod=None, successMethod=None):
         failMethod = failMethod or self.findReceptacle

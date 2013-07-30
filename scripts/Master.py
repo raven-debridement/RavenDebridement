@@ -73,8 +73,8 @@ class MasterClass():
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
 
-        self.timeout = Util.TimeoutClass(30)
-        self.findGripperTimeout = Util.TimeoutClass(1)
+        self.timeout = Util.Timeout(30)
+        self.findGripperTimeout = Util.Timeout(1)
 
         self.rotateBy = -30
 

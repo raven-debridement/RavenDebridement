@@ -318,7 +318,7 @@ def convertToFrame(p, frame):
 
 
 
-class TimeoutClass():
+class Timeout():
     def __init__(self, timeoutTime):
         """
         timeoutTime is integer of how long until times out
