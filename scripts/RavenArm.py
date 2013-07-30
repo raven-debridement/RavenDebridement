@@ -2,7 +2,7 @@
 
 import roslib; roslib.load_manifest('master-control')
 import numpy as np
-import os
+import os, sys
 import random
 
 import rospy
@@ -24,7 +24,7 @@ import thread
 # rename so no conflict with raven_2_msgs.msg.Constants
 import Constants as MyConstants
 import Util
-from RavenArm import RavenArm
+from RavenController import RavenController
 from ARImageDetection import ARImageDetectionClass
 
 
@@ -62,7 +62,7 @@ class RavenArm:
         """
         True if no stages
         """
-        return len(self.player.stages) == 0
+        return len(self.ravenController.stages) == 0
         
     def stop(self):
         return self.ravenController.stop()
@@ -95,7 +95,7 @@ class RavenArm:
         self.ravenController.goToPose(endPose, start=startPose, duration=duration, speed=speed)
 
         if block:
-            return self.blockUntilPaused(2*duration)
+            return self.blockUntilPaused()
         return True
 
     def goToGripperPoseDelta(self, deltaPose, startPose=None, block=True, duration=None, speed=None, ignoreOrientation=False):
@@ -157,10 +157,10 @@ class RavenArm:
 
         geometry_msgs.msg.Pose
         """
-        gripperPose = None
+        gripperPose = self.ravenController.currentPose
 
-        if self.currentPose != None:
-            gripperPose = Util.convertToFrame(tfx.pose(self.currentPose), frame)
+        if gripperPose != None:
+            gripperPose = Util.convertToFrame(tfx.pose(gripperPose), frame)
 
         return gripperPose
 
@@ -169,7 +169,7 @@ class RavenArm:
     # other methods #
     #################
     
-    def blockUntilPaused(self, timeoutTime=float("inf")):
+    def blockUntilPaused(self, timeoutTime=999999):
         timeout = Util.Timeout(timeoutTime)
         timeout.start()
 
@@ -188,7 +188,7 @@ def testOpenCloseGripper(close=True,arm=MyConstants.Arm.Left):
     ravenArm = RavenArm(arm)
     rospy.sleep(1)
 
-    ravenCommander.start()
+    ravenArm.start()
     rospy.loginfo('Setting the gripper')
     if close:
         ravenArm.closeGripper()
@@ -198,5 +198,24 @@ def testOpenCloseGripper(close=True,arm=MyConstants.Arm.Left):
     rospy.loginfo('Press enter to exit')
     raw_input()
 
+def testMoveToHome(arm=MyConstants.Arm.Left):
+    rospy.init_node('raven_commander',anonymous=True)
+    ravenArm = RavenArm(arm)
+    imageDetector = ARImageDetectionClass()
+    rospy.sleep(4)
+
+    ravenArm.start()
+
+    rospy.loginfo('Press enter to go to home')
+    raw_input()
+
+    desPose = imageDetector.getHomePose()
+    ravenArm.goToGripperPose(desPose)
+    
+    rospy.loginfo('Press enter to exit')
+    raw_input()
+    
+
 if __name__ == '__main__':
-    testOpenCloseGripper(close=True)
+    #testOpenCloseGripper(close=True)
+    testMoveToHome()

@@ -284,7 +284,7 @@ class RavenController():
             
             toolPose = pose.msg.Pose()
 
-            RavenPose.addArmPoseCmd(cmd, self.arm, toolPose)
+            RavenController.addArmPoseCmd(cmd, self.arm, toolPose)
 
         self.addStage('goToPose', duration, fn)
         
