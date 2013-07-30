@@ -116,7 +116,7 @@ class RavenArm:
 
 
         endPosition = startPose.position + deltaPose.position
-        endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrixx
+        endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
 
         endPose = tfx.pose(endPosition, endQuatMat)
 

@@ -283,8 +283,7 @@ class ImageDetectionClass():
         receptaclePoint = self.getReceptaclePoint()
 
         return tfx.pose(self.receptaclePoint, self.normal).msg.PoseStamped()
-        #return Util.pointStampedToPoseStamped(self.receptaclePoint, self.normal)
-
+        
     def getReceptaclePoint(self):
         """
         Returns PointStamped of the centroid of the receptacle
