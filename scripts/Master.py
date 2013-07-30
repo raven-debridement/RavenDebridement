@@ -73,7 +73,7 @@ class MasterClass():
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
 
-        self.timeout = Util.TimeoutClass(999999999)
+        self.timeout = Util.TimeoutClass(30)
         self.findGripperTimeout = Util.TimeoutClass(1)
 
         self.rotateBy = -30
@@ -263,7 +263,7 @@ class MasterClass():
                     
             if self.timeout.hasTimedOut() or rospy.is_shutdown():
                 rospy.loginfo('Timed out')
-                self.objectHeightOffset = self.objectHeightOffset - .001 if self.objectHeightOffset > 0 else 0
+                self.objectHeightOffset = self.objectHeightOffset - .0005 if self.objectHeightOffset > 0 else 0
                 return failMethod(.02)
                 
             rospy.sleep(.1)
@@ -451,10 +451,13 @@ def rotateTest():
     imageDetector = ARImageDetectionClass()
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.gripperControl.start()
-    master.rotateGripper()
+
+    while not rospy.is_shutdown():
+        rospy.loginfo('Press enter')
+        raw_input()
+        master.rotateGripper()
 
 
 if __name__ == '__main__':
     mainloop()
-    #rotateTest()
     
