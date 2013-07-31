@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import roslib
-roslib.load_manifest('master-control')
+roslib.load_manifest('RavenDebridement')
 roslib.load_manifest('tfx')
 import rospy
 import sys

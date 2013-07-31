@@ -7,7 +7,7 @@ are frequently used
 
 # Import required Python code.
 import roslib
-roslib.load_manifest('master-control')
+roslib.load_manifest('RavenDebridement')
 import rospy
 
 class StereoClick:

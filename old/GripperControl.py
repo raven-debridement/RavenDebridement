@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import roslib; roslib.load_manifest('master-control')
+import roslib; roslib.load_manifest('RavenDebridement')
 import numpy as np
 import os
 import random

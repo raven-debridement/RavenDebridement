@@ -5,7 +5,7 @@ Adapted from Ben Kehoe's trajectory_player
 """
 
 import roslib
-roslib.load_manifest('master-control')
+roslib.load_manifest('RavenDebridement')
 import rospy
 from math import *
 import copy

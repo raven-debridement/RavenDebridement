@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 import roslib
-#roslib.load_manifest('raven_2_trajectory')
-roslib.load_manifest('master-control')
+roslib.load_manifest('RavenDebridement')
 import rospy
 from geometry_msgs.msg import *
 from math import *

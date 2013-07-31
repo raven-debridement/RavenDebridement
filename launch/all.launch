@@ -2,8 +2,8 @@
 <launch>
 
     <!-- Launches cameras -->
-    <include file="$(find master-control)/launch/stereo_BC.launch" />
-    <!--<include file="$(find master-control)/launch/stereo_AD.launch" />-->
+    <include file="$(find RavenDebridement)/launch/stereo_BC.launch" />
+    <!--<include file="$(find RavenDebridement)/launch/stereo_AD.launch" />-->
 
     <!-- Rectifies images, produces disparity image and point cloud -->
     <node ns="BC" pkg="stereo_image_proc" type="stereo_image_proc" name="stereo_image_proc">

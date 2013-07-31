@@ -7,7 +7,7 @@ for conversions, etc.
 
 # Import required Python code.
 import roslib
-roslib.load_manifest('master-control')
+roslib.load_manifest('RavenDebridement')
 import rospy
 from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion, Point
 from visualization_msgs.msg import Marker

@@ -2,7 +2,7 @@
 
 # Import required Python code.
 import roslib
-roslib.load_manifest('master-control')
+roslib.load_manifest('RavenDebridement')
 import rospy
 import math
 
@@ -23,7 +23,7 @@ import code
 
 class MasterClass():
     """
-    Contains the master pipeline for master-control in the run method
+    Contains the master pipeline for RavenDebridement in the run method
 
     See control_pipeline.jpeg for the pipeline overview
     """
