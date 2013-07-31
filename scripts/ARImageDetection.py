@@ -16,7 +16,7 @@ import numpy as np
 
 import Util
 import Constants
-from ImageDetection import ImageDetectionClass
+from ImageDetection import ImageDetector
 
 from threading import Lock
 
@@ -25,7 +25,7 @@ import code
 APPROX_TIME = 0.1 # in sec
 id_map = {32: Constants.AR.Frames.Object}
 
-class ARImageDetectionClass(ImageDetectionClass):
+class ARImageDetector(ImageDetector):
     
       class State():
             CalibrateLeft = 0
@@ -50,11 +50,11 @@ class ARImageDetectionClass(ImageDetectionClass):
 
 
             # home position. likely in front of the camera, close
-            self.homePoint = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
+            self.homePoint = tfx.point([-.021,.001,-.097],frame=Constants.Frames.Link0).msg.PointStamped()
             
             #receptacle point. Must have frame_id of link_0
             #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-            self.receptaclePoint = tfx.point([.039, .045, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
+            self.receptaclePoint = tfx.point([.012, .035, -.175],frame=Constants.Frames.Link0).msg.PointStamped()
 
             #table normal. Must be according to global (or main camera) frame
             if normal != None:
@@ -147,11 +147,11 @@ class ARImageDetectionClass(ImageDetectionClass):
         return timeDiff < maxTime
 
       def isCalibrated(self):
-            return self.state == ARImageDetectionClass.State.Calibrated
+            return self.state == ARImageDetector.State.Calibrated
 
 def testTransforms():
     rospy.init_node('ar_image_detection')
-    imageDetector = ARImageDetectionClass()
+    imageDetector = ARImageDetector()
     imageDetector.markerPose = None
 
     #print 'about to spin'
@@ -169,7 +169,7 @@ def testObjectPoint():
       Prints when an objectPoint has been detected
       """
       rospy.init_node('image_detection_node')
-      imageDetector = ARImageDetectionClass()
+      imageDetector = ARImageDetector()
       while not rospy.is_shutdown():
             objectPoint = imageDetector.getObjectPoint()
             if objectPoint != None:      
@@ -180,16 +180,16 @@ def testObjectPoint():
 
 def testCalibration():
     rospy.init_node('image_detection_node')
-    imageDetector = ARImageDetectionClass()
+    imageDetector = ARImageDetector()
     while not rospy.is_shutdown():
         raw_input("press any key to calibrate")
         if not imageDetector.isCalibrated():
-            imageDetector.setState(ARImageDetectionClass.State.CalibrateLeft)
+            imageDetector.setState(ARImageDetector.State.CalibrateLeft)
         rospy.sleep(.5)
 
 def testFound():
     rospy.init_node('ar_image_detection')
-    imageDetector = ARImageDetectionClass()
+    imageDetector = ARImageDetector()
       
     while not rospy.is_shutdown():
         if imageDetector.hasFoundGripper(Constants.Arm.Left):
@@ -206,7 +206,7 @@ def testFound():
 def testRotation():
     rospy.init_node('ar_image_detection')
 
-    imageDetector = ARImageDetectionClass()
+    imageDetector = ARImageDetector()
     listener = tf.TransformListener()
     tf_br = tf.TransformBroadcaster()
     

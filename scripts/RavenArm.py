@@ -25,7 +25,7 @@ import thread
 import Constants as MyConstants
 import Util
 from RavenController import RavenController
-from ARImageDetection import ARImageDetectionClass
+from ARImageDetection import ARImageDetector
 
 
 class RavenArm:
@@ -201,7 +201,7 @@ def testOpenCloseGripper(close=True,arm=MyConstants.Arm.Left):
 def testMoveToHome(arm=MyConstants.Arm.Left):
     rospy.init_node('raven_commander',anonymous=True)
     ravenArm = RavenArm(arm)
-    imageDetector = ARImageDetectionClass()
+    imageDetector = ARImageDetector()
     rospy.sleep(4)
 
     ravenArm.start()

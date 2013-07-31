@@ -9,11 +9,10 @@ for conversions, etc.
 import roslib
 roslib.load_manifest('master-control')
 import rospy
-from geometry_msgs.msg import Twist, PointStamped, PoseStamped, Quaternion, Point, TransformStamped
+from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion, Point
 from visualization_msgs.msg import Marker
 import tf
 import tf.transformations as tft
-import operator
 import numpy as np
 import math
 

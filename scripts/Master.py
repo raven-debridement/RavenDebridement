@@ -16,8 +16,7 @@ from raven_pose_estimator.srv import ThreshRed
 import Util
 import Constants
 from RavenArm import RavenArm
-from ImageDetection import ImageDetectionClass
-from ARImageDetection import ARImageDetectionClass
+from ARImageDetection import ARImageDetector
 
 import code
 
@@ -48,7 +47,6 @@ class MasterClass():
         # initialize the three main control mechanisms
         # image detection, gripper control, and arm control
         self.imageDetector = imageDetector
-        #self.gripperControl = GripperControlClass(self.armName, self.listener)
         self.ravenArm = RavenArm(self.armName)
 
         self.receptaclePose = None
@@ -205,29 +203,31 @@ class MasterClass():
         self.timeout.start()
         while not Util.withinBounds(self.gripperPose, self.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
                 
-            if self.imageDetector.hasFoundNewGripper(self.gripperName):
-                rospy.loginfo('paused and found new gripper')
-                self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
-                deltaPose = uncappedDeltaPose = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, self.toolframe))
-                    
-                deltaPose.position = deltaPose.position.capped(maxMovement)
-                #if abs(deltaPose.position.z) > maxMovement:
-                #    deltaPose.position.z = math.copysign(maxMovement, deltaPose.position.z)
-
-                deltaPose0Link = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
-                deltaPose0Link.position = deltaPose.position.capped(maxMovement)
-                self.publishDesiredPose(deltaPose0Link, tfx.pose(self.gripperPose))
-
-                rospy.loginfo('delta pose')
-                rospy.loginfo(deltaPose)
-
-                self.ravenArm.goToGripperPoseDelta(deltaPose)
+            if self.ravenArm.isPaused():
                 rospy.sleep(1)
-            else:
-                rospy.loginfo('paused but did NOT find new gripper')
-                deltaPose.position = uncappedDeltaPose.position - deltaPose.position
-                self.ravenArm.goToGripperPoseDelta(deltaPose, ignoreOrientation=True)
-                break
+                if self.imageDetector.hasFoundNewGripper(self.gripperName):
+                    rospy.loginfo('paused and found new gripper')
+                    self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
+                    deltaPose = uncappedDeltaPose = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, self.toolframe))
+                    
+                    deltaPose.position = deltaPose.position.capped(maxMovement)
+                    #if abs(deltaPose.position.z) > maxMovement:
+                    #    deltaPose.position.z = math.copysign(maxMovement, deltaPose.position.z)
+
+                    deltaPose0Link = tfx.pose(Util.deltaPose(self.gripperPose, self.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
+                    deltaPose0Link.position = deltaPose.position.capped(maxMovement)
+                    self.publishDesiredPose(deltaPose0Link, tfx.pose(self.gripperPose))
+
+                    rospy.loginfo('delta pose')
+                    rospy.loginfo(deltaPose)
+
+                    self.ravenArm.goToGripperPoseDelta(deltaPose)
+                    rospy.sleep(1)
+                else:
+                    rospy.loginfo('paused but did NOT find new gripper')
+                    deltaPose.position = uncappedDeltaPose.position - deltaPose.position
+                    self.ravenArm.goToGripperPoseDelta(deltaPose, ignoreOrientation=True)
+                    break
                     
                     
             if self.timeout.hasTimedOut() or rospy.is_shutdown():
@@ -375,13 +375,13 @@ def mainloop():
     run loop
     """
     rospy.init_node('master_node',anonymous=True)
-    imageDetector = ARImageDetectionClass()
+    imageDetector = ARImageDetector()
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.run()
 
 def rotateTest():
     rospy.init_node('master_node',anonymous=True)
-    imageDetector = ARImageDetectionClass()
+    imageDetector = ARImageDetector()
     master = MasterClass(Constants.Arm.Left, imageDetector)
     master.ravenArm.start()
 
@@ -394,5 +394,5 @@ def rotateTest():
 
 
 if __name__ == '__main__':
-    #mainloop()
-    rotateTest()
+    mainloop()
+    

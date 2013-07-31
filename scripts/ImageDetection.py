@@ -19,13 +19,13 @@ import Constants
 import code
 
 
-class ImageDetectionClass():
+class ImageDetector():
     """
     Used to detect object, grippers, and receptacle
     """
 
     def __init__(self, normal=None):
-        # PointStamped
+
         self.objectPoint = None
 
         # gripper pose. Must both have frame_id of respective tool frame
@@ -34,36 +34,36 @@ class ImageDetectionClass():
 
         self.newLeftGripperPose = False
         self.newRightGripperPose = False
+
+        # home position. likely in front of the camera, close
+        self.homePoint = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
+            
         #receptacle point. Must have frame_id of link_0
         #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-        # WARNING this is hardcoded for the left arm only
-        self.receptaclePoint = tfx.point([-.025,-.004,-.093],frame=Constants.Frames.Link0).msg.PointStamped()
-        # home position. likely in front of the camera, close
-        self.homePoint = tfx.point([-.025,-.004,-.093],frame=Constants.Frames.Link0).msg.PointStamped()
+        self.receptaclePoint = tfx.point([.039, .045, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
+
         #table normal. Must be according to global (or main camera) frame
         if normal != None:
             self.normal = normal
         else:
-            # default to straight up
-            self.normal = Util.makeQuaternion(.5**.5, 0, -.5**.5, 0)
+            # for tape side
+            self.normal = tfx.tb_angles(-90,90,0).msg
+            # for non-tape side
+            #self.normal = tfx.tb_angles(90,90,0).msg
 
         self.listener = tf.TransformListener()
         self.tf_br = tf.TransformBroadcaster()
         self.registerObjectPublisher()
 
-        # hardcode receptacle point
-
-        #######################
-        # MAY NEED TO USE LOCKS
-        #######################
 
         # Temporary. Will eventually be placed with real image detection
         # Will subscribe to camera feeds eventually 
-        rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
-        #rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self.ravenStateCallback)
-
+        #rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
+        
         rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
         rospy.Subscriber(Constants.GripperTape.Topic, PoseStamped, self.tapeCallback)
+
+        rospy.sleep(2)
 
     def registerObjectPublisher(self):
         object_topic = "object_marker"
@@ -97,12 +97,6 @@ class ImageDetectionClass():
         marker = Util.createMarker(self.getObjectPose(), 0)
         self.objPublisher.publish(marker)
         
-        # to account for gripper being open
-        #self.objectPoint.point.z += .004
-
-        marker = Util.createMarker(self.getObjectPose(), 1)
-        self.objPublisher.publish(marker)
-
     def stereoCallback(self, msg):
         """
         Temporary. First click sets receptaclePoint, all others are objectPoints
@@ -133,20 +127,6 @@ class ImageDetectionClass():
             self.objMarker = marker
             self.objPublisher.publish(marker)
         
-    def ravenStateCallback(self, msg):
-        # gripperPoses in own frames
-        rgp = PoseStamped()
-        rgp.header.stamp = msg.header.stamp
-        rgp.header.frame_id = Constants.ToolFrame.Right
-        rgp.pose.orientation.w = 1
-        self.rightGripperPose = rgp
-        
-        lgp = PoseStamped()
-        lgp.header.stamp = msg.header.stamp
-        lgp.header.frame_id = Constants.ToolFrame.Left
-        lgp.pose.orientation.w = 1
-        self.leftGripperPose = lgp
-
     def gripperPoseEstimated(self):
         return self.gripperPoseIsEstimate
 
@@ -313,7 +293,7 @@ class ImageDetectionClass():
 
 def test():     
     rospy.init_node('image_detection_node')
-    imageDetector = ImageDetectionClass()
+    imageDetector = ImageDetector()
     while not rospy.is_shutdown():
         if imageDetector.hasFoundObject():
             objectPoint = imageDetector.getObjectPoint()
