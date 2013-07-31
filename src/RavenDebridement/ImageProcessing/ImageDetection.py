@@ -13,8 +13,8 @@ from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion
 from raven_2_msgs.msg import *
 from visualization_msgs.msg import Marker
 
-import Util
-import Constants
+from RavenDebridement.Utils import Util
+from RavenDebridement.Utils import Constants
 
 import code
 

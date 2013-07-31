@@ -13,10 +13,10 @@ import tfx
 from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion
 from raven_pose_estimator.srv import ThreshRed
 
-import Util
-import Constants
-from RavenArm import RavenArm
-from ARImageDetection import ARImageDetector
+from RavenDebridement.Utils import Util
+from RavenDebridement.Utils import Constants
+from RavenDebridement.RavenCommand.RavenArm import RavenArm
+from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 import code
 

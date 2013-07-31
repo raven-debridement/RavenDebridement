@@ -22,10 +22,10 @@ from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
 import thread
 
 # rename so no conflict with raven_2_msgs.msg.Constants
-import Constants as MyConstants
-import Util
+from RavenDebridement.Utils import Constants as MyConstants
+from RavenDebridement.Utils import Util
 from RavenController import RavenController
-from ARImageDetection import ARImageDetector
+from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 
 class RavenArm:

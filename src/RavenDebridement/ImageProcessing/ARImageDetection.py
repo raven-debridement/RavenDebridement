@@ -14,8 +14,8 @@ import tf.transformations as tft
 import math
 import numpy as np
 
-import Util
-import Constants
+from RavenDebridement.Utils import Util
+from RavenDebridement.Utils import Constants
 from ImageDetection import ImageDetector
 
 from threading import Lock

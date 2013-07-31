@@ -25,8 +25,8 @@ import tfx
 import thread
 import threading
 
-import Util
-import Constants as MyConstants
+from RavenDebridement.Utils import Util
+from RavenDebridement.Utils import Constants as MyConstants
 
 import code
 
