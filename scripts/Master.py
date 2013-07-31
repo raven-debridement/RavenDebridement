@@ -346,6 +346,8 @@ class MasterClass():
             currentStage = currentStage()
             rospy.sleep(delay)
 
+        self.ravenArm.stop()
+
     def publishObjectPose(self, pose):
         self.obj_pub.publish(pose)
 
