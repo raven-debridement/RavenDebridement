@@ -25,6 +25,8 @@ import tfx
 import thread
 import threading
 
+from RavenPlanner import RavenPlanner
+
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants as MyConstants
 
@@ -68,6 +70,9 @@ class RavenController():
         self.header.frame_id = '/0_link'
         
         self.thread = None
+
+        # for IK
+        self.ravenPlanner = RavenPlanner(self.arm)
 
         #################
         # PAUSE COMMAND #
@@ -284,10 +289,37 @@ class RavenController():
             
             toolPose = pose.msg.Pose()
 
+            # not sure if correct
+            cmd.controller = Constants.CONTROLLER_NONE
             RavenController.addArmPoseCmd(cmd, self.arm, toolPose)
 
         self.addStage('goToPose', duration, fn)
+
+    def goToPoseUsingJoints(self, end, duration=None, speed=None):
+        """
+        go to the end pose, but use joint commands and joint interpolation
+        """
+        end = tfx.pose(end)
         
+        jointTypes = self.ravenPlanner.getRosJointTypes()
+
+        startJointPositions = self.ravenPlanner.getCurrentJointPositions()
+        endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
+        
+        # TEMP
+        if duration is None:
+            duration = 10
+
+        def fn(cmd, t):
+            # TEMP
+            # how to interpolate
+            # t is percent along trajectory
+            cmd.controller = Constants.CONTROLLER_JOINT_POSITION
+            pass
+
+        self.addStage('goToPoseUsingJoints', duration, fn)
+        
+
     ###############################
     # setting the gripper grasp   #
     ###############################
@@ -339,6 +371,32 @@ class RavenController():
     def addArmGraspCmd(cmd,armName,grasp,graspOption=ToolCommand.GRASP_INCREMENT_SIGN):
         return RavenController.addArmCmd(cmd, armName, grasp=grasp, graspOption=graspOption, poseOption=ToolCommand.POSE_OFF)
 
+    @staticmethod
+    def addArmJointCmds(cmd,armName,jointsTypeValue):
+        """
+        jointsTypeValue is tuple of (jointType, value)
+        
+        jointType is from raven_2_msgs.msg.Constants
+        value is position in radians
+        """
+        cmd.arm_names.append(armName)
+
+        arm_cmd = ArmCommand()
+        arm_cmd.active = True
+
+        for jointType, value in jointsTypeValue:
+            jointCmd = JointCommand()
+            jointCmd.command_type = JointCommand.COMMAND_TYPE_POSITION
+            jointCmd.value = value
+
+            arm_cmd.joint_types.append(jointType)
+            arm_cmd.joint_commands.append(jointCmd)
+            
+
+        
+
+        
+
 
 
 
@@ -361,7 +419,7 @@ class RavenController():
 
 def test_startstop():
     rospy.init_node('raven_arm',anonymous=True)
-    leftArm = RavenController('L')
+    leftArm = RavenController(MyConstants.Arm.Left)
     rospy.sleep(2)
 
     rospy.loginfo('Press enter to start')

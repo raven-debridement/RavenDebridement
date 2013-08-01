@@ -18,6 +18,8 @@ import math
 
 import tfx
 
+from raven_2_msgs.msg import *
+
 import code
 
 def createMarker(pose, id_):
@@ -136,4 +138,6 @@ class Timeout():
         greater than the current time
         """
         return rospy.Time.now() > self.endTime 
+
+
 
