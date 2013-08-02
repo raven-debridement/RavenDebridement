@@ -125,7 +125,10 @@ class RavenController():
         self.stages = []
         self.startTime = None
 
-        self.defaultSpeed = .01
+        # cm/sec
+        self.defaultPoseSpeed = .01
+        # rad/sec
+        self.defaultJointSpeed = pi/8
 
 		
         self.currentState = None
@@ -281,7 +284,7 @@ class RavenController():
         
         if duration is None:
             if speed is None:
-                speed = self.defaultSpeed
+                speed = self.defaultPoseSpeed
             duration = end.position.distance(start.position) / speed
 
         def fn(cmd, t):
@@ -295,27 +298,41 @@ class RavenController():
 
         self.addStage('goToPose', duration, fn)
 
-    def goToPoseUsingJoints(self, end, duration=None, speed=None):
+    def goToPoseUsingJoints(self, end, duration=None, speed=None, endJointPositions=None):
         """
         go to the end pose, but use joint commands and joint interpolation
+
+        TEMP: endJointPositions. it's a stub
         """
+
         end = tfx.pose(end)
         
         jointTypes = self.ravenPlanner.getRosJointTypes()
 
         startJointPositions = self.ravenPlanner.getCurrentJointPositions()
-        endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
         
         # TEMP
+        if endJointPositions is not None:
+            endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
+
         if duration is None:
-            duration = 10
+            if speed is None:
+                speed = self.defaultJointSpeed
+            maxJointMovement = max(abs(np.array(endJointPositions)-np.array(startJointPositions)))
+            duration = maxJointMovement / speed
+        
 
         def fn(cmd, t):
-            # TEMP
-            # how to interpolate
             # t is percent along trajectory
             cmd.controller = Constants.CONTROLLER_JOINT_POSITION
-            pass
+
+            desJoints = [startJointPos + (endJointPos-startJointPos)*t for startJointPos, endJointPos in zip(startJointPositions, endJointPositions)]
+            print(desJoints)
+
+            RavenController.addArmJointCmds(cmd, self.arm, zip(jointTypes, desJoints))
+
+
+        code.interact(local=locals())
 
         self.addStage('goToPoseUsingJoints', duration, fn)
         
@@ -391,6 +408,8 @@ class RavenController():
 
             arm_cmd.joint_types.append(jointType)
             arm_cmd.joint_commands.append(jointCmd)
+
+        cmd.arms.append(arm_cmd)
             
 
         
@@ -418,7 +437,7 @@ class RavenController():
 
 
 def test_startstop():
-    rospy.init_node('raven_arm',anonymous=True)
+    rospy.init_node('raven_controller',anonymous=True)
     leftArm = RavenController(MyConstants.Arm.Left)
     rospy.sleep(2)
 
@@ -435,5 +454,20 @@ def test_startstop():
     rospy.loginfo('Press enter to exit')
     raw_input()
 
+def test_goToPoseUsingJoints():
+    rospy.init_node('raven_controller',anonymous=True)
+    rightArmController = RavenController(MyConstants.Arm.Right)
+    rospy.sleep(2)
+
+    #rightArmController.start()
+
+    rospy.loginfo('Press enter to move')
+    raw_input()
+
+    endJointPositions = list((pi/180.0)*np.array([21.9, 95.4, -7.5, 20.4, -29.2, -11.8]))
+
+    rightArmController.goToPoseUsingJoints(tfx.pose([0,0,0]), endJointPositions=endJointPositions)
+
 if __name__ == '__main__':
-    test_startstop()
+    #test_startstop()
+    test_goToPoseUsingJoints()
