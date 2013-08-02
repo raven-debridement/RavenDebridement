@@ -38,7 +38,11 @@ class Frames:
     LeftBase = '/base_link_L'
     RightBase = '/base_link_R'
     Link0 = '/0_link'
-
+    
+class OpenraveLinks:
+    LeftGrasper1 = 'grasper1_L'
+    RightGrasper1 = 'grasper1_R'
+    
 class RavenTopics:
     #publish ToolCommandStamped directly
     LeftTool = '/raven_command/tool/L'

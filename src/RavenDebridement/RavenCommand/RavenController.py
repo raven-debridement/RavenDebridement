@@ -310,10 +310,12 @@ class RavenController():
         jointTypes = self.ravenPlanner.getRosJointTypes()
 
         startJointPositions = self.ravenPlanner.getCurrentJointPositions()
-        
-        # TEMP
+        #endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
+
+        # TEMP #######
         if endJointPositions is not None:
             endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
+        ##############
 
         if duration is None:
             if speed is None:
