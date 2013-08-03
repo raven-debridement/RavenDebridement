@@ -421,20 +421,6 @@ class RavenController():
 
 
 
-    def add_go_to_pose_using_joints(self, name, startJoints, endPose, arm=None, duration=None, speed=None):
-        """
-        Calculate the the joints for endPose using openrave IK
-
-        Then, return callback function for moving with linear angular velocity
-        from startJoints to endJoints
-        """
-        env = rave.Environment()
-        ravenFile = os.path.dirname(__file__) + '/../models/raven2.zae'
-        env.Load(ravenFile)
-        robot = env.GetRobots()[0]
-
-        code.interact(local=locals())
-
 
 
 
