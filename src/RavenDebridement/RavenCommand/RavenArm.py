@@ -88,6 +88,32 @@ class RavenArm:
             prevTime = stampedPose.stamp
             prevPose = pose
 
+    def executeDeltaPoseTrajectory(self, stampedDeltaPoses, startPose=None):
+        """
+        stampedDeltaPoses is a list of tfx poses with time stamps
+
+        each stampedDeltaPose is endPose - startPose, where
+        each endPose is different but the startPose is the same
+
+        This function is intended to be used where each
+        endPose is from the vision system and the one
+        startPose is the gripper position according to vision
+        """
+        if startPose == None:
+            startPose = self.getGripperPose()
+            if startPose == None:
+                return
+        
+        prevTime = rospy.Time.now()
+
+        for stampedDeltaPose in stampedDeltaPoses:
+            duration = stampedDeltaPose.stamp - prevTime
+
+            deltaPose = tfx.pose(stampedDeltaPose.position, stampedDeltaPose.orientation)
+            self.goToGripperPoseDelta(deltaPose, startPose=startPose, block=False, duration=duration)
+
+            prevTime = stampedDeltaPose.stamp
+
     def executeJointTrajectory(self, stampedJoints):
         """
         stampedJoints is a tuple of ((stamp, joints), ....)
