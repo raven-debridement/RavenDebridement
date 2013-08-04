@@ -111,6 +111,15 @@ class RavenController():
 
                 self.currentJoints = dict((joint.type, joint.position) for joint in arm.joints)
 
+    def getCurrentJoints(self):
+        """
+        Returns is dictionary of {jointType : jointPos}
+        
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+        """
+        return self.currentJoints
+
 
     ###############################################
     # start, stop, and resetting of the raven arm #
@@ -128,7 +137,7 @@ class RavenController():
         # cm/sec
         self.defaultPoseSpeed = .01
         # rad/sec
-        self.defaultJointSpeed = pi/8
+        self.defaultJointSpeed = pi/64
 
 		
         self.currentState = None
@@ -294,7 +303,7 @@ class RavenController():
             toolPose = pose.msg.Pose()
 
             # not sure if correct
-            cmd.controller = Constants.CONTROLLER_NONE
+            cmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
             RavenController.addArmPoseCmd(cmd, self.arm, toolPose)
 
         self.addStage('goToPose', duration, fn)
@@ -319,14 +328,14 @@ class RavenController():
         for startJointType in startJoints.keys():
             if not endJoints.has_key(startJointType):
                 del startJoints[startJointType]
-
+                
         # now there should be one-to-one correspondence
         # between startJoints and endJoints
 
         if duration is None:
             if speed is None:
                 speed = self.defaultJointSpeed
-            maxJointMovement = max(abs(np.array(endJointPositions)-np.array(startJointPositions)))
+            maxJointMovement = max([abs(endJoints[jointType]-startJoints[jointType]) for jointType in startJoints.keys()])
             duration = maxJointMovement / speed
         
 
@@ -334,13 +343,13 @@ class RavenController():
             # t is percent along trajectory
             cmd.controller = Constants.CONTROLLER_JOINT_POSITION
 
-            desJoint = dict()
-            for jointType in startJoint.keys():
-                startJointPos = startJoint[jointType]
+            desJoints = dict()
+            for jointType in startJoints.keys():
+                startJointPos = startJoints[jointType]
                 endJointPos = endJoints[jointType]
                 desJoints[jointType] = startJointPos + (endJointPos-startJointPos)*t
             
-            RavenController.addArmJointCmds(cmd, self.arm, zip(jointTypes, desJoints))
+            RavenController.addArmJointCmds(cmd, self.arm, desJoints)
 
 
         self.addStage('goToPoseUsingJoints', duration, fn)

@@ -4,6 +4,7 @@ import roslib; roslib.load_manifest('RavenDebridement')
 import numpy as np
 import os, sys
 import random
+import math
 
 import rospy
 
@@ -246,6 +247,16 @@ class RavenArm:
 
         return gripperPose
 
+    def getCurrentJoints(self):
+        """
+        Returns is dictionary of {jointType : jointPos}
+        
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+        """
+        return self.ravenController.getCurrentJoints()
+
+
 
     #################
     # other methods #
@@ -303,8 +314,9 @@ def testGoToJoints(arm=MyConstants.Arm.Right):
     ravenPlanner = RavenPlanner(arm)
     rospy.sleep(2)
 
-    endAngles = tfx.tb_angles(0,90,0)
-    endPose = tfx.tb_angles([-.136,-.017,-.068], endAngles, frame=MyConstants.Frames.Link0)
+    angle = tfx.tb_angles(90,90,0)
+    endPose = tfx.pose([-.134, -.013, -.068], angle,frame=MyConstants.Frames.Link0)
+    # z -.068
 
     ravenArm.start()
 
@@ -312,21 +324,83 @@ def testGoToJoints(arm=MyConstants.Arm.Right):
     raw_input()
 
     desJoints = ravenPlanner.getJointsFromPose(endPose)
+    currJoints = ravenArm.ravenController.currentJoints
 
     rospy.loginfo('Found joints')
     for jointType, jointPos in desJoints.items():
-        print("jointType: {0}, jointPos: {1}".format(jointType,jointPos))
+        print("desired: jointType = {0}, jointPos = {1}".format(jointType,jointPos))
+        print("current: jointType = {0}, jointPos = {1}".format(jointType,currJoints[jointType]))
+
+    #code.interact(local=locals())
 
     rospy.loginfo('Press enter to move')
     raw_input()
     
     ravenArm.goToJoints(desJoints)
 
+    #code.interact(local=locals())
+
+    rospy.loginfo('Press enter to exit')
+    raw_input()
+
+def testGoToPose(arm=MyConstants.Arm.Right):
+    rospy.init_node('raven_arm_node',anonymous=True)
+    ravenArm = RavenArm(arm)
+    rospy.sleep(2)
+
+    endAngles = tfx.tb_angles(0,90,0)
+    endPose = tfx.pose([-.136,-.017,-.075], endAngles, frame=MyConstants.Frames.Link0)
+
+    ravenArm.start()
+
+    rospy.loginfo('Press enter to go to endPose')
+    raw_input()
+
+    ravenArm.goToGripperPose(endPose)
+
     rospy.loginfo('Press enter to exit')
     raw_input()
     
 
+def testTrajopt(arm=MyConstants.Arm.Right):
+    rospy.init_node('test_trajopt',anonymous=True)
+    ravenArm = RavenArm(arm)
+    ravenPlanner = RavenPlanner(arm)
+    rospy.sleep(2)
+
+    angle = tfx.tb_angles(90,90,0)
+    endPose = tfx.pose([-.133, -.015, -.072], angle,frame=MyConstants.Frames.Link0)
+
+    startJoints = ravenArm.getCurrentJoints()
+
+    endJoints = ravenPlanner.getJointsFromPose(endPose)
+
+    rospy.loginfo('desired and start joint positions')
+    for jointType, jointPos in endJoints.items():
+        print("desired: jointType = {0}, jointPos = {1}".format(jointType,(180.0/math.pi)*jointPos))
+        print("current: jointType = {0}, jointPos = {1}".format(jointType,(180.0/math.pi)*startJoints[jointType]))
+
+    rospy.loginfo('Press enter to call trajopt')
+    raw_input()
+
+    jointTraj = ravenPlanner.getTrajectoryFromPose(startJoints, endPose)
+
+    for trajIndex in range(len(jointTraj)):
+        jointWaypoint = jointTraj[trajIndex]
+        print(list((180.0/math.pi)*jointWaypoint))
+
+    endJointPositions = jointTraj[-1]
+    endTrajJoints = dict(zip(startJoints.keys()[:-1], list(endJointPositions)))     
+
+    ravenPlanner.env.SetViewer('qtcoin')
+    #ravenPlanner.updateOpenraveJoints(endTrajJoints)
+
+    rospy.loginfo('Successful use of trajopt')
+    code.interact(local=locals())
+
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
     #testMoveToHome()
-    testGoToJoints()
+    #testGoToJoints()
+    #testGoToPose()
+    testTrajopt()

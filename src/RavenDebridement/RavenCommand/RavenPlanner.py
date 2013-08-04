@@ -18,7 +18,7 @@ from RavenDebridement.srv import InvKinSrv
 
 
 import openravepy as rave
-#import trajoptpy
+import trajoptpy
 import json
 #import trajoptpy.kin_utils as ku
 import numpy as np
@@ -36,22 +36,22 @@ class Request():
     """
     Class for the trajopt json requests
     """
+    
     def __init__(self, n_steps=20):
         self.n_steps = n_steps
         
 
-    def stayHigh(self, armName, toolFrame, pose, initialJoints):
+    def straightLine(self, manipName, toolFrame, pose, endJointPositions):
         pose = tfx.pose(pose)
         
         desPos = pose.position.list
-        desQuat = pose.orientation.list
+        desQuat = pose.orientation
+        wxyzQuat = [desQuat.w, desQuat.x, desQuat.y, desQuat.z]
 
-        # request isn't correct
-        # it doesn't force arm to stay high
         request = {
             "basic_info" : {
                 "n_steps" : self.n_steps,
-                "manip" : armName,
+                "manip" : manipName,
                 "start_fixed" : True
                 },
             "costs" : [
@@ -66,17 +66,6 @@ class Request():
                         "dist_pen" : [0.025]
                         }
                     },
-                {
-                        "type" : "pose",
-                        "name" : "target_pose",
-                        "params" : {"xyz" : desPos,
-                                    "xyzw" : desQuat,
-                                    "link": toolFrame,
-                                    "rot_coeffs" : [1,1,0],
-                                    "pos_coeffs" : [0,0,0],
-                                    "coeffs" : [20]
-                                    }
-                        },
                 ],
             "constraints" : [
                 # BEGIN pose_target
@@ -84,9 +73,9 @@ class Request():
                     "type" : "pose",
                     "name" : "target_pose",
                     "params" : {"xyz" : desPos,
-                                "xyzw" : desQuat,
+                                "wxyz" : wxyzQuat,
                                 "link": toolFrame,
-                                "rot_coeffs" : [0,0,0],
+                                "rot_coeffs" : [1,1,1],
                                 "pos_coeffs" : [1,1,1]
                                 }
                     
@@ -95,9 +84,11 @@ class Request():
                 ],
             "init_info" : {
                 "type" : "straight_line",
-                "endpoint" : initialJoints
+                "endpoint" : endJointPositions
                 }
             }
+
+        return request
 
 class RavenPlanner():
 
@@ -145,7 +136,7 @@ class RavenPlanner():
 
         self.refFrame = MyConstants.Frames.Link0
 
-        #rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
+        rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
 
 
         self.env = rave.Environment()
@@ -199,7 +190,7 @@ class RavenPlanner():
                 print(link.GetName())
 
         #self.robot.SetJointValues(self.getCurrentJointPositions(), self.raveJointTypes)
-        code.interact(local=locals())
+        #code.interact(local=locals())
 
 
     def _ravenStateCallback(self, msg):
@@ -249,8 +240,9 @@ class RavenPlanner():
         raveJointTypes = []
         jointPositions = []
         for rosJointType, jointPos in rosJoints.items():
-            raveJointTypes.append(self.rosJointTypesToRave[rosJointType])
-            jointPositions.append(jointPos)
+            if self.rosJointTypesToRave.has_key(rosJointType):
+                raveJointTypes.append(self.rosJointTypesToRave[rosJointType])
+                jointPositions.append(jointPos)
 
         self.robot.SetJointValues(jointPositions, raveJointTypes)
 
@@ -280,10 +272,11 @@ class RavenPlanner():
 
     def getJointsFromPose(self, endPose):
         """
-        orientation still seems off....
+        Calls IK server and returns a dictionary of {jointType : jointPos}
+        
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
         """
-        #if not self.updateRave():
-        #    return
 
         endPose = Util.convertToFrame(tfx.pose(endPose), self.refFrame)
 
@@ -300,26 +293,49 @@ class RavenPlanner():
 
         return dict((joint.type, joint.position) for joint in resp.joints)
 
+    def getTrajectoryFromPose(self, startJoints, endPose, reqFunc=Request(20).straightLine):
         """
-        # IKfast method
-        endPose = Util.convertToFrame(tfx.pose(endPose), self.toolFrame)
-        endMatrix = np.array(endPose.matrix)
 
-        endMatrix = self.transformRelativePoseForIk(endMatrix, endPose.frame, self.toolFrame)
-        endJointPositions = self.manip.FindIKSolution(endMatrix, rave.IkFilterOptions.CheckEnvCollisions)
         """
-        
-        
+        self.updateOpenraveJoints(startJoints)
+
+        endJoints = self.getJointsFromPose(endPose)
+
+        if endJoints == None:
+            rospy.loginfo('IK failed!')
+            return
+
+        transEndPose = Util.convertToFrame(endPose, self.toolFrame)
+
+        endJointPositions = []
+        for raveJointType in self.manip.GetArmIndices():
+            rosJointType = self.raveJointTypesToRos[raveJointType]
+            endJointPositions.append(endJoints[rosJointType])
+
+        # manipName, toolFrame, pose, endJointPositions
+        request = reqFunc(self.manip.GetName(), self.toolFrame, transEndPose, endJointPositions) 
+
+        code.interact(local=locals())            
+
+        # convert dictionary into json-formatted string
+        s = json.dumps(request)
+        # create object that stores optimization problem
+        prob = trajoptpy.ConstructProblem(s, self.env)
+        # do optimization
+        result = trajoptpy.OptimizeProblem(prob)
+
+        return result.GetTraj()
 
 
 def testIK():
     rospy.init_node('test_IK',anonymous=True)
     rp = RavenPlanner(MyConstants.Arm.Right)
+    rospy.sleep(2)
 
-    angle = tfx.tb_angles(-52.1,66.2,55.8)
-    endPose = tfx.pose([-.134, -.013, -.068], angle,frame=MyConstants.Frames.Link0)
+    angle = tfx.tb_angles(-3.2,88.5,-1.8)#tfx.tb_angles(-70.4,85.6,-70.7)
+    endPose = tfx.pose([-.136, -.017, -.074], angle,frame=MyConstants.Frames.Link0)
     rospy.loginfo('Getting joint positions')
-    rp.currentGrasp = (pi/180.0)*70
+    rp.currentGrasp = 1.2
     joints = rp.getJointsFromPose(endPose)
    
     for jointType, jointPos in joints.items():
@@ -335,6 +351,8 @@ def testIK():
 def testRequest():
     rospy.init_node('test_request',anonymous=True)
     code.interact(local=locals())
+
+
 
 if __name__ == '__main__':
     testIK()

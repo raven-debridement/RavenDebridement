@@ -146,44 +146,62 @@ int set_joints_with_limits1(mechanism* mech, float d_act, float thp_act, float g
 	int limits=0;
 
 	if (mech->joint[Z_INS].jpos_d  < Z_INS_MIN_LIMIT) {
+	  printf("hit insertion min limit");
 		limits++;
 		mech->joint[Z_INS].jpos_d = Z_INS_MIN_LIMIT;
 	} else if (mech->joint[Z_INS].jpos_d  > Z_INS_MAX_LIMIT) {
+	  printf("hit insertion max limit");
 		limits++;
 		mech->joint[Z_INS].jpos_d = Z_INS_MAX_LIMIT;
 	}
 
 	if (mech->joint[WRIST].jpos_d  < TOOL_WRIST_MIN_LIMIT) {
+	  printf("hit tool wrist min limit");
 		limits++;
 		mech->joint[WRIST].jpos_d = TOOL_WRIST_MIN_LIMIT;
 	} else if (mech->joint[WRIST].jpos_d  > TOOL_WRIST_MAX_LIMIT) {
+	  printf("hit tool wrist max limit");
 		limits++;
 		mech->joint[WRIST].jpos_d = TOOL_WRIST_MAX_LIMIT;
 	}
+
+	/*
 	//TODO: limit this elsewhere
 	if (fabs(mech->joint[WRIST].jpos_d - mech->joint[WRIST].jpos) > 10 DEG2RAD) {
+	  printf("hit tool wrist subtraction limit");
 		if (mech->joint[WRIST].jpos_d > mech->joint[WRIST].jpos) {
-			mech->joint[WRIST].jpos_d = mech->joint[WRIST].jpos + 10 DEG2RAD;
+		  mech->joint[WRIST].jpos_d = mech->joint[WRIST].jpos + 10 DEG2RAD;
 		} else {
-			mech->joint[WRIST].jpos_d = mech->joint[WRIST].jpos - 10 DEG2RAD;
+		  	mech->joint[WRIST].jpos_d = mech->joint[WRIST].jpos - 10 DEG2RAD;
 		}
 	}
+	*/
 
 	if (mech->joint[GRASP1].jpos_d  < TOOL_GRASP1_MIN_LIMIT) {
+	  printf("hit grasp1 min limit");
 		limits++;
 		mech->joint[GRASP1].jpos_d = TOOL_GRASP1_MIN_LIMIT;
 	} else if (mech->joint[GRASP1].jpos_d  > TOOL_GRASP1_MAX_LIMIT) {
+	  printf("hit grasp1 max limit");
 		limits++;
 		mech->joint[GRASP1].jpos_d = TOOL_GRASP1_MAX_LIMIT;
 	}
 
 	if (mech->joint[GRASP2].jpos_d  < TOOL_GRASP2_MIN_LIMIT) {
+	  printf("hit grasp2 min limit");
 		limits++;
 		mech->joint[GRASP2].jpos_d = TOOL_GRASP2_MIN_LIMIT;
 	} else if (mech->joint[GRASP2].jpos_d  > TOOL_GRASP2_MAX_LIMIT) {
+	  printf("hit grasp2 max limit");
 		limits++;
 		mech->joint[GRASP2].jpos_d = TOOL_GRASP2_MAX_LIMIT;
 	}
+
+	printf("Z_INS = %f\n", mech->joint[Z_INS].jpos_d RAD2DEG);
+	printf("WRIST = %f\n", mech->joint[WRIST].jpos_d RAD2DEG);
+	printf("GRASP1 = %f\n", mech->joint[GRASP1].jpos_d RAD2DEG);
+	printf("GRASP2 = %f\n", mech->joint[GRASP2].jpos_d RAD2DEG);
+	
 
 	return limits;
 }
@@ -196,37 +214,50 @@ int set_joints_with_limits2(mechanism* mech, float ths_act, float the_act, float
 
 	int limits = 0;
 	if (mech->joint[SHOULDER].jpos_d < SHOULDER_MIN_LIMIT) {
+	  printf("hit shoulder min limit");
 		limits++;
 		mech->joint[SHOULDER].jpos_d = SHOULDER_MIN_LIMIT;
 	} else if (mech->joint[SHOULDER].jpos_d > SHOULDER_MAX_LIMIT) {
+	  printf("hit shoulder max limit");
 		limits++;
 		mech->joint[SHOULDER].jpos_d = SHOULDER_MAX_LIMIT;
 	}
 
 	if (mech->joint[ELBOW].jpos_d < ELBOW_MIN_LIMIT) {
+	  printf("hit elbow min limit");
 		limits++;
 		mech->joint[ELBOW].jpos_d = ELBOW_MIN_LIMIT;
 	} else if (mech->joint[ELBOW].jpos_d > ELBOW_MAX_LIMIT) {
+	  printf("hit elbow max limit");
 		limits++;
 		mech->joint[ELBOW].jpos_d = ELBOW_MAX_LIMIT;
 	}
 
 	if (mech->joint[TOOL_ROT].jpos_d < TOOL_ROLL_MIN_LIMIT) {
+	  printf("hit tool roll min limit");
 		limits++;
 		mech->joint[TOOL_ROT].jpos_d = TOOL_ROLL_MIN_LIMIT;
 	} else if (mech->joint[TOOL_ROT].jpos_d > TOOL_ROLL_MAX_LIMIT) {
+	  printf("hit tool roll max limit");
 		limits++;
 		mech->joint[TOOL_ROT].jpos_d = TOOL_ROLL_MAX_LIMIT;
 	}
 
+	/*
 	//TODO: limit this elsewhere
 	if (fabs(mech->joint[TOOL_ROT].jpos_d - mech->joint[TOOL_ROT].jpos) > 10 DEG2RAD) {
+	  printf("tool roll subraction limit");
 		if (mech->joint[TOOL_ROT].jpos_d > mech->joint[TOOL_ROT].jpos) {
-			mech->joint[TOOL_ROT].jpos_d = mech->joint[TOOL_ROT].jpos + 10 DEG2RAD;
+		  	mech->joint[TOOL_ROT].jpos_d = mech->joint[TOOL_ROT].jpos + 10 DEG2RAD;
 		} else {
-			mech->joint[TOOL_ROT].jpos_d = mech->joint[TOOL_ROT].jpos - 10 DEG2RAD;
+		  	mech->joint[TOOL_ROT].jpos_d = mech->joint[TOOL_ROT].jpos - 10 DEG2RAD;
 		}
 	}
+	*/
+
+	printf("SHOULDER = %f\n",mech->joint[SHOULDER].jpos_d RAD2DEG);
+	printf("ELBOW = %f\n",mech->joint[ELBOW].jpos_d RAD2DEG);
+	printf("TOOL_ROT = %f\n",mech->joint[TOOL_ROT].jpos_d RAD2DEG);
 
 	return limits;
 }
