@@ -243,12 +243,14 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 
 	// desired tip position
 	//btVector3 actualPoint = btVector3(pos_d->x,pos_d->y,pos_d->z) / MICRON_PER_M;
-	btVector3 actualPoint = btVector3(x, y, z) / MICRON_PER_M;
+	btVector3 actualPoint = btVector3(x, y, z);
 	//btMatrix3x3 actualOrientation = toBt(ori_d->R);
 	btMatrix3x3 actualOrientation = matrix;
 	btTransform actualPose(actualOrientation,actualPoint);
 
-	
+	printf("actual point %f %f %f\n", actualPoint[0], actualPoint[1], actualPoint[2]);
+	tb_angles tb(actualOrientation);
+	printf("actual orientation %f %f %f",tb.yaw_deg,tb.pitch_deg,tb.roll_deg);
 	
 	float grasp = GRASP_TO_IK(armId,mech->ori_d.grasp);
 
@@ -476,7 +478,7 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
     mech->ori_d = ori;
 
     // temp
-    mech->ori_d.grasp = 0;
+    mech->ori_d.grasp = 125.9;
 
     for(int i = 0; i < 3; i++) {
 	ROS_INFO("%f %f %f",mech->ori_d.R[i][0],mech->ori_d.R[i][1],mech->ori_d.R[i][2]);
@@ -494,7 +496,7 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 
     for(int i = 0; i < MAX_DOF_PER_MECH; i++) {
 	raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
-	joint->type = mech->joint[i].type;
+	joint->type = i;//mech->joint[i].type;
 	joint->state = raven_2_msgs::JointState::STATE_READY;
 	joint->position = mech->joint[i].jpos_d;
 	res.joints.push_back(*joint);
