@@ -1,0 +1,5 @@
+<launch>
+
+    <node pkg="RavenDebridement" type="inv_kin_server" name="IK_server" output="screen" />
+
+</launch>

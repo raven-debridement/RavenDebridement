@@ -14,6 +14,9 @@ from raven_2_msgs.msg import *
 from std_msgs.msg import Header
 from geometry_msgs.msg import *
 
+from RavenDebridement.srv import InvKinSrv
+
+
 import openravepy as rave
 #import trajoptpy
 import json
@@ -108,12 +111,21 @@ class RavenPlanner():
     grasper_joint_1
     grasper_joint_2
     """
-    rosJointIndices = [Constants.JOINT_TYPE_SHOULDER,
-                       Constants.JOINT_TYPE_ELBOW,
-                       Constants.JOINT_TYPE_INSERTION,
-                       Constants.JOINT_TYPE_ROTATION,
-                       Constants.JOINT_TYPE_PITCH,
-                       Constants.JOINT_TYPE_GRASP_FINGER1]
+    rosJointTypes = [Constants.JOINT_TYPE_SHOULDER,
+                     Constants.JOINT_TYPE_ELBOW,
+                     Constants.JOINT_TYPE_INSERTION,
+                     Constants.JOINT_TYPE_ROTATION,
+                     Constants.JOINT_TYPE_PITCH,
+                     Constants.JOINT_TYPE_GRASP_FINGER1,
+                     Constants.JOINT_TYPE_GRASP_FINGER2]
+
+    raveJointNames = ["shoulder",
+                      "elbow",
+                      "insertion",
+                      "tool_roll",
+                      "wrist_joint",
+                      "grasper_joint_1",
+                      "grasper_joint_2"]
 
     def __init__(self, armName=MyConstants.Arm.Left):
         """
@@ -122,12 +134,13 @@ class RavenPlanner():
         rospy.loginfo('Initializing openrave planner for ' + armName + ' raven arm')
 
         self.armName = armName
+        
 
         self.currentState = None
         self.jointStates = None
 
-        self.jointPositions = [0 for _ in range(len(self.rosJointIndices))]
-        self.jointTypes = list(self.rosJointIndices)
+        self.jointPositions = [0 for _ in range(len(self.rosJointTypes))]
+        self.jointTypes = list(self.rosJointTypes)
 
         self.refFrame = MyConstants.Frames.Link0
 
@@ -144,25 +157,27 @@ class RavenPlanner():
 
         self.robot = self.env.GetRobots()[0]
         if self.armName == MyConstants.Arm.Left:
+            self.invKinArm = Constants.ARM_TYPE_GOLD
             self.toolFrame = MyConstants.OpenraveLinks.LeftGrasper1
             self.robot.SetActiveManipulator('left_arm')
         else:
+            self.invKinArm = Constants.ARM_TYPE_GREEN
             self.toolFrame = MyConstants.OpenraveLinks.RightGrasper1
             self.robot.SetActiveManipulator('right_arm')
         self.manip = self.robot.GetActiveManipulator()
         self.manipJoints = self.robot.GetJoints(self.manip.GetArmJoints())
 
-        rospy.loginfo('Loading model')
-        ikmodel = rave.databases.inversekinematics.InverseKinematicsModel(self.robot, iktype=rave.IkParameterization.Type.Transform6D)
-        if not ikmodel.load():
-            ikmodel.autogenerate()
-        rospy.loginfo('Model loaded')
+        #rospy.loginfo('Loading model')
+        #ikmodel = rave.databases.inversekinematics.InverseKinematicsModel(self.robot, iktype=rave.IkParameterization.Type.Transform6D)
+        #if not ikmodel.load():
+        #    ikmodel.autogenerate()
+        #rospy.loginfo('Model loaded')
 
-        self.raveJointNames = [str(joint.GetName()) for joint in self.manipJoints]
+        self.raveJointNames = ['{0}_{1}'.format(name, self.armName[0].upper()) for name in self.raveJointNames]
 
-        self.raveJointIndices = list(self.manip.GetArmIndices())
-        self.raveJointIndicesToRos = dict((rave,ros) for rave,ros in zip(self.raveJointIndices, self.rosJointIndices))
-        self.rosJointIndicesToRave = dict((ros,rave) for ros,rave in zip(self.rosJointIndices, self.raveJointIndices))
+        self.raveJointTypes = [self.robot.GetJointIndex(name) for name in self.raveJointNames]
+        self.raveJointTypesToRos = dict((rave,ros) for rave,ros in zip(self.raveJointTypes, self.rosJointTypes))
+        self.rosJointTypesToRave = dict((ros,rave) for ros,rave in zip(self.rosJointTypes, self.raveJointTypes))
         
         rospy.loginfo('Links')
         for link in self.robot.GetLinks():
@@ -182,8 +197,8 @@ class RavenPlanner():
             if link not in indLinks:
                 print(link.GetName())
 
-        self.robot.SetJointValues(self.getCurrentJointPositions(), self.raveJointIndices)
-        #code.interact(local=locals())
+        #self.robot.SetJointValues(self.getCurrentJointPositions(), self.raveJointTypes)
+        code.interact(local=locals())
 
 
     def _ravenStateCallback(self, msg):
@@ -202,9 +217,9 @@ class RavenPlanner():
         jointTypes = []
         raveIndicies = []
         for jointState in jointStates:
-            if self.rosJointIndicesToRave.has_key(jointState.type):
-                jointPositions.append(jointState.position) # not sure why negative, but looks right
-                raveIndices.append(self.rosJointIndicesToRave[jointState.type])
+            if self.rosJointTypesToRave.has_key(jointState.type):
+                jointPositions.append(jointState.position)
+                raveIndices.append(self.rosJointTypesToRave[jointState.type])
             
         
         #code.interact(local=locals())
@@ -213,12 +228,29 @@ class RavenPlanner():
         return True
 
     def getRosJointTypes(self):
-        return list(self.rosJointIndices)
+        return list(self.rosJointTypes)
 
     def getCurrentJointPositions(self):
         # stub
         return list((pi/180.0)*np.array([21.9,95.4,-7.5,20.4,-29.2,14.6]))
         #return list(self.positions)
+
+    def updateOpenraveJoints(self, rosJoints):
+        """
+        Updates the openrave raven model using rosJoints
+
+        rosJoints is dictionary of {jointType : jointPos}
+        
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+        """
+        raveJointTypes = []
+        jointPositions = []
+        for rosJointType, jointPos in rosJoints.items():
+            raveJointTypes.append(self.rosJointTypesToRave[rosJointType])
+            jointPositions.append(jointPos)
+
+        self.robot.SetJointValues(jointPositions, raveJointTypes)
 
     def transformRelativePoseForIk(poseMatrix, refLinkName, targLinkName):
         """
@@ -245,34 +277,51 @@ class RavenPlanner():
         return newWorldFromEE
 
     def getJointPositionsFromPose(self, endPose):
-        if not self.updateRave():
-            rospy.loginfo('Failed to update')
+        """
+        orientation still seems off....
+        """
+        #if not self.updateRave():
+        #    return
+
+        endPose = Util.convertToFrame(tfx.pose(endPose), self.refFrame)
+
+        try:
+            rospy.loginfo('Waiting for IK server...')
+            rospy.wait_for_service('inv_kin_server',timeout=5)
+            inv_kin_service = rospy.ServiceProxy('inv_kin_server', InvKinSrv)
+            rospy.loginfo('Calling the IK server')
+            resp = inv_kin_service(self.invKinArm, endPose.msg.Pose())
+            rospy.loginfo('IK success!')
+        except (rospy.ServiceException, rospy.ROSException) as e:
+            rospy.loginfo("IK server failure: %s"%e)
             return
 
+        return dict((joint.type, joint.position) for joint in resp.joints)
+
+        """
+        # IKfast method
         endPose = Util.convertToFrame(tfx.pose(endPose), self.toolFrame)
         endMatrix = np.array(endPose.matrix)
 
         endMatrix = self.transformRelativePoseForIk(endMatrix, endPose.frame, self.toolFrame)
         endJointPositions = self.manip.FindIKSolution(endMatrix, rave.IkFilterOptions.CheckEnvCollisions)
-        #init_joint_target = ku.ik_for_link(endMatrix, self.manip, "r_link1_L", filter_options=rave.IkFilterOptions.CheckEnvCollisions)
-
-        code.interact(local=locals())
-
+        """
         
         
 
 
-def testRavenPlanner():
-    rospy.init_node('test_raven_planner',anonymous=True)
+def testIK():
+    rospy.init_node('test_IK',anonymous=True)
     rp = RavenPlanner(MyConstants.Arm.Right)
 
-    """
-    while not rospy.is_shutdown() and rp.jointStates == None:
-        rospy.sleep(.1)
-
+    endPose = tfx.pose([-.136, -.017, -.068], tfx.tb_angles(0,90,0),frame=MyConstants.Frames.Link0)
     rospy.loginfo('Getting joint positions')
-    rp.getJointPositionsFromPose(tfx.pose([0,0,0],frame=MyConstants.Frames.RightTool))
-    """
+    joints = rp.getJointPositionsFromPose(endPose)
+   
+    for jointType, jointPos in joints.items():
+        print("jointType = {0}, jointPos = {1}".format(jointType,((180.0/pi)*jointPos)))
+
+    code.interact(local=locals())
 
     rospy.spin()
 
@@ -281,5 +330,5 @@ def testRequest():
     code.interact(local=locals())
 
 if __name__ == '__main__':
-    #testRavenPlanner()
-    testRequest()
+    testIK()
+    #testRequest()

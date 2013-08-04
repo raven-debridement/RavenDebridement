@@ -439,10 +439,9 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 {
     
 
-    struct position pos;
-    pos.x = req.pose.position.x;
-    pos.y = req.pose.position.y;
-    pos.z = req.pose.position.z;
+    float x = req.pose.position.x;
+    float y = req.pose.position.y;
+    float z = req.pose.position.z;
 
 
     btQuaternion quat = btQuaternion(req.pose.orientation.x,
@@ -452,17 +451,6 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 
     btMatrix3x3 mat = btMatrix3x3(quat);
 
-
-    
-    struct orientation ori = orientation();
-    for(int i = 0; i < 3; i++) {
-	for(int j = 0; j < 3; j++) {
-	    ori.R[i][j] = mat[i][j];
-	}
-    }
-
-
-    
     struct mechanism* mech = new mechanism();
 
     if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GOLD) {
@@ -473,30 +461,30 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 	return false;
     }
 
-
-    mech->pos_d = pos;
-    mech->ori_d = ori;
-
     // temp
-    mech->ori_d.grasp = 125.9;
+    mech->ori_d.grasp = 0;
 
-    for(int i = 0; i < 3; i++) {
-	ROS_INFO("%f %f %f",mech->ori_d.R[i][0],mech->ori_d.R[i][1],mech->ori_d.R[i][2]);
-    }
 
     ROS_INFO("Solve IK for:");
-    ROS_INFO("Position (%f,%f,%f)",req.pose.position.x,req.pose.position.y,req.pose.position.z);
+    ROS_INFO("Position (%f,%f,%f)",x,y,z);
     ROS_INFO("Quaternion (%f,%f,%f,%f)",req.pose.orientation.x,req.pose.orientation.y,req.pose.orientation.z,req.pose.orientation.w);
 
     
-    if (!invMechKinNew(mech,req.pose.position.x,req.pose.position.y,req.pose.position.z,mat)) {
+    if (!invMechKinNew(mech, x, y, z, mat)) {
 	ROS_INFO("IK service call failed");
     	return false;
     }
 
-    for(int i = 0; i < MAX_DOF_PER_MECH; i++) {
+    int JOINT_NAMES[7] = {SHOULDER,
+			  ELBOW,
+			  Z_INS,
+			  TOOL_ROT,
+			  WRIST,
+			  GRASP1,
+			  GRASP2};
+    for(int i = 0; i < 7; i++) {
 	raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
-	joint->type = i;//mech->joint[i].type;
+	joint->type = JOINT_NAMES[i];
 	joint->state = raven_2_msgs::JointState::STATE_READY;
 	joint->position = mech->joint[i].jpos_d;
 	res.joints.push_back(*joint);
@@ -512,7 +500,7 @@ int main(int argc, char **argv)
     ros::NodeHandle node;
 
     ros::ServiceServer service = node.advertiseService("inv_kin_server", inv_kin);
-    ROS_INFO("Service is ready");
+    ROS_INFO("Raven IK server is ready");
     ros::spin();
 
     return 0;
