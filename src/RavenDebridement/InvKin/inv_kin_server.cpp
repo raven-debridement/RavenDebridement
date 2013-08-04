@@ -233,7 +233,7 @@ int set_joints_with_limits2(mechanism* mech, float ths_act, float the_act, float
 
 
 
-int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3 matrix) {
+int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3 matrix, float grasp) {
         struct position*    pos_d = &(mech->pos_d);
 	struct orientation* ori_d = &(mech->ori_d);
 
@@ -248,11 +248,22 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	btMatrix3x3 actualOrientation = matrix;
 	btTransform actualPose(actualOrientation,actualPoint);
 
+	btQuaternion quat = actualPose.getRotation();
+	printf("quaternion %f %f %f %f\n",quat.x(),quat.y(),quat.z(),quat.w());
+
+	printf("matrix\n");
+	for(int i=0; i<3; i++){
+	    printf("%f %f %f\n",matrix[i][0],matrix[i][1],matrix[i][2]);
+	}
+
 	printf("actual point %f %f %f\n", actualPoint[0], actualPoint[1], actualPoint[2]);
 	tb_angles tb(actualOrientation);
-	printf("actual orientation %f %f %f",tb.yaw_deg,tb.pitch_deg,tb.roll_deg);
+	printf("actual orientation %f %f %f\n",tb.yaw_deg,tb.pitch_deg,tb.roll_deg);
 	
-	float grasp = GRASP_TO_IK(armId,mech->ori_d.grasp);
+	//float grasp = GRASP_TO_IK(armId,mech->ori_d.grasp);
+
+	//ROS_INFO("ori_d grasp %f",mech->ori_d.grasp);
+	ROS_INFO("grasp %f",grasp);
 
 
 	/*
@@ -266,6 +277,11 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	 */
 	btTransform ik_pose = ik_world_to_actual_world(armId) * actualPose * Tg.inverse();
 
+	btVector3 ik_origin = ik_pose.getOrigin();
+	btMatrix3x3 ik_basis = ik_pose.getBasis();
+	printf("ik point %f %f %f\n",ik_origin.x(),ik_origin.y(),ik_origin.z());
+	tb_angles ik_tb(ik_basis);
+	printf("ik orientation %f %f %f\n",ik_tb.yaw_deg,ik_tb.pitch_deg,ik_tb.roll_deg);
 		
 	
 	const float th12 = THETA_12;
@@ -284,6 +300,8 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	float px = origin_in_gripper_frame.x();
 	float py = origin_in_gripper_frame.y();
 	float pz = origin_in_gripper_frame.z();
+
+	ROS_INFO("(px, py, pz) = (%f, %f, %f)",px,py,pz);
 
 	float thy = atan2f(py,-px);
 
@@ -317,8 +335,13 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	}
 
 
+	ROS_INFO("d %f",d);
+	ROS_INFO("thp %f",thp);
+	ROS_INFO("thy %f",thy);
+
 	btVector3 z_roll_in_world = btTransform(Zi(d) * Xip * Zp(thp) * Xpy * Zy(thy) * Tg * Tgripper_to_world).invXform(btVector3(0,0,1));
 	btVector3 x_roll_in_world = btTransform(Zi(d) * Xip * Zp(thp) * Xpy * Zy(thy) * Tg * Tgripper_to_world).invXform(btVector3(1,0,0));
+
 
 	float zx = z_roll_in_world.x();
 	float zy = z_roll_in_world.y();
@@ -369,17 +392,29 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 		float C6 = kc23*(sthe_tmp * sths_tmp - kc12*cthe*cths_tmp) + cths_tmp*ks12*ks23;
 		float C7 = cthe*sths_tmp + kc12*cths_tmp*sthe_tmp;
 
+		ROS_INFO("C4 %f",C4);
+		ROS_INFO("C5 %f",C5);
+		ROS_INFO("C6 %f",C6);
+		ROS_INFO("C7 %f",C7);
+		ROS_INFO("xx %f",xx);
+		ROS_INFO("xy %f",xy);
+		
 		thr_opt[i] = atan2(
 				(xx - C7 * xy / C4) / (C6 + C7*C5/C4),
 				(xx + C6 * xy / C5) / (-C6*C4/C5 - C7));
 
 		ROS_INFO("ths_opt %f",ths_opt[i]);
 		ROS_INFO("the_opt %f",the_opt[i]);
-		ROS_INFO("thr_act %f",thr_act[i]);
-
+		ROS_INFO("thr_opt %f",thr_opt[i]);
+		
 		ths_act[i] = THS_FROM_IK(armId,ths_opt[i]);
 		the_act[i] = THE_FROM_IK(armId,the_opt[i]);
 		thr_act[i] = THR_FROM_IK(armId,thr_opt[i]);
+
+
+		ROS_INFO("ths_act %f",ths_act[i]);
+		ROS_INFO("the_act %f",the_act[i]);
+		ROS_INFO("thr_act %f",thr_act[i]);
 
 	
 		bool valid2 = check_joint_limits2_new(ths_act[i],the_act[i],thr_act[i],validity2[i]);
@@ -461,8 +496,7 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 	return false;
     }
 
-    // temp
-    mech->ori_d.grasp = 0;
+    //mech->ori_d.grasp = req.grasp;
 
 
     ROS_INFO("Solve IK for:");
@@ -470,7 +504,7 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
     ROS_INFO("Quaternion (%f,%f,%f,%f)",req.pose.orientation.x,req.pose.orientation.y,req.pose.orientation.z,req.pose.orientation.w);
 
     
-    if (!invMechKinNew(mech, x, y, z, mat)) {
+    if (!invMechKinNew(mech, x, y, z, mat, req.grasp)) {
 	ROS_INFO("IK service call failed");
     	return false;
     }
@@ -486,7 +520,7 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 	raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
 	joint->type = JOINT_NAMES[i];
 	joint->state = raven_2_msgs::JointState::STATE_READY;
-	joint->position = mech->joint[i].jpos_d;
+	joint->position = mech->joint[JOINT_NAMES[i]].jpos_d;
 	res.joints.push_back(*joint);
     }
 

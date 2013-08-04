@@ -137,6 +137,7 @@ class RavenPlanner():
         
 
         self.currentState = None
+        self.currentGrasp = 0
         self.jointStates = None
 
         self.jointPositions = [0 for _ in range(len(self.rosJointTypes))]
@@ -206,6 +207,7 @@ class RavenPlanner():
         for arm in msg.arms:
             if arm.name == self.armName:
                 self.jointStates = arm.joints
+                self.currentGrasp = arm.tool.grasp
                 
     def updateRave(self):
         if self.jointStates == None:
@@ -290,7 +292,7 @@ class RavenPlanner():
             rospy.wait_for_service('inv_kin_server',timeout=5)
             inv_kin_service = rospy.ServiceProxy('inv_kin_server', InvKinSrv)
             rospy.loginfo('Calling the IK server')
-            resp = inv_kin_service(self.invKinArm, endPose.msg.Pose())
+            resp = inv_kin_service(self.invKinArm, self.currentGrasp, endPose.msg.Pose())
             rospy.loginfo('IK success!')
         except (rospy.ServiceException, rospy.ROSException) as e:
             rospy.loginfo("IK server failure: %s"%e)
@@ -314,12 +316,17 @@ def testIK():
     rospy.init_node('test_IK',anonymous=True)
     rp = RavenPlanner(MyConstants.Arm.Right)
 
-    endPose = tfx.pose([-.136, -.017, -.068], tfx.tb_angles(0,90,0),frame=MyConstants.Frames.Link0)
+    angle = tfx.tb_angles(-52.1,66.2,55.8)
+    endPose = tfx.pose([-.134, -.013, -.068], angle,frame=MyConstants.Frames.Link0)
     rospy.loginfo('Getting joint positions')
+    rp.currentGrasp = (pi/180.0)*70
     joints = rp.getJointPositionsFromPose(endPose)
    
     for jointType, jointPos in joints.items():
         print("jointType = {0}, jointPos = {1}".format(jointType,((180.0/pi)*jointPos)))
+
+    rp.updateOpenraveJoints(joints)
+    rp.env.SetViewer('qtcoin')
 
     code.interact(local=locals())
 
