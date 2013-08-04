@@ -4,3 +4,7 @@ build
 .#*
 *pyc
 *swp
+bin
+lib
+srv_gen
+src/RavenDebridement/srv/

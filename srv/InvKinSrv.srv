@@ -1,0 +1,4 @@
+uint8 arm_type # from raven_2_msgs/Constants
+geometry_msgs/Pose pose
+---
+raven_2_msgs/JointState[] joints

@@ -10,15 +10,19 @@
   <url>http://ros.org/wiki/raven_debridement_master</url>
 
   <depend package="rospy"/>
+  <depend package="roscpp"/>
   <depend package="tf"/>
   
   <depend package="geometry_msgs"/>
   <depend package="std_msgs"/>
   <depend package="sensor_msgs"/>
   <depend package="ar_pose"/>
+
+  <depend package="bullet"/>
   
   <depend package="raven_2_msgs"/>
   <depend package="raven_2_trajectory"/>
+  <depend package="raven_2_control"/>
   <depend package="tfx"/>
   <depend package="tf_conversions"/>
   <depend package="dynamic_reconfigure"/>
@@ -26,6 +30,11 @@
 
   <depend package="raven_pose_estimator"/>
 
+  
+  <export>
+    <cpp cflags="-I${prefix}/include" lflags="-L${prefix}/lib"/>
+  </export>
+  
 </package>
 
 
