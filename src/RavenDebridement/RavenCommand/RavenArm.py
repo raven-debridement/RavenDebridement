@@ -67,6 +67,48 @@ class RavenArm:
     def stop(self):
         return self.ravenController.stop()
 
+    #######################
+    # trajectory commands #
+    #######################
+
+    def executePoseTrajectory(self, stampedPoses):
+        """
+        stampedPoses is a list of tfx poses with time stamps
+        """
+
+        prevTime = rospy.Time.now()
+        prevPose = None
+
+        for stampedPose in stampedPoses:
+            duration = stampedPose.stamp - prevTime
+
+            pose = tfx.pose(stampedPose.position, stampedPose.orientation)
+            self.goToGripperPose(pose, startPose=prevPose, block=False, duration=duration)
+
+            prevTime = stampedPose.stamp
+            prevPose = pose
+
+    def executeJointTrajectory(self, stampedJoints):
+        """
+        stampedJoints is a tuple of ((stamp, joints), ....)
+
+        joints is dictionary of {jointType : jointPos}
+        
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+        """
+        
+        prevTime = rospy.Time.now()
+        prevJoints = None
+
+        for stamp, joints in stampedJoints:
+            duration = stamp - prevTime
+            joints = dict(joints) # so we don't clobber, just in case
+            
+            self.goToJoints(joints, startJoints=prevJoints, block=False, duration=duration)
+
+            prevTime = stamp
+            prevJoints = joints
 
     #####################
     # command methods   #
@@ -122,6 +164,20 @@ class RavenArm:
 
         self.goToGripperPose(endPose, startPose=startPose, block=block, duration=duration, speed=speed, ignoreOrientation=ignoreOrientation)
 
+
+    def goToJoints(self, desJoints, startJoints=None, block=True, duration=None, speed=None):
+        """
+        desJoints is dictionary of {jointType : jointPos}
+        
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+        """
+        
+        self.ravenController.goToJoints(desJoints, duration=duration, speed=speed)
+
+        if block:
+            return self.blockUntilPaused()
+        return True
             
     def closeGripper(self,duration=2.5, block=True):
         self.ravenController.clearStages()
@@ -218,4 +274,4 @@ def testMoveToHome(arm=MyConstants.Arm.Left):
 
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
-    testMoveToHome()
+    #testMoveToHome()

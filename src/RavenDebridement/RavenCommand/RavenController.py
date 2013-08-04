@@ -107,7 +107,9 @@ class RavenController():
         for arm in msg.arms:
             if arm.name == self.arm:
                 self.currentPose = tfx.pose(arm.tool.pose, header=msg.header)
-                self.currentGrasp = arm.tool.grasp 
+                self.currentGrasp = arm.tool.grasp
+
+                self.currentJoints = dict((joint.type, joint.position) for joint in arm.joints)
 
 
     ###############################################
@@ -132,6 +134,7 @@ class RavenController():
         self.currentState = None
         self.currentPose = None
         self.currentGrasp = None
+        self.currentJoints = None
 		
         # ADDED
         self.stopRunning.clear()
@@ -296,24 +299,29 @@ class RavenController():
 
         self.addStage('goToPose', duration, fn)
 
-    def goToJoints(self, jointPositions, duration=None, speed=None):
+    def goToJoints(self, endJoints, startJoints=None, duration=None, speed=None):
         """
-        go to the end pose, but use joint commands and joint interpolation
-
-        TEMP: endJointPositions. it's a stub
-        """
-
-        end = tfx.pose(end)
+        joints is dictionary of {jointType : jointPos}
         
-        jointTypes = self.ravenPlanner.getRosJointTypes()
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+        """
 
-        startJointPositions = self.ravenPlanner.getCurrentJointPositions()
-        #endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
+        if startJoints == None:
+            startJoints = self.currentJoints
 
-        # TEMP #######
-        if endJointPositions is not None:
-            endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
-        ##############
+        # if there doesn't exist a start joint for an end joint, return
+        for endJointType in endJoints.keys():
+            if not startJoints.has_key(endJointType):
+                return
+
+        # if there doesn't exist an end joint for a start joint, ignore it
+        for startJointType in startJoints.keys():
+            if not endJoints.has_key(startJointType):
+                del startJoints[startJointType]
+
+        # now there should be one-to-one correspondence
+        # between startJoints and endJoints
 
         if duration is None:
             if speed is None:
@@ -326,13 +334,14 @@ class RavenController():
             # t is percent along trajectory
             cmd.controller = Constants.CONTROLLER_JOINT_POSITION
 
-            desJoints = [startJointPos + (endJointPos-startJointPos)*t for startJointPos, endJointPos in zip(startJointPositions, endJointPositions)]
-            print(desJoints)
-
+            desJoint = dict()
+            for jointType in startJoint.keys():
+                startJointPos = startJoint[jointType]
+                endJointPos = endJoints[jointType]
+                desJoints[jointType] = startJointPos + (endJointPos-startJointPos)*t
+            
             RavenController.addArmJointCmds(cmd, self.arm, zip(jointTypes, desJoints))
 
-
-        code.interact(local=locals())
 
         self.addStage('goToPoseUsingJoints', duration, fn)
         
@@ -389,22 +398,22 @@ class RavenController():
         return RavenController.addArmCmd(cmd, armName, grasp=grasp, graspOption=graspOption, poseOption=ToolCommand.POSE_OFF)
 
     @staticmethod
-    def addArmJointCmds(cmd,armName,jointsTypeValue):
+    def addArmJointCmds(cmd,armName,joints):
         """
-        jointsTypeValue is tuple of (jointType, value)
+        joints is dictionary of {jointType : jointPos}
         
         jointType is from raven_2_msgs.msg.Constants
-        value is position in radians
+        jointPos is position in radians
         """
         cmd.arm_names.append(armName)
 
         arm_cmd = ArmCommand()
         arm_cmd.active = True
 
-        for jointType, value in jointsTypeValue:
+        for jointType, jointPos in joints.items():
             jointCmd = JointCommand()
             jointCmd.command_type = JointCommand.COMMAND_TYPE_POSITION
-            jointCmd.value = value
+            jointCmd.value = jointPos
 
             arm_cmd.joint_types.append(jointType)
             arm_cmd.joint_commands.append(jointCmd)
