@@ -24,7 +24,7 @@ import thread
 # rename so no conflict with raven_2_msgs.msg.Constants
 from RavenDebridement.Utils import Constants as MyConstants
 from RavenDebridement.Utils import Util
-from RavenController import RavenController
+from RavenController import RavenController, RavenPlanner
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 
@@ -297,7 +297,36 @@ def testMoveToHome(arm=MyConstants.Arm.Left):
     rospy.loginfo('Press enter to exit')
     raw_input()
     
+def testGoToJoints(arm=MyConstants.Arm.Right):
+    rospy.init_node('rave_arm_node',anonymous=True)
+    ravenArm = RavenArm(arm)
+    ravenPlanner = RavenPlanner(arm)
+    rospy.sleep(2)
+
+    endAngles = tfx.tb_angles(0,90,0)
+    endPose = tfx.tb_angles([-.136,-.017,-.068], endAngles, frame=MyConstants.Frames.Link0)
+
+    ravenArm.start()
+
+    rospy.loginfo('Press enter to go to endPose using joint commands')
+    raw_input()
+
+    desJoints = ravenPlanner.getJointsFromPose(endPose)
+
+    rospy.loginfo('Found joints')
+    for jointType, jointPos in desJoints.items():
+        print("jointType: {0}, jointPos: {1}".format(jointType,jointPos))
+
+    rospy.loginfo('Press enter to move')
+    raw_input()
+    
+    ravenArm.goToJoints(desJoints)
+
+    rospy.loginfo('Press enter to exit')
+    raw_input()
+    
 
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
     #testMoveToHome()
+    testGoToJoints()

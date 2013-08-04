@@ -278,7 +278,7 @@ class RavenPlanner():
 
         return newWorldFromEE
 
-    def getJointPositionsFromPose(self, endPose):
+    def getJointsFromPose(self, endPose):
         """
         orientation still seems off....
         """
@@ -320,7 +320,7 @@ def testIK():
     endPose = tfx.pose([-.134, -.013, -.068], angle,frame=MyConstants.Frames.Link0)
     rospy.loginfo('Getting joint positions')
     rp.currentGrasp = (pi/180.0)*70
-    joints = rp.getJointPositionsFromPose(endPose)
+    joints = rp.getJointsFromPose(endPose)
    
     for jointType, jointPos in joints.items():
         print("jointType = {0}, jointPos = {1}".format(jointType,((180.0/pi)*jointPos)))
