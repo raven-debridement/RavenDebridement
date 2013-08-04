@@ -71,8 +71,6 @@ class RavenController():
         
         self.thread = None
 
-        # for IK
-        self.ravenPlanner = RavenPlanner(self.arm)
 
         #################
         # PAUSE COMMAND #
@@ -298,7 +296,7 @@ class RavenController():
 
         self.addStage('goToPose', duration, fn)
 
-    def goToPoseUsingJoints(self, end, duration=None, speed=None, endJointPositions=None):
+    def goToJoints(self, jointPositions, duration=None, speed=None):
         """
         go to the end pose, but use joint commands and joint interpolation
 
