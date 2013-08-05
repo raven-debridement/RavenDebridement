@@ -280,7 +280,7 @@ class RavenArm:
 
 
 
-def testOpenCloseGripper(close=True,arm=MyConstants.Arm.Left):
+def testOpenCloseGripper(close=True,arm=MyConstants.Arm.Right):
     rospy.init_node('raven_commander',anonymous=True)
     ravenArm = RavenArm(arm)
     rospy.sleep(1)
@@ -295,7 +295,7 @@ def testOpenCloseGripper(close=True,arm=MyConstants.Arm.Left):
     rospy.loginfo('Press enter to exit')
     raw_input()
 
-def testMoveToHome(arm=MyConstants.Arm.Left):
+def testMoveToHome(arm=MyConstants.Arm.Right):
     rospy.init_node('raven_commander',anonymous=True)
     ravenArm = RavenArm(arm)
     imageDetector = ARImageDetector()
@@ -306,6 +306,7 @@ def testMoveToHome(arm=MyConstants.Arm.Left):
     rospy.loginfo('Press enter to go to home')
     raw_input()
 
+    #desPose = imageDetector.getReceptaclePose()
     desPose = imageDetector.getHomePose()
     ravenArm.goToGripperPose(desPose)
     
@@ -469,8 +470,8 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
 
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
-    #testMoveToHome()
+    testMoveToHome()
     #testGoToJoints()
     #testGoToPose()
     #testTrajopt()
-    testExecuteJointTrajectory()
+    #testExecuteJointTrajectory()

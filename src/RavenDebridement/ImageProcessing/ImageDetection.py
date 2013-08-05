@@ -72,9 +72,11 @@ class ImageDetector():
 
     def tapeCallback(self, msg):
         # TEMP hard coded for left gripper
-        self.newLeftGripperPose = True
+        #self.newLeftGripperPose = True
+        self.newRightGripperPose = True
         self.tapeMsg = msg
-        self.leftGripperPose = msg
+        #self.leftGripperPose = msg
+        self.rightGripperPose = msg
         self.gripperPoseIsEstimate = False
 
     def foamCallback(self, msg):

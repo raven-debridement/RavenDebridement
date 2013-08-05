@@ -11,6 +11,8 @@ import tf.transformations as tft
 import tfx
 
 import smach
+import smach_ros
+smach.set_shutdown_check(rospy.is_shutdown)
 
 from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion
 from raven_pose_estimator.srv import ThreshRed
@@ -21,6 +23,7 @@ from RavenDebridement.RavenCommand.RavenArm import RavenArm
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 import code
+
 
 class FindReceptacle(smach.State):
     def __init__(self, imageDetector):
@@ -72,9 +75,11 @@ class FindObject(smach.State):
             rospy.loginfo('Did not find object')
             return 'failure'
         # get object w.r.t. toolframe
-        userdata.objectPose = self.imageDetector.getObjectPose(self.toolframe)
-        userdata.objectPose.pose.position.z += userdata.objectHeightOffset
-        self.publishObjectPose(userdata.objectPose)
+        objectPose = self.imageDetector.getObjectPose(self.toolframe)
+        objectPose.pose.position.z += userdata.objectHeightOffset
+        self.publishObjectPose(objectPose)
+
+        userdata.objectPose = objectPose
 
         rospy.loginfo('Found object')
         return 'success'
@@ -91,6 +96,7 @@ class FindGripper(smach.State):
         rospy.loginfo('Searching for ' + self.gripperName)
         # find gripper point
         self.imageDetector.ignoreOldGripper(self.gripperName)
+
 
         self.findGripperTimeout.start()
         while (not self.imageDetector.hasFoundGripper(self.gripperName)) or (not self.imageDetector.hasFoundNewGripper(self.gripperName)):
@@ -144,7 +150,7 @@ class ServoToObject(smach.State):
     """
     In closed-loop, servos to the object. Then, closes the gripper.
     """
-    def __init__(self, imageDetector, ravenArm, gripperName, transFrame, rotFrame, gripperOpenCloseDuration, listener, des_pose_pub):
+    def __init__(self, imageDetector, ravenArm, gripperName, transFrame, rotFrame, toolframe, gripperOpenCloseDuration, listener, des_pose_pub):
         smach.State.__init__(self, outcomes = ['success','gripperNotFound','timedOut'], 
                              input_keys=['objectPose'], 
                              output_keys=['vertAmount'],
@@ -154,6 +160,7 @@ class ServoToObject(smach.State):
         self.gripperName = gripperName
         self.transFrame = transFrame
         self.rotFrame = rotFrame
+        self.toolframe = toolframe
         self.gripperOpenCloseDuration = gripperOpenCloseDuration
         self.listener = listener
         self.des_pose_pub = des_pose_pub
@@ -189,7 +196,7 @@ class ServoToObject(smach.State):
         # if can't find gripper at start, go back to receptacle
         rospy.sleep(1)
         if self.imageDetector.hasFoundGripper(self.gripperName) and self.imageDetector.hasFoundNewGripper(self.gripperName):
-            self.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
+            userdata.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
         else:
             return 'gripperNotFound'
             
@@ -201,18 +208,20 @@ class ServoToObject(smach.State):
                 if self.imageDetector.hasFoundNewGripper(self.gripperName):
                     rospy.loginfo('paused and found new gripper')
                     userdata.gripperPose = self.imageDetector.getGripperPose(self.gripperName)
-                    deltaPose = uncappedDeltaPose = tfx.pose(Util.deltaPose(self.gripperPose, userdata.objectPose, Constants.Frames.Link0, self.toolframe))
+                    deltaPose = uncappedDeltaPose = tfx.pose(Util.deltaPose(userdata.gripperPose, userdata.objectPose, Constants.Frames.Link0, self.toolframe))
                     
                     deltaPose.position = deltaPose.position.capped(maxMovement)
                     #if abs(deltaPose.position.z) > maxMovement:
                     #    deltaPose.position.z = math.copysign(maxMovement, deltaPose.position.z)
 
-                    deltaPose0Link = tfx.pose(Util.deltaPose(uesrdata.gripperPose, userdata.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
+                    deltaPose0Link = tfx.pose(Util.deltaPose(userdata.gripperPose, userdata.objectPose, Constants.Frames.Link0, Constants.Frames.Link0))
                     deltaPose0Link.position = deltaPose.position.capped(maxMovement)
                     self.publishDesiredPose(deltaPose0Link, tfx.pose(userdata.gripperPose))
 
                     rospy.loginfo('delta pose')
                     rospy.loginfo(deltaPose)
+
+                    code.interact(local=locals())
 
                     self.ravenArm.goToGripperPoseDelta(deltaPose)
                     rospy.sleep(1)
@@ -226,7 +235,7 @@ class ServoToObject(smach.State):
             if self.timeout.hasTimedOut() or rospy.is_shutdown():
                 rospy.loginfo('Timed out')
                 userdata.objectHeightOffset = userdata.objectHeightOffset - .0005 if userdata.objectHeightOffset > 0 else 0
-                userdata.vertAmount = .02
+                userdata.vertAmount = .04
                 return 'timedOut'
                 
             rospy.sleep(.1)
@@ -235,6 +244,8 @@ class ServoToObject(smach.State):
         # close gripper (consider not all the way)
         self.ravenArm.closeGripper(duration=self.gripperOpenCloseDuration)
             
+        userdata.vertAmount = .04
+        
         return 'success'
 
 class MoveVertical(smach.State):
@@ -294,7 +305,7 @@ class MoveToReceptacle(smach.State):
     Then, open the gripper
     """
     def __init__(self, ravenArm, openLoopSpeed, gripperOpenCloseDuration):
-        smach.State.__init__(self, outcomes = ['success','failure'])
+        smach.State.__init__(self, outcomes = ['success','failure'],input_keys=['receptaclePose'])
         self.ravenArm = ravenArm
         self.openLoopSpeed = openLoopSpeed
         self.gripperOpenCloseDuration = gripperOpenCloseDuration
@@ -303,7 +314,7 @@ class MoveToReceptacle(smach.State):
         rospy.loginfo('Moving to receptacle')
         # move to receptacle with object
                 
-        self.ravenArm.goToGripperPose(self.receptaclePose.pose, ignoreOrientation=True, speed=self.openLoopSpeed)
+        self.ravenArm.goToGripperPose(userdata.receptaclePose.pose, ignoreOrientation=True, speed=self.openLoopSpeed)
 
 
         rospy.loginfo('Opening the gripper')
@@ -359,18 +370,18 @@ class MasterClass(object):
         self.rotFrame = self.toolframe
 
         # height offset for foam
-        self.objectHeightOffset = .005
+        self.objectHeightOffset = .007
 
         # in cm/sec, I think
-        self.openLoopSpeed = .04
+        self.openLoopSpeed = .01
 
-        self.gripperOpenCloseDuration = 2.5
+        self.gripperOpenCloseDuration = 1
 
         # debugging outputs
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
         
-        self.sm = smach.StateMachine(outcomes=['success','failure'])
+        self.sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['objectHeightOffset'])
         
         with self.sm:
             smach.StateMachine.add('findReceptable', FindReceptacle(self.imageDetector), 
@@ -392,8 +403,8 @@ class MasterClass(object):
                                    transitions = {'success': 'servoToObject',
                                                   'failure': 'moveNearObject'})
             smach.StateMachine.add('servoToObject', ServoToObject(self.imageDetector, self.ravenArm, self.gripperName, 
-                                                                  self.transFrame, self.rotFrame, self.gripperOpenCloseDuration, 
-                                                                  self.listener, self.des_pose_pub),
+                                                                  self.transFrame, self.rotFrame, self.toolframe,
+                                                                  self.gripperOpenCloseDuration, self.listener, self.des_pose_pub),
                                    transitions = {'success': 'objectServoSuccessMoveVertical',
                                                   'gripperNotFound': 'moveToHome',
                                                   'timedOut': 'objectServoFailureMoveVertical'})
@@ -432,7 +443,16 @@ class MasterClass(object):
     
     def run(self):
         self.ravenArm.start()
-        outcome = self.sm.execute()
+        sis = smach_ros.IntrospectionServer('master_server', self.sm, '/SM_ROOT')
+        sis.start()
+        userData = smach.UserData()
+        userData['objectHeightOffset'] = self.objectHeightOffset
+        
+        try:
+            outcome = self.sm.execute(userData)
+        except:
+            pass
+
         self.ravenArm.stop()
 
 
@@ -444,7 +464,7 @@ def mainloop():
     """
     rospy.init_node('master_node',anonymous=True)
     imageDetector = ARImageDetector()
-    master = MasterClass(Constants.Arm.Left, imageDetector)
+    master = MasterClass(Constants.Arm.Right, imageDetector)
     master.run()
 
 def rotateTest():
