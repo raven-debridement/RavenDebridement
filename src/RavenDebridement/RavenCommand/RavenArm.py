@@ -20,6 +20,8 @@ import tfx
 from raven_2_msgs.msg import *
 from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
 
+import openravepy as rave
+
 import thread
 
 # rename so no conflict with raven_2_msgs.msg.Constants
@@ -27,6 +29,7 @@ from RavenDebridement.Utils import Constants as MyConstants
 from RavenDebridement.Utils import Util
 from RavenController import RavenController, RavenPlanner
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
+
 
 
 class RavenArm:
@@ -81,7 +84,7 @@ class RavenArm:
         prevPose = None
 
         for stampedPose in stampedPoses:
-            duration = stampedPose.stamp - prevTime
+            duration = (stampedPose.stamp - prevTime).to_sec()
 
             pose = tfx.pose(stampedPose.position, stampedPose.orientation)
             self.goToGripperPose(pose, startPose=prevPose, block=False, duration=duration)
@@ -108,12 +111,13 @@ class RavenArm:
         prevTime = rospy.Time.now()
 
         for stampedDeltaPose in stampedDeltaPoses:
-            duration = stampedDeltaPose.stamp - prevTime
+            duration = (stampedDeltaPose.stamp - prevTime).to_sec()
 
             deltaPose = tfx.pose(stampedDeltaPose.position, stampedDeltaPose.orientation)
             self.goToGripperPoseDelta(deltaPose, startPose=startPose, block=False, duration=duration)
 
             prevTime = stampedDeltaPose.stamp
+
 
     def executeJointTrajectory(self, stampedJoints):
         """
@@ -129,7 +133,7 @@ class RavenArm:
         prevJoints = None
 
         for stamp, joints in stampedJoints:
-            duration = stamp - prevTime
+            duration = (stamp - prevTime).to_sec()
             joints = dict(joints) # so we don't clobber, just in case
             
             self.goToJoints(joints, startJoints=prevJoints, block=False, duration=duration)
@@ -200,7 +204,7 @@ class RavenArm:
         jointPos is position in radians
         """
         
-        self.ravenController.goToJoints(desJoints, duration=duration, speed=speed)
+        self.ravenController.goToJoints(desJoints, startJoints=startJoints, duration=duration, speed=speed)
 
         if block:
             return self.blockUntilPaused()
@@ -369,7 +373,8 @@ def testTrajopt(arm=MyConstants.Arm.Right):
     rospy.sleep(2)
 
     angle = tfx.tb_angles(90,90,0)
-    endPose = tfx.pose([-.133, -.015, -.072], angle,frame=MyConstants.Frames.Link0)
+    endPose = tfx.pose([-.133, -.015, -.1], angle,frame=MyConstants.Frames.Link0)
+    # z -.072
 
     startJoints = ravenArm.getCurrentJoints()
 
@@ -385,22 +390,87 @@ def testTrajopt(arm=MyConstants.Arm.Right):
 
     jointTraj = ravenPlanner.getTrajectoryFromPose(startJoints, endPose)
 
+    for jointDict in jointTraj:
+        print(jointDict)
+
+    """
     for trajIndex in range(len(jointTraj)):
         jointWaypoint = jointTraj[trajIndex]
         print(list((180.0/math.pi)*jointWaypoint))
 
     endJointPositions = jointTraj[-1]
     endTrajJoints = dict(zip(startJoints.keys()[:-1], list(endJointPositions)))     
+    """
 
     ravenPlanner.env.SetViewer('qtcoin')
-    #ravenPlanner.updateOpenraveJoints(endTrajJoints)
+    #ravenPlanner.updateOpenraveJoints(jointTraj[-1])
 
     rospy.loginfo('Successful use of trajopt')
     code.interact(local=locals())
+
+def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
+    rospy.init_node('test_trajopt',anonymous=True)
+    ravenArm = RavenArm(arm)
+    ravenPlanner = RavenPlanner(arm)
+    rospy.sleep(2)
+
+
+    angle = tfx.tb_angles(0,90,0)
+    endPose = tfx.pose([-.14, -.007, -.105], angle,frame=MyConstants.Frames.Link0)
+
+    startJoints = ravenArm.getCurrentJoints()
+
+    ####### TEMP
+    # so adding box will work, don't normally need to do though
+    ravenPlanner.updateOpenraveJoints(startJoints)
+    box = rave.RaveCreateKinBody(ravenPlanner.env,'')
+    box.SetName('testbox')
+    box.InitFromBoxes(np.array([[-.02,0,0,0.005,0.01,0.015]]),True)
+    #code.interact(local=locals())
+    ee = ravenPlanner.manip.GetEndEffectorTransform()
+    ee[:3,:3] = np.identity(3)
+    box.SetTransform(ee)
+    ravenPlanner.env.Add(box,True)
+    #ravenPlanner.env.SetViewer('qtcoin')
+    rospy.loginfo('Box created, press enter')
+    raw_input()
+    #return
+    ###########
+
+    rospy.loginfo('Press enter to call trajopt')
+    raw_input()
+    rospy.sleep(4)
+
+    jointTraj = ravenPlanner.getTrajectoryFromPose(startJoints, endPose)
+    
+    if jointTraj == None:
+        return
+
+    duration = 40.0
+    waypointDuration = duration / float(len(jointTraj))
+    
+    now = rospy.Time.now()
+    stamps = [now + rospy.Duration(i*waypointDuration) for i in range(len(jointTraj))]
+
+    stampedJoints = zip(stamps, jointTraj)
+    
+    rospy.loginfo('Have stamped joints, ready to execute')
+
+    ravenArm.start()
+    
+    ravenArm.executeJointTrajectory(stampedJoints)
+    
+    #ravenPlanner.env.SetViewer('qtcoin')
+    #ravenPlanner.updateOpenraveJoints(jointTraj[0])
+    #code.interact(local=locals())
+
+    rospy.loginfo('Press enter to exit')
+    raw_input()
 
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
     #testMoveToHome()
     #testGoToJoints()
     #testGoToPose()
-    testTrajopt()
+    #testTrajopt()
+    testExecuteJointTrajectory()

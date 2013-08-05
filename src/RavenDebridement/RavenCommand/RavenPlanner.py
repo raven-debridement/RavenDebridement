@@ -68,19 +68,11 @@ class Request():
                     },
                 ],
             "constraints" : [
-                # BEGIN pose_target
                 {
-                    "type" : "pose",
-                    "name" : "target_pose",
-                    "params" : {"xyz" : desPos,
-                                "wxyz" : wxyzQuat,
-                                "link": toolFrame,
-                                "rot_coeffs" : [1,1,1],
-                                "pos_coeffs" : [1,1,1]
-                                }
+                    "type" : "joint", # joint-space target
+                    "params" : {"vals" : endJointPositions } # length of vals = # dofs of manip
+                    }
                     
-                    },
-                #END pose_target
                 ],
             "init_info" : {
                 "type" : "straight_line",
@@ -147,6 +139,11 @@ class RavenPlanner():
         ravenFile = os.path.dirname(__file__) + '/../../../models/ravenII_2arm.xml'
         self.env.Load(ravenFile)
 
+
+        # TEMP
+        #trajoptpy.SetInteractive(True)
+
+
         self.robot = self.env.GetRobots()[0]
         if self.armName == MyConstants.Arm.Left:
             self.invKinArm = Constants.ARM_TYPE_GOLD
@@ -200,33 +197,9 @@ class RavenPlanner():
                 self.jointStates = arm.joints
                 self.currentGrasp = arm.tool.grasp
                 
-    def updateRave(self):
-        if self.jointStates == None:
-            return False
-
-        jointStates = self.jointStates
-
-        jointPositions = []
-        jointTypes = []
-        raveIndicies = []
-        for jointState in jointStates:
-            if self.rosJointTypesToRave.has_key(jointState.type):
-                jointPositions.append(jointState.position)
-                raveIndices.append(self.rosJointTypesToRave[jointState.type])
-            
-        
-        #code.interact(local=locals())
-        self.robot.SetJointValues(jointPositions, raveIndices)
-            
-        return True
-
-    def getRosJointTypes(self):
-        return list(self.rosJointTypes)
-
-    def getCurrentJointPositions(self):
-        # stub
-        return list((pi/180.0)*np.array([21.9,95.4,-7.5,20.4,-29.2,14.6]))
-        #return list(self.positions)
+    ######################
+    # Openrave methods   #
+    ######################
 
     def updateOpenraveJoints(self, rosJoints):
         """
@@ -245,6 +218,10 @@ class RavenPlanner():
                 jointPositions.append(jointPos)
 
         self.robot.SetJointValues(jointPositions, raveJointTypes)
+
+    #####################################
+    # Conversion/Miscellaneous methods  #
+    #####################################
 
     def transformRelativePoseForIk(poseMatrix, refLinkName, targLinkName):
         """
@@ -270,6 +247,29 @@ class RavenPlanner():
 
         return newWorldFromEE
 
+    def trajoptTrajToDicts(self, trajoptTraj):
+        """
+        Converts a trajopt numpy array trajectory
+        to a list of joint dictionaries
+        """
+        grasp = self.currentGrasp
+        jointTraj = []
+        for trajIndex in range(len(trajoptTraj)):
+            waypointJointPositions = list(trajoptTraj[trajIndex])
+            finger1Position = waypointJointPositions[-1]
+            # the following works for right arm
+            # may have a different sign for left arm
+            finger2Position = -finger1Position - grasp
+            waypointJointPositions.append(finger2Position)
+            waypointDict = dict(zip(self.rosJointTypes, waypointJointPositions))
+            jointTraj.append(waypointDict)
+
+        return jointTraj
+
+    #################################
+    # IK and Trajectory planning    #
+    #################################
+
     def getJointsFromPose(self, endPose):
         """
         Calls IK server and returns a dictionary of {jointType : jointPos}
@@ -293,9 +293,13 @@ class RavenPlanner():
 
         return dict((joint.type, joint.position) for joint in resp.joints)
 
-    def getTrajectoryFromPose(self, startJoints, endPose, reqFunc=Request(20).straightLine):
+    def getTrajectoryFromPose(self, startJoints, endPose, reqFunc=Request(100).straightLine):
         """
+        Use trajopt to compute trajectory
 
+        Returns a list of joint dictionaries
+
+        NEED TO ADD ERROR CHECKING
         """
         self.updateOpenraveJoints(startJoints)
 
@@ -315,8 +319,6 @@ class RavenPlanner():
         # manipName, toolFrame, pose, endJointPositions
         request = reqFunc(self.manip.GetName(), self.toolFrame, transEndPose, endJointPositions) 
 
-        code.interact(local=locals())            
-
         # convert dictionary into json-formatted string
         s = json.dumps(request)
         # create object that stores optimization problem
@@ -324,7 +326,7 @@ class RavenPlanner():
         # do optimization
         result = trajoptpy.OptimizeProblem(prob)
 
-        return result.GetTraj()
+        return self.trajoptTrajToDicts(result.GetTraj())
 
 
 def testIK():

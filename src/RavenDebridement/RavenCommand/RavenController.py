@@ -288,6 +288,9 @@ class RavenController():
     def goToPose(self, end, start=None, duration=None, speed=None):
         if start == None:
             start = self.currentPose
+            if start == None:
+                rospy.loginfo('Have not received currentPose yet, aborting goToPose')
+                return
 
         start = tfx.pose(start)
         end = tfx.pose(end)
@@ -318,6 +321,9 @@ class RavenController():
 
         if startJoints == None:
             startJoints = self.currentJoints
+            if startJoints == None:
+                rospy.loginfo('Have not received startJoints yet, aborting goToJoints')
+                return
 
         # if there doesn't exist a start joint for an end joint, return
         for endJointType in endJoints.keys():
