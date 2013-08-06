@@ -482,10 +482,25 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     rospy.loginfo('Press enter to exit')
     raw_input()
 
+def testOpenraveJoints(arm=MyConstants.Arm.Right):
+    rospy.init_node('test_trajopt',anonymous=True)
+    ravenArm = RavenArm(arm)
+    ravenPlanner = RavenPlanner(arm)
+    rospy.sleep(2)
+
+    startJoints = ravenArm.getCurrentJoints()
+
+    ravenPlanner.updateOpenraveJoints(startJoints)
+
+    ravenPlanner.env.SetViewer('qtcoin')
+
+    code.interact(local=locals())
+
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
     #testMoveToHome()
     #testGoToJoints()
     #testGoToPose()
     #testTrajopt()
-    testExecuteJointTrajectory()
+    #testExecuteJointTrajectory()
+    testOpenraveJoints()
