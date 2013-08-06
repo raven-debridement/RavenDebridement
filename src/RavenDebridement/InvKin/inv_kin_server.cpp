@@ -548,7 +548,7 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 			  TOOL_ROT,
 			  WRIST};
 
-    for(int i = 0; i < 7; i++) {
+    for(int i = 0; i < 5; i++) {
 	raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
 	joint->type = JOINT_NAMES[i];
 	joint->state = raven_2_msgs::JointState::STATE_READY;

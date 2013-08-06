@@ -94,6 +94,8 @@ class RavenArm:
 
     def executeDeltaPoseTrajectory(self, stampedDeltaPoses, startPose=None):
         """
+        INCORRECTLY IMPLEMENTED
+
         stampedDeltaPoses is a list of tfx poses with time stamps
 
         each stampedDeltaPose is endPose - startPose, where
@@ -502,5 +504,5 @@ if __name__ == '__main__':
     #testGoToJoints()
     #testGoToPose()
     #testTrajopt()
-    #testExecuteJointTrajectory()
-    testOpenraveJoints()
+    testExecuteJointTrajectory()
+    #testOpenraveJoints()

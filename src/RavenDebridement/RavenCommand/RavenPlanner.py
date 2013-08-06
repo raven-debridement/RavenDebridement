@@ -119,8 +119,7 @@ class RavenPlanner():
 
         self.currentState = None
         self.currentGrasp = 0
-        self.jointStates = None
-
+        
         self.jointPositions = [0 for _ in range(len(self.rosJointTypes))]
         self.jointTypes = list(self.rosJointTypes)
 
@@ -145,11 +144,11 @@ class RavenPlanner():
         self.robot = self.env.GetRobots()[0]
         if self.armName == MyConstants.Arm.Left:
             self.invKinArm = Constants.ARM_TYPE_GOLD
-            self.toolFrame = MyConstants.OpenraveLinks.LeftGrasperYaw
+            self.toolFrame = MyConstants.OpenraveLinks.LeftToolBase
             self.robot.SetActiveManipulator('left_arm')
         else:
             self.invKinArm = Constants.ARM_TYPE_GREEN
-            self.toolFrame = MyConstants.OpenraveLinks.RightGrasperYaw
+            self.toolFrame = MyConstants.OpenraveLinks.RightToolBase
             self.robot.SetActiveManipulator('right_arm')
         self.manip = self.robot.GetActiveManipulator()
         self.manipJoints = self.robot.GetJoints(self.manip.GetArmJoints())
@@ -160,27 +159,36 @@ class RavenPlanner():
         #    ikmodel.autogenerate()
         #rospy.loginfo('Model loaded')
 
+
         self.raveJointNames = ['{0}_{1}'.format(name, self.armName[0].upper()) for name in self.raveJointNames]
 
         self.raveJointTypes = [self.robot.GetJointIndex(name) for name in self.raveJointNames]
         self.raveJointTypesToRos = dict((rave,ros) for rave,ros in zip(self.raveJointTypes, self.rosJointTypes))
         self.rosJointTypesToRave = dict((ros,rave) for ros,rave in zip(self.rosJointTypes, self.raveJointTypes))
         
-        
+        self.raveGrasperJointNames = ['grasper_joint_1_{0}'.format(self.armName[0].upper()), 'grasper_joint_2_{0}'.format(self.armName[0].upper())]
+        self.raveGrasperJointTypes = [self.robot.GetJointIndex(name) for name in self.raveGrasperJointNames]
+
+        self.env.SetViewer('qtcoin')
+        rospy.sleep(2)
+        self.updateOpenraveJoints()
+        code.interact(local=locals())
 
 
     def _ravenStateCallback(self, msg):
         self.currentState = msg
         for arm in msg.arms:
             if arm.name == self.armName:
-                self.jointStates = arm.joints
-                self.currentGrasp = arm.tool.grasp
+                self.currentJoints = dict((joint.type, joint.position) for joint in arm.joints)
+
+                if self.currentJoints.has_key(Constants.JOINT_TYPE_GRASP):
+                    self.currentGrasp = self.currentJoints[Constants.JOINT_TYPE_GRASP]
                 
     ######################
     # Openrave methods   #
     ######################
 
-    def updateOpenraveJoints(self, rosJoints):
+    def updateOpenraveJoints(self, rosJoints=None):
         """
         Updates the openrave raven model using rosJoints
 
@@ -189,6 +197,11 @@ class RavenPlanner():
         jointType is from raven_2_msgs.msg.Constants
         jointPos is position in radians
         """
+        if rosJoints == None:
+            rosJoints = self.currentJoints
+            if rosJoints == None:
+                return
+
         raveJointTypes = []
         jointPositions = []
         for rosJointType, jointPos in rosJoints.items():
@@ -196,7 +209,16 @@ class RavenPlanner():
                 raveJointTypes.append(self.rosJointTypesToRave[rosJointType])
                 jointPositions.append(jointPos)
 
+        # for opening the gripper
+        # NOTE: this is for the right arm, may be diff for left arm
+        raveJointTypes += self.raveGrasperJointTypes
+        jointPositions += [self.currentGrasp/2, -self.currentGrasp/2]
+
         self.robot.SetJointValues(jointPositions, raveJointTypes)
+
+        
+        code.interact(local=locals())
+
 
     #####################################
     # Conversion/Miscellaneous methods  #
@@ -273,7 +295,6 @@ class RavenPlanner():
 
         Returns a list of joint dictionaries
 
-        NEED TO ADD ERROR CHECKING
         """
         self.updateOpenraveJoints(startJoints)
 
@@ -284,6 +305,9 @@ class RavenPlanner():
             return
 
         transEndPose = Util.convertToFrame(endPose, self.toolFrame)
+
+        
+        #code.interact(local=locals())
 
         endJointPositions = []
         for raveJointType in self.manip.GetArmIndices():
