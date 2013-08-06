@@ -416,8 +416,20 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     rospy.sleep(2)
 
 
+    if arm == MyConstants.Arm.Right:
+        toolframe = MyConstants.Frames.RightTool
+    else:
+        toolframe = MyConstants.Frames.LeftTool
+
+    currPose = tfx.pose([0,0,0], frame=toolframe)
+    tf_tool_to_link0 = tfx.lookupTransform(MyConstants.Frames.Link0, currPose.frame, wait=5)
+    currPose = tf_tool_to_link0 * currPose
+
     angle = tfx.tb_angles(0,90,0)
-    endPose = tfx.pose([-.14, -.007, -.105], angle,frame=MyConstants.Frames.Link0)
+    endPosition = currPose.position
+    endPosition.x -= .03
+    endPose = tfx.pose(endPosition, angle,frame=MyConstants.Frames.Link0)
+
 
     startJoints = ravenArm.getCurrentJoints()
 
@@ -438,6 +450,8 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     #return
     ###########
 
+    #ravenPlanner.env.SetViewer('qtcoin')
+
     rospy.loginfo('Press enter to call trajopt')
     raw_input()
     rospy.sleep(4)
@@ -457,21 +471,21 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     
     rospy.loginfo('Have stamped joints, ready to execute')
 
-    ravenArm.start()
+    #ravenArm.start()
     
-    ravenArm.executeJointTrajectory(stampedJoints)
+    #ravenArm.executeJointTrajectory(stampedJoints)
     
-    #ravenPlanner.env.SetViewer('qtcoin')
+    
     #ravenPlanner.updateOpenraveJoints(jointTraj[0])
-    #code.interact(local=locals())
+    code.interact(local=locals())
 
     rospy.loginfo('Press enter to exit')
     raw_input()
 
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
-    testMoveToHome()
+    #testMoveToHome()
     #testGoToJoints()
     #testGoToPose()
     #testTrajopt()
-    #testExecuteJointTrajectory()
+    testExecuteJointTrajectory()

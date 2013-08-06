@@ -63,7 +63,7 @@ class Request():
                     "type" : "collision",
                     "params" : {
                         "coeffs" : [20],
-                        "dist_pen" : [0.025]
+                        "dist_pen" : [0.005]
                         }
                     },
                 ],
@@ -141,7 +141,7 @@ class RavenPlanner():
 
 
         # TEMP
-        #trajoptpy.SetInteractive(True)
+        trajoptpy.SetInteractive(True)
 
 
         self.robot = self.env.GetRobots()[0]
@@ -168,26 +168,7 @@ class RavenPlanner():
         self.raveJointTypesToRos = dict((rave,ros) for rave,ros in zip(self.raveJointTypes, self.rosJointTypes))
         self.rosJointTypesToRave = dict((ros,rave) for ros,rave in zip(self.rosJointTypes, self.raveJointTypes))
         
-        rospy.loginfo('Links')
-        for link in self.robot.GetLinks():
-            print(link.GetName())
-
-        rospy.loginfo('Joints')
-        for joint in self.robot.GetJoints():
-            print(joint.GetName())
-
-        rospy.loginfo('Independent links')
-        indLinks = self.manip.GetIndependentLinks()
-        for link in indLinks:
-            print(link.GetName())
-
-        rospy.loginfo('Dependent links')
-        for link in self.robot.GetLinks():
-            if link not in indLinks:
-                print(link.GetName())
-
-        #self.robot.SetJointValues(self.getCurrentJointPositions(), self.raveJointTypes)
-        #code.interact(local=locals())
+        
 
 
     def _ravenStateCallback(self, msg):
@@ -293,7 +274,7 @@ class RavenPlanner():
 
         return dict((joint.type, joint.position) for joint in resp.joints)
 
-    def getTrajectoryFromPose(self, startJoints, endPose, reqFunc=Request(100).straightLine):
+    def getTrajectoryFromPose(self, startJoints, endPose, reqFunc=Request(40).straightLine):
         """
         Use trajopt to compute trajectory
 
@@ -325,6 +306,14 @@ class RavenPlanner():
         prob = trajoptpy.ConstructProblem(s, self.env)
         # do optimization
         result = trajoptpy.OptimizeProblem(prob)
+
+        # check trajectory safety
+        from trajoptpy.check_traj import traj_is_safe
+        prob.SetRobotActiveDOFs()
+        if not traj_is_safe(result.GetTraj(), self.robot):
+            rospy.loginfo('Trajopt trajectory is not safe. Trajopt failed!')
+            rospy.loginfo('Still returning trajectory')
+            #return
 
         return self.trajoptTrajToDicts(result.GetTraj())
 
@@ -359,3 +348,25 @@ def testRequest():
 if __name__ == '__main__':
     testIK()
     #testRequest()
+
+
+
+"""
+        rospy.loginfo('Links')
+        for link in self.robot.GetLinks():
+            print(link.GetName())
+
+        rospy.loginfo('Joints')
+        for joint in self.robot.GetJoints():
+            print(joint.GetName())
+
+        rospy.loginfo('Independent links')
+        indLinks = self.manip.GetIndependentLinks()
+        for link in indLinks:
+            print(link.GetName())
+
+        rospy.loginfo('Dependent links')
+        for link in self.robot.GetLinks():
+            if link not in indLinks:
+                print(link.GetName())
+"""
