@@ -99,16 +99,14 @@ class RavenPlanner():
                      Constants.JOINT_TYPE_INSERTION,
                      Constants.JOINT_TYPE_ROTATION,
                      Constants.JOINT_TYPE_PITCH,
-                     Constants.JOINT_TYPE_GRASP_FINGER1,
-                     Constants.JOINT_TYPE_GRASP_FINGER2]
+                     Constants.JOINT_TYPE_YAW]
 
     raveJointNames = ["shoulder",
                       "elbow",
                       "insertion",
                       "tool_roll",
                       "wrist_joint",
-                      "grasper_joint_1",
-                      "grasper_joint_2"]
+                      "grasper_yaw"]
 
     def __init__(self, armName=MyConstants.Arm.Left):
         """
@@ -136,7 +134,7 @@ class RavenPlanner():
         # TEMP
         #self.env.SetViewer('qtcoin')
 
-        ravenFile = os.path.dirname(__file__) + '/../../../models/ravenII_2arm.xml'
+        ravenFile = os.path.dirname(__file__) + '/../../../models/myRaven.xml'
         self.env.Load(ravenFile)
 
 
@@ -147,11 +145,11 @@ class RavenPlanner():
         self.robot = self.env.GetRobots()[0]
         if self.armName == MyConstants.Arm.Left:
             self.invKinArm = Constants.ARM_TYPE_GOLD
-            self.toolFrame = MyConstants.OpenraveLinks.LeftGrasper1
+            self.toolFrame = MyConstants.OpenraveLinks.LeftGrasperYaw
             self.robot.SetActiveManipulator('left_arm')
         else:
             self.invKinArm = Constants.ARM_TYPE_GREEN
-            self.toolFrame = MyConstants.OpenraveLinks.RightGrasper1
+            self.toolFrame = MyConstants.OpenraveLinks.RightGrasperYaw
             self.robot.SetActiveManipulator('right_arm')
         self.manip = self.robot.GetActiveManipulator()
         self.manipJoints = self.robot.GetJoints(self.manip.GetArmJoints())
@@ -237,11 +235,6 @@ class RavenPlanner():
         jointTraj = []
         for trajIndex in range(len(trajoptTraj)):
             waypointJointPositions = list(trajoptTraj[trajIndex])
-            finger1Position = waypointJointPositions[-1]
-            # the following works for right arm
-            # may have a different sign for left arm
-            finger2Position = -finger1Position - grasp
-            waypointJointPositions.append(finger2Position)
             waypointDict = dict(zip(self.rosJointTypes, waypointJointPositions))
             jointTraj.append(waypointDict)
 
@@ -339,15 +332,15 @@ def testIK():
 
     rospy.spin()
 
-def testRequest():
+def testRP():
     rospy.init_node('test_request',anonymous=True)
-    code.interact(local=locals())
+    rp = RavenPlanner(MyConstants.Arm.Right)
 
 
 
 if __name__ == '__main__':
-    testIK()
-    #testRequest()
+    #testIK()
+    testRP()
 
 
 

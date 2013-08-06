@@ -18,6 +18,8 @@
 #include "DS0.h"
 #include "raven/kinematics/kinematics_defines.h"
 
+// from raven_2_msgs
+#define YAW 8
 
 const double go_dh_al[6] = {0,              -A12,   M_PI - A23,  0, M_PI/2, -M_PI/2};
 const double go_dh_a[6]  = {0,              0,      0,         0, 0, 0 };
@@ -544,9 +546,8 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 			  ELBOW,
 			  Z_INS,
 			  TOOL_ROT,
-			  WRIST,
-			  GRASP1,
-			  GRASP2};
+			  WRIST};
+
     for(int i = 0; i < 7; i++) {
 	raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
 	joint->type = JOINT_NAMES[i];
@@ -554,6 +555,12 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 	joint->position = mech->joint[JOINT_NAMES[i]].jpos_d;
 	res.joints.push_back(*joint);
     }
+
+    raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
+    joint->type = YAW;
+    joint->state = raven_2_msgs::JointState::STATE_READY;
+    joint->position = (mech->joint[GRASP1].jpos_d - mech->joint[GRASP2].jpos_d)/2;
+    res.joints.push_back(*joint);
 
     return true;
 }

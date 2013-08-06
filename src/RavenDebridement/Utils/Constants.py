@@ -40,8 +40,8 @@ class Frames:
     Link0 = '/0_link'
     
 class OpenraveLinks:
-    LeftGrasper1 = 'grasper1_L'
-    RightGrasper1 = 'grasper1_R'
+    LeftGrasperYaw = 'grasper_yaw_L'
+    RightGrasperYaw = 'grasper_yaw_R'
     
 class RavenTopics:
     #publish ToolCommandStamped directly
