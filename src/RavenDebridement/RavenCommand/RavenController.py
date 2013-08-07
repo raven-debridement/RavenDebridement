@@ -97,6 +97,7 @@ class RavenController():
         ravenPauseCmd.arms.append(armCmd)
         ravenPauseCmd.pedal_down = True
         ravenPauseCmd.header = header
+        #ravenPauseCmd.controller = Constants.CONTROLLER_JOINT_POSITION
         ravenPauseCmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
 
         self.ravenPauseCmd = ravenPauseCmd
@@ -137,7 +138,7 @@ class RavenController():
         # cm/sec
         self.defaultPoseSpeed = .01
         # rad/sec
-        self.defaultJointSpeed = pi/64
+        self.defaultJointSpeed = pi/30
 
 		
         self.currentState = None
@@ -334,6 +335,14 @@ class RavenController():
         for startJointType in startJoints.keys():
             if not endJoints.has_key(startJointType):
                 del startJoints[startJointType]
+
+        # make sure no pseudo joints are commanded
+        pseudoJoints = [Constants.JOINT_TYPE_YAW, Constants.JOINT_TYPE_GRASP]
+        for pseudoJoint in pseudoJoints:
+            if startJoints.has_key(pseudoJoint):
+                del startJoints[pseudoJoint]
+            if endJoints.has_key(pseudoJoint):
+                del endJoints[pseudoJoint]
                 
         # now there should be one-to-one correspondence
         # between startJoints and endJoints

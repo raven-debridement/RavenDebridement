@@ -4,6 +4,7 @@
 
 #include "raven_2_msgs/Constants.h"
 
+#include <stdlib.h>
 #include <math.h>
 #include <iostream>
 #include <tf/transform_datatypes.h>
@@ -20,6 +21,7 @@
 
 // from raven_2_msgs
 #define YAW 8
+#define GRASP 9
 
 const double go_dh_al[6] = {0,              -A12,   M_PI - A23,  0, M_PI/2, -M_PI/2};
 const double go_dh_a[6]  = {0,              0,      0,         0, 0, 0 };
@@ -316,6 +318,7 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	tb_angles ik_tb(ik_basis);
 	printf("ik orientation %f %f %f\n",ik_tb.yaw_deg,ik_tb.pitch_deg,ik_tb.roll_deg);
 		
+
 	
 	const float th12 = THETA_12;
 	const float th23 = THETA_23;
@@ -349,10 +352,10 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 
 	float d_act, thp_act, thy_act, g1_act, g2_act;
 	d_act = D_FROM_IK(armId,d);
-	thp_act = THP_FROM_IK(armId,thp);
+	thp_act = fix_angle(-thp-WRIST_OFFSET_GOLD);//thp_act = THP_FROM_IK(armId,thp);
 	thy_act = THY_FROM_IK(armId,thy,grasp);
-	g1_act = FINGER1_FROM_IK(armId,thy,grasp);
-	g2_act = FINGER2_FROM_IK(armId,thy,grasp);
+	g1_act = FINGER2_FROM_IK(armId,thy,grasp);//FINGER1_FROM_IK(armId,thy,grasp);
+	g2_act = FINGER1_FROM_IK(armId,thy,grasp);//FINGER2_FROM_IK(armId,thy,grasp);
 
 	//check angles
 	int validity1[4];
@@ -436,14 +439,26 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 				(xx - C7 * xy / C4) / (C6 + C7*C5/C4),
 				(xx + C6 * xy / C5) / (-C6*C4/C5 - C7));
 
+
 		ROS_INFO("ths_opt %f",ths_opt[i]);
 		ROS_INFO("the_opt %f",the_opt[i]);
 		ROS_INFO("thr_opt %f",thr_opt[i]);
 		
 		ths_act[i] = THS_FROM_IK(armId,ths_opt[i]);
 		the_act[i] = THE_FROM_IK(armId,the_opt[i]);
-		thr_act[i] = THR_FROM_IK(armId,thr_opt[i]);
-
+		//thr_act[i] = THR_FROM_IK(armId,thr_opt[i]);
+		
+		
+		if (mech->type == GOLD_ARM) {
+		  //ths_act[i] = fix_angle(ths_opt[i]);
+		  //the_act[i] = the_opt[i];
+		  thr_act[i] = fix_angle(-thr_opt[i]-M_PI_2); // UNSURE
+		} else {
+		  //ths_act[i] = fix_angle(M_PI - ths_opt[i]);
+		  //the_act[i] = -the_opt[i];
+		  thr_act[i] = fix_angle(thr_opt[i]-M_PI_2);
+		}
+		
 
 		ROS_INFO("ths_act %f",ths_act[i]);
 		ROS_INFO("the_act %f",the_act[i]);
@@ -546,21 +561,33 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 			  ELBOW,
 			  Z_INS,
 			  TOOL_ROT,
-			  WRIST};
+			  WRIST,
+                          GRASP1,
+                          GRASP2};
 
-    for(int i = 0; i < 5; i++) {
-	raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
+    raven_2_msgs::JointState *joint;
+
+    for(int i = 0; i < 7; i++) {
+	joint = new raven_2_msgs::JointState();
 	joint->type = JOINT_NAMES[i];
 	joint->state = raven_2_msgs::JointState::STATE_READY;
 	joint->position = mech->joint[JOINT_NAMES[i]].jpos_d;
 	res.joints.push_back(*joint);
     }
 
-    raven_2_msgs::JointState *joint = new raven_2_msgs::JointState();
+    joint = new raven_2_msgs::JointState();
     joint->type = YAW;
     joint->state = raven_2_msgs::JointState::STATE_READY;
     joint->position = (mech->joint[GRASP1].jpos_d - mech->joint[GRASP2].jpos_d)/2;
     res.joints.push_back(*joint);
+
+    
+    joint = new raven_2_msgs::JointState();
+    joint->type = GRASP;
+    joint->state = raven_2_msgs::JointState::STATE_READY;
+    joint->position = abs(mech->joint[GRASP1].jpos_d) + abs(mech->joint[GRASP2].jpos_d);
+    res.joints.push_back(*joint);
+    
 
     return true;
 }

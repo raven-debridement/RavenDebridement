@@ -75,7 +75,30 @@ class RavenArm:
     # trajectory commands #
     #######################
 
-    def executePoseTrajectory(self, stampedPoses):
+    def executePoseTrajectory(self, poseTraj, duration=None, speed=None):
+        """
+        poseTraj is a tuple/list of poses
+
+        Can set either duration or speed (not both)
+
+        duration is either the time of the whole trajectory
+        or a list of the duration of each segment of the trajectory
+
+        speed is the joint speed
+        """
+        if duration != None:
+            if type(duration) != tuple:
+                duration = [duration/len(poseTraj) for _ in range(len(poseTraj))]
+            
+            if len(duration) != len(jointTraj):
+                return
+
+        prevPose = None
+        for pose in poseTraj:
+            self.goToPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed)
+            prevPose = pose
+
+    def executeStampedPoseTrajectory(self, stampedPoses):
         """
         stampedPoses is a list of tfx poses with time stamps
         """
@@ -120,8 +143,35 @@ class RavenArm:
 
             prevTime = stampedDeltaPose.stamp
 
+    def executeJointTrajectory(self, jointTraj, duration=None, speed=None):
+        """
+        jointTraj is a tuple/list of joints dictionaries
 
-    def executeJointTrajectory(self, stampedJoints):
+        joints is a dictionary of {jointType : jointPos}
+
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+
+        Can set either duration or speed (not both)
+
+        duration is either the time of the whole trajectory
+        or a list of the duration of each segment of the trajectory
+
+        speed is the joint speed
+        """
+        if duration != None:
+            if type(duration) != tuple:
+                duration = [duration/len(jointTraj) for _ in range(len(jointTraj))]
+            
+            if len(duration) != len(jointTraj):
+                return
+
+        prevJoints = None
+        for joints in jointTraj:
+            self.goToJoints(joints, startJoints=prevJoints, block=False, duration=duration, speed=speed)
+            prevJoints = joints
+
+    def executeStampedJointTrajectory(self, stampedJoints):
         """
         stampedJoints is a tuple of ((stamp, joints), ....)
 
@@ -321,9 +371,9 @@ def testGoToJoints(arm=MyConstants.Arm.Right):
     ravenPlanner = RavenPlanner(arm)
     rospy.sleep(2)
 
-    angle = tfx.tb_angles(90,90,0)
-    endPose = tfx.pose([-.134, -.013, -.068], angle,frame=MyConstants.Frames.Link0)
-    # z -.068
+    angle = tfx.tb_angles(20,70,0)
+    endPose = tfx.pose([-.136, -.017, -.075], angle,frame=MyConstants.Frames.Link0)
+
 
     ravenArm.start()
 
@@ -331,7 +381,17 @@ def testGoToJoints(arm=MyConstants.Arm.Right):
     raw_input()
 
     desJoints = ravenPlanner.getJointsFromPose(endPose)
-    currJoints = ravenArm.ravenController.currentJoints
+    currJoints = ravenArm.getCurrentJoints()
+    
+    """
+    grasp = ravenPlanner.currentGrasp
+    yaw = desJoints[Constants.JOINT_TYPE_YAW]
+    finger1 = yaw - grasp/2
+    finger2 = -(yaw + grasp/2)
+    desJoints[Constants.JOINT_TYPE_GRASP_FINGER1] = finger1
+    desJoints[Constants.JOINT_TYPE_GRASP_FINGER2] = finger2
+    del desJoints[Constants.JOINT_TYPE_YAW]
+    """
 
     rospy.loginfo('Found joints')
     for jointType, jointPos in desJoints.items():
@@ -355,8 +415,8 @@ def testGoToPose(arm=MyConstants.Arm.Right):
     ravenArm = RavenArm(arm)
     rospy.sleep(2)
 
-    endAngles = tfx.tb_angles(0,90,0)
-    endPose = tfx.pose([-.136,-.017,-.075], endAngles, frame=MyConstants.Frames.Link0)
+    angle = tfx.tb_angles(20,70,0)
+    endPose = tfx.pose([-.136, -.017, -.075], angle,frame=MyConstants.Frames.Link0)
 
     ravenArm.start()
 
@@ -415,7 +475,7 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     rospy.init_node('test_trajopt',anonymous=True)
     ravenArm = RavenArm(arm)
     ravenPlanner = RavenPlanner(arm)
-    rospy.sleep(2)
+    rospy.sleep(4)
 
 
     if arm == MyConstants.Arm.Right:
@@ -429,7 +489,7 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
 
     angle = tfx.tb_angles(0,90,0)
     endPosition = currPose.position
-    endPosition.x -= .03
+    endPosition.x -= .05
     endPose = tfx.pose(endPosition, angle,frame=MyConstants.Frames.Link0)
 
 
@@ -440,42 +500,35 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     ravenPlanner.updateOpenraveJoints(startJoints)
     box = rave.RaveCreateKinBody(ravenPlanner.env,'')
     box.SetName('testbox')
-    box.InitFromBoxes(np.array([[-.02,0,0,0.005,0.01,0.015]]),True)
+    box.InitFromBoxes(np.array([[0,-.025,0,0.1,0.01,0.01]]),True)
     #code.interact(local=locals())
     ee = ravenPlanner.manip.GetEndEffectorTransform()
     ee[:3,:3] = np.identity(3)
     box.SetTransform(ee)
     ravenPlanner.env.Add(box,True)
-    #ravenPlanner.env.SetViewer('qtcoin')
+    ravenPlanner.env.SetViewer('qtcoin')
     rospy.loginfo('Box created, press enter')
     raw_input()
-    #return
+    
     ###########
 
     #ravenPlanner.env.SetViewer('qtcoin')
 
     rospy.loginfo('Press enter to call trajopt')
     raw_input()
-    rospy.sleep(4)
+    rospy.sleep(1)
 
     jointTraj = ravenPlanner.getTrajectoryFromPose(startJoints, endPose)
     
     if jointTraj == None:
         return
-
-    duration = 40.0
-    waypointDuration = duration / float(len(jointTraj))
     
-    now = rospy.Time.now()
-    stamps = [now + rospy.Duration(i*waypointDuration) for i in range(len(jointTraj))]
-
-    stampedJoints = zip(stamps, jointTraj)
-    
-    rospy.loginfo('Have stamped joints, ready to execute')
+    rospy.loginfo('Press enter to move')
+    raw_input()
 
     #ravenArm.start()
     
-    #ravenArm.executeJointTrajectory(stampedJoints)
+    #ravenArm.executeJointTrajectory(jointTraj)
     
     
     #ravenPlanner.updateOpenraveJoints(jointTraj[0])

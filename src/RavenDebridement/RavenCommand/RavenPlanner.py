@@ -62,8 +62,9 @@ class Request():
                 {
                     "type" : "collision",
                     "params" : {
-                        "coeffs" : [20],
-                        "dist_pen" : [0.005]
+                        "coeffs" : [100],
+                        "continuous" : True,
+                        "dist_pen" : [0.001]
                         }
                     },
                 ],
@@ -138,7 +139,7 @@ class RavenPlanner():
 
 
         # TEMP
-        trajoptpy.SetInteractive(True)
+        #trajoptpy.SetInteractive(True)
 
 
         self.robot = self.env.GetRobots()[0]
@@ -169,11 +170,7 @@ class RavenPlanner():
         self.raveGrasperJointNames = ['grasper_joint_1_{0}'.format(self.armName[0].upper()), 'grasper_joint_2_{0}'.format(self.armName[0].upper())]
         self.raveGrasperJointTypes = [self.robot.GetJointIndex(name) for name in self.raveGrasperJointNames]
 
-        self.env.SetViewer('qtcoin')
-        rospy.sleep(2)
-        self.updateOpenraveJoints()
-        code.interact(local=locals())
-
+        
 
     def _ravenStateCallback(self, msg):
         self.currentState = msg
@@ -196,6 +193,9 @@ class RavenPlanner():
         
         jointType is from raven_2_msgs.msg.Constants
         jointPos is position in radians
+
+        Updates based on: shoulder, elbow, insertion,
+                          rotation, pitch, yaw, grasp (self.currentGrasp)
         """
         if rosJoints == None:
             rosJoints = self.currentJoints
@@ -212,12 +212,12 @@ class RavenPlanner():
         # for opening the gripper
         # NOTE: this is for the right arm, may be diff for left arm
         raveJointTypes += self.raveGrasperJointTypes
+        #currentGrasp = self.currentGrasp if self.armName == MyConstants.Arm.Left else -self.currentGrasp
         jointPositions += [self.currentGrasp/2, -self.currentGrasp/2]
 
         self.robot.SetJointValues(jointPositions, raveJointTypes)
 
         
-        code.interact(local=locals())
 
 
     #####################################
@@ -252,12 +252,24 @@ class RavenPlanner():
         """
         Converts a trajopt numpy array trajectory
         to a list of joint dictionaries
+
+        dicts contain ros joints:
+        shoulder, elbow, insertion,
+        rotation, pitch, finger1, finger2
         """
         grasp = self.currentGrasp
         jointTraj = []
         for trajIndex in range(len(trajoptTraj)):
             waypointJointPositions = list(trajoptTraj[trajIndex])
-            waypointDict = dict(zip(self.rosJointTypes, waypointJointPositions))
+            
+            # since yaw is pseudo-joint, convert to finger1 and finger2
+            yaw = waypointJointPositions[-1]
+            finger1 = yaw - grasp/2
+            finger2 = -(yaw + grasp/2)
+            waypointJointPositions = waypointJointPositions[:-1] + [finger1, finger2]
+            rosJointTypesPlusFingers = self.rosJointTypes[:-1] + [Constants.JOINT_TYPE_GRASP_FINGER1, Constants.JOINT_TYPE_GRASP_FINGER2]
+            
+            waypointDict = dict(zip(rosJointTypesPlusFingers, waypointJointPositions))
             jointTraj.append(waypointDict)
 
         return jointTraj
@@ -272,6 +284,8 @@ class RavenPlanner():
         
         jointType is from raven_2_msgs.msg.Constants
         jointPos is position in radians
+
+        Needs to return finger1 and finger2
         """
 
         endPose = Util.convertToFrame(tfx.pose(endPose), self.refFrame)
@@ -303,6 +317,9 @@ class RavenPlanner():
         if endJoints == None:
             rospy.loginfo('IK failed!')
             return
+
+        # only keep shoulder, elbow, insertion, rotation, pitch, yaw
+        endJoints = dict([(jointType,jointPos) for jointType, jointPos in endJoints.items() if jointType in self.rosJointTypes])
 
         transEndPose = Util.convertToFrame(endPose, self.toolFrame)
 

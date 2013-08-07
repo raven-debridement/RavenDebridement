@@ -141,3 +141,15 @@ class Timeout():
 
 
 
+
+
+def testAngleBetween():
+    quat0 = tfx.tb_angles(-82,90,98).msg
+    quat1 = tfx.tb_angles(-3,90,-8).msg
+
+    theta = angleBetweenQuaternions(quat0, quat1)
+
+    print("theta = {0}".format(theta))
+
+if __name__ == '__main__':
+    testAngleBetween()
