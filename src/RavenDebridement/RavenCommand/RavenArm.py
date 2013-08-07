@@ -27,7 +27,8 @@ import thread
 # rename so no conflict with raven_2_msgs.msg.Constants
 from RavenDebridement.Utils import Constants as MyConstants
 from RavenDebridement.Utils import Util
-from RavenController import RavenController, RavenPlanner
+from RavenPlanner import Request, RavenPlanner
+from RavenController import RavenController
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 
@@ -518,7 +519,7 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     raw_input()
     rospy.sleep(1)
 
-    jointTraj = ravenPlanner.getTrajectoryFromPose(startJoints, endPose)
+    jointTraj = ravenPlanner.getTrajectoryFromPose(endPose, reqType=Request.Type.Pose)
     
     if jointTraj == None:
         return
@@ -532,6 +533,17 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     
     
     #ravenPlanner.updateOpenraveJoints(jointTraj[0])
+
+    endJoints = ravenPlanner.getJointsFromPose(endPose)
+    ravenPlanner.updateOpenraveJoints(endJoints)
+    endJointsEE = ravenPlanner.manip.GetEndEffectorTransform()
+
+    ravenPlanner.updateOpenraveJoints(jointTraj[-1])
+    jointTrajEE = ravenPlanner.manip.GetEndEffectorTransform()
+
+    #Util.plot_transform(ravenPlanner.env, endJointsEE)
+    #Util.plot_transform(ravenPlanner.env, jointTrajEE)
+
     code.interact(local=locals())
 
     rospy.loginfo('Press enter to exit')
@@ -554,8 +566,8 @@ def testOpenraveJoints(arm=MyConstants.Arm.Right):
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
     #testMoveToHome()
-    #testGoToJoints()
+    testGoToJoints()
     #testGoToPose()
     #testTrajopt()
-    testExecuteJointTrajectory()
+    #testExecuteJointTrajectory()
     #testOpenraveJoints()

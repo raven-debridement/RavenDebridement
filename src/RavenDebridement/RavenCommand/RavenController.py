@@ -138,7 +138,15 @@ class RavenController():
         # cm/sec
         self.defaultPoseSpeed = .01
         # rad/sec
-        self.defaultJointSpeed = pi/30
+        #self.defaultJointSpeed = pi/30
+
+        self.defaultJointSpeed = {Constants.JOINT_TYPE_SHOULDER      : pi/16,
+                                  Constants.JOINT_TYPE_ELBOW         : pi/16,
+                                  Constants.JOINT_TYPE_INSERTION     : pi/32,
+                                  Constants.JOINT_TYPE_ROTATION      : pi/4,
+                                  Constants.JOINT_TYPE_PITCH         : pi/16,
+                                  Constants.JOINT_TYPE_GRASP_FINGER1 : pi/16,
+                                  Constants.JOINT_TYPE_GRASP_FINGER2 : pi/16}
 
 		
         self.currentState = None
@@ -318,6 +326,8 @@ class RavenController():
         
         jointType is from raven_2_msgs.msg.Constants
         jointPos is position in radians
+
+        speed is a dictionary mapping each joint to a speed
         """
 
         if startJoints == None:
@@ -350,8 +360,7 @@ class RavenController():
         if duration is None:
             if speed is None:
                 speed = self.defaultJointSpeed
-            maxJointMovement = max([abs(endJoints[jointType]-startJoints[jointType]) for jointType in startJoints.keys()])
-            duration = maxJointMovement / speed
+            duration = max([abs((endJoints[jointType]-startJoints[jointType]))/speed[jointType] for jointType in startJoints.keys()])
         
 
         def fn(cmd, t):

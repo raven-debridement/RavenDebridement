@@ -36,12 +36,12 @@ class Request():
     """
     Class for the trajopt json requests
     """
-    
-    def __init__(self, n_steps=20):
-        self.n_steps = n_steps
-        
+    class Type:
+        Joints = 0
+        Pose = 1
 
-    def straightLine(self, manipName, toolFrame, pose, endJointPositions):
+    @staticmethod
+    def pose(n_steps, manipName, endJointPositions,  toolFrame, pose):
         pose = tfx.pose(pose)
         
         desPos = pose.position.list
@@ -50,7 +50,50 @@ class Request():
 
         request = {
             "basic_info" : {
-                "n_steps" : self.n_steps,
+                "n_steps" : n_steps,
+                "manip" : manipName,
+                "start_fixed" : True
+                },
+            "costs" : [
+                {
+                    "type" : "joint_vel",
+                    "params": {"coeffs" : [1]}
+                    },
+                {
+                    "type" : "collision",
+                    "params" : {
+                        "coeffs" : [100],
+                        "continuous" : True,
+                        "dist_pen" : [0.001]
+                        }
+                    },
+ 
+                ],
+            "constraints" : [
+               {
+                    "type" : "pose",
+                    "name" : "target_pose",
+                    "params" : {"xyz" : desPos,
+                                "wxyz" : wxyzQuat,
+                                "link" : toolFrame,
+                                "rot_coeffs" : [5,5,5],
+                                "pos_coeffs" : [100,100,100]
+                                }
+                    }
+                ],
+            "init_info" : {
+                "type" : "straight_line",
+                "endpoint" : endJointPositions
+                }
+            }
+
+        return request
+
+    @staticmethod
+    def joints(n_steps, manipName, endJointPositions):
+        request = {
+            "basic_info" : {
+                "n_steps" : n_steps,
                 "manip" : manipName,
                 "start_fixed" : True
                 },
@@ -145,11 +188,11 @@ class RavenPlanner():
         self.robot = self.env.GetRobots()[0]
         if self.armName == MyConstants.Arm.Left:
             self.invKinArm = Constants.ARM_TYPE_GOLD
-            self.toolFrame = MyConstants.OpenraveLinks.LeftToolBase
+            self.toolFrame = MyConstants.OpenraveLinks.LeftTool
             self.robot.SetActiveManipulator('left_arm')
         else:
             self.invKinArm = Constants.ARM_TYPE_GREEN
-            self.toolFrame = MyConstants.OpenraveLinks.RightToolBase
+            self.toolFrame = MyConstants.OpenraveLinks.RightTool
             self.robot.SetActiveManipulator('right_arm')
         self.manip = self.robot.GetActiveManipulator()
         self.manipJoints = self.robot.GetJoints(self.manip.GetArmJoints())
@@ -224,7 +267,7 @@ class RavenPlanner():
     # Conversion/Miscellaneous methods  #
     #####################################
 
-    def transformRelativePoseForIk(poseMatrix, refLinkName, targLinkName):
+    def transformRelativePoseForIk(self, poseMatrix, refLinkName, targLinkName):
         """
         Adapted from PR2.py
 
@@ -266,8 +309,9 @@ class RavenPlanner():
             yaw = waypointJointPositions[-1]
             finger1 = yaw - grasp/2
             finger2 = -(yaw + grasp/2)
-            waypointJointPositions = waypointJointPositions[:-1] + [finger1, finger2]
-            rosJointTypesPlusFingers = self.rosJointTypes[:-1] + [Constants.JOINT_TYPE_GRASP_FINGER1, Constants.JOINT_TYPE_GRASP_FINGER2]
+            # try keeping yaw
+            waypointJointPositions = waypointJointPositions[:] + [finger1, finger2]
+            rosJointTypesPlusFingers = self.rosJointTypes[:] + [Constants.JOINT_TYPE_GRASP_FINGER1, Constants.JOINT_TYPE_GRASP_FINGER2]
             
             waypointDict = dict(zip(rosJointTypesPlusFingers, waypointJointPositions))
             jointTraj.append(waypointDict)
@@ -303,13 +347,19 @@ class RavenPlanner():
 
         return dict((joint.type, joint.position) for joint in resp.joints)
 
-    def getTrajectoryFromPose(self, startJoints, endPose, reqFunc=Request(40).straightLine):
+    def getTrajectoryFromPose(self, endPose, startJoints=None, reqType=Request.Type.Joints, n_steps=40):
         """
         Use trajopt to compute trajectory
 
         Returns a list of joint dictionaries
 
         """
+        if startJoints == None:
+            startJoints = self.currentJoints
+            if startJoints == None:
+                rospy.loginfo('Have not received start joints. Aborting')
+                return
+
         self.updateOpenraveJoints(startJoints)
 
         endJoints = self.getJointsFromPose(endPose)
@@ -321,8 +371,11 @@ class RavenPlanner():
         # only keep shoulder, elbow, insertion, rotation, pitch, yaw
         endJoints = dict([(jointType,jointPos) for jointType, jointPos in endJoints.items() if jointType in self.rosJointTypes])
 
-        transEndPose = Util.convertToFrame(endPose, self.toolFrame)
-
+        #transEndPose = tfx.pose(Util.convertToFrame(endPose, self.toolFrame))
+        endPose = tfx.pose(endPose)
+        if endPose.frame == None:
+            # assume 0_link
+            endPose.frame = MyConstants.Frames.Link0
         
         #code.interact(local=locals())
 
@@ -331,8 +384,14 @@ class RavenPlanner():
             rosJointType = self.raveJointTypesToRos[raveJointType]
             endJointPositions.append(endJoints[rosJointType])
 
-        # manipName, toolFrame, pose, endJointPositions
-        request = reqFunc(self.manip.GetName(), self.toolFrame, transEndPose, endJointPositions) 
+        if reqType == Request.Type.Joints:
+            request = Request.joints(n_steps, self.manip.GetName(), endJointPositions)
+        else:
+            worldFromEE = tfx.pose(self.transformRelativePoseForIk(endPose.matrix, endPose.frame, self.toolFrame))
+            worldFromEE.position.z -= .01 # tool offset
+            #code.interact(local=locals())
+            request = Request.pose(n_steps, self.manip.GetName(), endJointPositions, self.toolFrame, worldFromEE)
+                                   
 
         # convert dictionary into json-formatted string
         s = json.dumps(request)
