@@ -284,7 +284,7 @@ class RavenPlanner():
         # targ <- EE
         worldFromEE = self.manip.GetEndEffectorTransform()
         targLinkFromEE = np.dot(np.linalg.inv(worldFromTargLink), worldFromEE)
-
+        
         # world <- EE
         refLinkFromTargLink = poseMatrix
         newWorldFromEE = np.dot(np.dot(worldFromRefLink, refLinkFromTargLink), targLinkFromEE)
@@ -347,7 +347,7 @@ class RavenPlanner():
 
         return dict((joint.type, joint.position) for joint in resp.joints)
 
-    def getTrajectoryFromPose(self, endPose, startJoints=None, reqType=Request.Type.Joints, n_steps=40):
+    def getTrajectoryFromPose(self, endPose, startJoints=None, reqType=Request.Type.Pose, n_steps=40):
         """
         Use trajopt to compute trajectory
 
@@ -389,7 +389,6 @@ class RavenPlanner():
         else:
             worldFromEE = tfx.pose(self.transformRelativePoseForIk(endPose.matrix, endPose.frame, self.toolFrame))
             worldFromEE.position.z -= .01 # tool offset
-            #code.interact(local=locals())
             request = Request.pose(n_steps, self.manip.GetName(), endJointPositions, self.toolFrame, worldFromEE)
                                    
 
@@ -416,32 +415,148 @@ def testIK():
     rp = RavenPlanner(MyConstants.Arm.Right)
     rospy.sleep(2)
 
-    angle = tfx.tb_angles(-3.2,88.5,-1.8)#tfx.tb_angles(-70.4,85.6,-70.7)
-    endPose = tfx.pose([-.136, -.017, -.074], angle,frame=MyConstants.Frames.Link0)
-    rospy.loginfo('Getting joint positions')
-    rp.currentGrasp = 1.2
-    joints = rp.getJointsFromPose(endPose)
-   
+    currPose = tfx.pose([0,0,0], frame=rp.toolFrame)
+    tf_tool_to_link0 = tfx.lookupTransform('0_link', currPose.frame, wait=5)
+    currPose = tf_tool_to_link0 * currPose
+    currPose.frame = '0_link'
+
+    joints = rp.currentJoints
     for jointType, jointPos in joints.items():
         print("jointType = {0}, jointPos = {1}".format(jointType,((180.0/pi)*jointPos)))
 
-    rp.updateOpenraveJoints(joints)
+    rp.updateOpenraveJoints()
+    #rp.env.SetViewer('qtcoin')
+
+    """
+    link0 = rp.robot.GetLink('0_link')
+    Tcur_w_link = link0.GetTransform()
+    Tcur_w_ee = rp.manip.GetEndEffectorTransform()
+    Tf_link_ee = np.linalg.solve(Tcur_w_link, Tcur_w_ee)
+
+    trans = np.eye(4)
+    trans[2][3] = -.01
+
+    T_w_ee = np.dot(trans, Tf_link_ee)
+
+    pose = tfx.pose(T_w_ee)
+    """
+    
+    refLinkName = rp.toolFrame
+    targLinkName = '0_link'
+    # world <- ref
+    refLink = rp.robot.GetLink(refLinkName)
+    worldFromRefLink = refLink.GetTransform()
+
+    # world <- targ
+    targLink = rp.robot.GetLink(targLinkName)
+    worldFromTargLink = targLink.GetTransform()
+
+    # targ <- EE
+    worldFromEE = rp.manip.GetEndEffectorTransform()
+    targLinkFromEE = np.dot(np.linalg.inv(worldFromTargLink), worldFromEE)
+    
+    pose = tfx.pose(targLinkFromEE)
+    pose.position.z-=.01
+    
+
+    print('currPose')
+    print(currPose.position)
+    print(currPose.tb_angles)
+    
+    print('openrave pose')
+    print(pose.position)
+    print(pose.tb_angles)
+
+    deltaPose = tfx.pose(Util.deltaPose(currPose,pose))
+    print('delta pose')
+    print(deltaPose.position)
+    print(deltaPose.tb_angles)
+    
+    
     rp.env.SetViewer('qtcoin')
+    rp.getTrajectoryFromPose(currPose)
+    code.interact(local=locals())
+    #Util.plot_transform(rp.env, rp.transformRelativePoseForIk(pose.matrix, targLinkName, targLinkName))
+    Util.plot_transform(rp.env, rp.transformRelativePoseForIk(currPose.matrix, currPose.frame, rp.toolFrame))
+
 
     code.interact(local=locals())
 
     rospy.spin()
 
-def testRP():
-    rospy.init_node('test_request',anonymous=True)
+
+def testOriginalModel():
+    rospy.init_node('test_IK',anonymous=True)
     rp = RavenPlanner(MyConstants.Arm.Right)
+    rospy.sleep(2)
 
+    import openravepy as rave
+    import os
+    import math
+    env = rave.Environment()
+    env.Load( os.path.dirname(__file__) +'/../../../models/ravenII_2arm.xml')
 
+    robot = env.GetRobots()[0]
+    manip = robot.GetManipulators()[1]
+    raveJointIndices = [9,10,11,12,13,14,15]
+    rosJointIndices = [0,1,2,4,5,6,7]
+
+    currentJoints = rp.currentJoints
+    currentPositions = []
+    for ros, rave in zip(rosJointIndices, raveJointIndices):
+        robot.SetDOFValues([currentJoints[ros]], [rave])
+        currentPositions.append((180.0/math.pi)*currentJoints[ros])
+
+    for link in robot.GetLinks():
+        print(link.GetName())
+
+    #code.interact(local=locals())
+    
+    
+    toolFrame = 'grasper1_R'
+
+    currPose = tfx.pose([0,0,0], frame=toolFrame)
+    tf_tool_to_link0 = tfx.lookupTransform('0_link', currPose.frame, wait=5)
+    currPose = tf_tool_to_link0 * currPose
+
+    refLinkName = toolFrame
+    targLinkName = '0_link'
+    # world <- ref
+    refLink = robot.GetLink(refLinkName)
+    worldFromRefLink = refLink.GetTransform()
+
+    # world <- targ
+    targLink = robot.GetLink(targLinkName)
+    worldFromTargLink = targLink.GetTransform()
+
+    # targ <- EE
+    worldFromEE = manip.GetEndEffectorTransform()
+    targLinkFromEE = np.dot(np.linalg.inv(worldFromTargLink), worldFromEE)
+    
+    pose = tfx.pose(targLinkFromEE)
+    pose.position.z-=.01
+    
+
+    print('currPose')
+    print(currPose.position)
+    print(currPose.tb_angles)
+    
+    print('openrave pose')
+    print(pose.position)
+    print(pose.tb_angles)
+
+    deltaPose = tfx.pose(Util.deltaPose(currPose,pose))
+    print('delta pose')
+    print(deltaPose.position)
+    print(deltaPose.tb_angles)
+
+    code.interact(local=locals())
+
+    rospy.spin()
 
 if __name__ == '__main__':
-    #testIK()
-    testRP()
-
+    testIK()
+    #testOriginalModel()
 
 
 """

@@ -86,11 +86,31 @@ def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     deltaPosition = desPos - currPos
     
     currQuat, desQuat = currRot.orientation.quaternion, desRot.orientation.quaternion
+    #currQuat, desQuat = currRot.quaternion, desRot.quaternion
     deltaQuat = tft.quaternion_multiply(tft.quaternion_inverse(currQuat), desQuat)
 
     deltaPose = tfx.pose(deltaPosition, deltaQuat)
 
     return deltaPose.msg.Pose()
+    
+def endPose(currPose, deltaPose, frame=None):
+    
+    currPose = tfx.pose(currPose)
+    deltaPose = tfx.pose(deltaPose)
+
+    if frame != None:
+        currPose = convertToFrame(currPose, frame)
+        deltaPose = convertToFrame(deltaPose, frame)
+
+    if currPose.frame != None and deltaPose.frame != None and currPose.frame != deltaPose.frame:
+        deltaPose = convertToFrame(deltaPose, currPose.frame)
+
+    endPosition = currPose.position + deltaPose.position
+    endQuatMat = currPose.orientation.matrix * deltaPose.orientation.matrix
+
+    endPose = tfx.pose(endPosition, endQuatMat)
+
+    return endPose
     
     
 def angleBetweenQuaternions(quat0, quat1):

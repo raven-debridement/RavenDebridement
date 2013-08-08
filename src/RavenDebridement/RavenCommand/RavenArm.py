@@ -76,7 +76,7 @@ class RavenArm:
     # trajectory commands #
     #######################
 
-    def executePoseTrajectory(self, poseTraj, duration=None, speed=None):
+    def executePoseTrajectory(self, poseTraj, block=True, duration=None, speed=None):
         """
         poseTraj is a tuple/list of poses
 
@@ -99,7 +99,11 @@ class RavenArm:
             self.goToPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed)
             prevPose = pose
 
-    def executeStampedPoseTrajectory(self, stampedPoses):
+        if block:
+            return self.blockUntilPaused()
+        return True
+
+    def executeStampedPoseTrajectory(self, stampedPoses, block=True):
         """
         stampedPoses is a list of tfx poses with time stamps
         """
@@ -116,10 +120,12 @@ class RavenArm:
             prevTime = stampedPose.stamp
             prevPose = pose
 
-    def executeDeltaPoseTrajectory(self, stampedDeltaPoses, startPose=None):
-        """
-        INCORRECTLY IMPLEMENTED
+        if block:
+            return self.blockUntilPaused()
+        return True
 
+    def executeStampedDeltaPoseTrajectory(self, stampedDeltaPoses, startPose=None, block=True):
+        """
         stampedDeltaPoses is a list of tfx poses with time stamps
 
         each stampedDeltaPose is endPose - startPose, where
@@ -129,22 +135,42 @@ class RavenArm:
         endPose is from the vision system and the one
         startPose is the gripper position according to vision
         """
+        durations = []
+        prevTime = rospy.Time.now()
+        for stampedDeltaPose in stampedDeltaPoses:
+            durations.append(stampedDeltaPose.stamp - prevTime)
+            prevTime = stampedDetlaPose.stamp
+
         if startPose == None:
             startPose = self.getGripperPose()
             if startPose == None:
                 return
-        
-        prevTime = rospy.Time.now()
 
-        for stampedDeltaPose in stampedDeltaPoses:
-            duration = (stampedDeltaPose.stamp - prevTime).to_sec()
+        startPose = Util.convertToFrame(tfx.pose(startPose), self.commandFrame)
 
-            deltaPose = tfx.pose(stampedDeltaPose.position, stampedDeltaPose.orientation)
-            self.goToGripperPoseDelta(deltaPose, startPose=startPose, block=False, duration=duration)
+        endPoses = []
+        for deltaPose in stampedDeltaPoses:
+            """
+            deltaPose = Util.convertToFrame(tfx.pose(deltaPose), self.commandFrame)
+            
+            endPosition = startPose.position + deltaPose.position
+            endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
 
-            prevTime = stampedDeltaPose.stamp
+            endPose = tfx.pose(endPosition, endQuatMat)
+            endPoses.append(endPose)
+            """
+            endPoses.append(Util.endPose(startPose, deltaPose, self.commandFrame))
 
-    def executeJointTrajectory(self, jointTraj, duration=None, speed=None):
+        prevPose = None
+        for duration, endPose in zip(duration, endPoses):
+            self.goToGripperPose(endPose, startPose=prevPose, block=False, duration=duration)
+            prevPose = endPose
+
+        if block:
+            return self.blockUntilPaused()
+        return True
+
+    def executeJointTrajectory(self, jointTraj, block=True, duration=None, speed=None):
         """
         jointTraj is a tuple/list of joints dictionaries
 
@@ -169,10 +195,17 @@ class RavenArm:
 
         prevJoints = None
         for joints in jointTraj:
+            joints = dict(joints)
             self.goToJoints(joints, startJoints=prevJoints, block=False, duration=duration, speed=speed)
             prevJoints = joints
 
-    def executeStampedJointTrajectory(self, stampedJoints):
+        if block:
+            rospy.loginfo('start joint execution blocking')
+            self.blockUntilPaused()
+            rospy.loginfo('end joint execution blocking')
+        return True
+
+    def executeStampedJointTrajectory(self, stampedJoints, block=True):
         """
         stampedJoints is a tuple of ((stamp, joints), ....)
 
@@ -193,6 +226,10 @@ class RavenArm:
 
             prevTime = stamp
             prevJoints = joints
+
+        if block:
+            return self.blockUntilPaused()
+        return True
 
     #####################
     # command methods   #
@@ -236,6 +273,8 @@ class RavenArm:
             if startPose == None:
                 return
 
+        endPose = Util.endPose(startPose, deltaPose, self.commandFrame)
+        """
         # convert to tfx format
         startPose = Util.convertToFrame(tfx.pose(startPose), self.commandFrame)
         deltaPose = Util.convertToFrame(tfx.pose(deltaPose), self.commandFrame)
@@ -245,6 +284,7 @@ class RavenArm:
         endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
 
         endPose = tfx.pose(endPosition, endQuatMat)
+        """
 
         self.goToGripperPose(endPose, startPose=startPose, block=block, duration=duration, speed=speed, ignoreOrientation=ignoreOrientation)
 
@@ -372,8 +412,8 @@ def testGoToJoints(arm=MyConstants.Arm.Right):
     ravenPlanner = RavenPlanner(arm)
     rospy.sleep(2)
 
-    angle = tfx.tb_angles(20,70,0)
-    endPose = tfx.pose([-.136, -.017, -.075], angle,frame=MyConstants.Frames.Link0)
+    angle = tfx.tb_angles(0,90,0)
+    endPose = tfx.pose([-.073, -.014, -.124], angle,frame=MyConstants.Frames.Link0)
 
 
     ravenArm.start()
@@ -410,6 +450,43 @@ def testGoToJoints(arm=MyConstants.Arm.Right):
 
     rospy.loginfo('Press enter to exit')
     raw_input()
+
+def testExecuteTrajopt(arm=MyConstants.Arm.Right):
+    rospy.init_node('rave_arm_node',anonymous=True)
+    ravenArm = RavenArm(arm)
+    ravenPlanner = RavenPlanner(arm)
+    rospy.sleep(2)
+
+    angle = tfx.tb_angles(0,90,0)
+    endPose = tfx.pose([-.073, -.014, -.15], angle,frame=MyConstants.Frames.Link0)
+
+
+    ravenArm.start()
+
+    rospy.loginfo('Press enter to go to endPose using joint commands')
+    raw_input()
+
+    desJoints = ravenPlanner.getJointsFromPose(endPose)
+    currJoints = ravenArm.getCurrentJoints()
+
+    endJointTraj = ravenPlanner.getTrajectoryFromPose(endPose)
+
+    rospy.loginfo('Found joints')
+    for jointType, jointPos in desJoints.items():
+        print("desired: jointType = {0}, jointPos = {1}".format(jointType,jointPos))
+        print("current: jointType = {0}, jointPos = {1}".format(jointType,currJoints[jointType]))
+
+
+    rospy.loginfo('Press enter to move')
+    raw_input()
+    
+    ravenArm.executeJointTrajectory(endJointTraj)
+    #ravenArm.goToJoints(endJointTraj[-1])
+
+    code.interact(local=locals())
+
+    rospy.loginfo('Press enter to exit')
+    raw_input()   
 
 def testGoToPose(arm=MyConstants.Arm.Right):
     rospy.init_node('raven_arm_node',anonymous=True)
@@ -564,9 +641,10 @@ def testOpenraveJoints(arm=MyConstants.Arm.Right):
     code.interact(local=locals())
 
 if __name__ == '__main__':
-    #testOpenCloseGripper(close=True)
+    testOpenCloseGripper(close=True)
     #testMoveToHome()
-    testGoToJoints()
+    #testGoToJoints()
+    #testExecuteTrajopt()
     #testGoToPose()
     #testTrajopt()
     #testExecuteJointTrajectory()

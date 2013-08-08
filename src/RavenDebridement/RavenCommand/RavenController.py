@@ -142,7 +142,7 @@ class RavenController():
 
         self.defaultJointSpeed = {Constants.JOINT_TYPE_SHOULDER      : pi/16,
                                   Constants.JOINT_TYPE_ELBOW         : pi/16,
-                                  Constants.JOINT_TYPE_INSERTION     : pi/32,
+                                  Constants.JOINT_TYPE_INSERTION     : pi/512,
                                   Constants.JOINT_TYPE_ROTATION      : pi/4,
                                   Constants.JOINT_TYPE_PITCH         : pi/16,
                                   Constants.JOINT_TYPE_GRASP_FINGER1 : pi/16,
@@ -275,7 +275,11 @@ class RavenController():
             
             else:
                 # no stages
-                cmd = self.ravenPauseCmd
+                #cmd = self.ravenPauseCmd
+                # if last command was gripper, then ignore
+                if cmd.arms[0].tool_command.grasp_option != ToolCommand.GRASP_OFF:
+                    cmd = self.ravenPauseCmd
+                
 
             self.header.stamp = now
             cmd.header = self.header
@@ -362,7 +366,7 @@ class RavenController():
                 speed = self.defaultJointSpeed
             duration = max([abs((endJoints[jointType]-startJoints[jointType]))/speed[jointType] for jointType in startJoints.keys()])
         
-
+        
         def fn(cmd, t):
             # t is percent along trajectory
             cmd.controller = Constants.CONTROLLER_JOINT_POSITION
@@ -420,6 +424,7 @@ class RavenController():
 
         arm_cmd.tool_command = tool_cmd
 
+        cmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
         cmd.arms.append(arm_cmd)
 
     @staticmethod
