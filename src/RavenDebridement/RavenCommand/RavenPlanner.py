@@ -67,6 +67,17 @@ class Request():
                         "dist_pen" : [0.001]
                         }
                     },
+
+                {
+                    "type" : "pose",
+                    "params" : {"xyz"  : [0,0,0],
+                                "wxyz" : wxyzQuat,
+                                "link" : toolFrame,
+                                "timestep" : [timestep for timestep in range(n_steps)],
+                                "rot_coeffs" : [5,5,5],
+                                "pos_coeffs" : [0,0,0]
+                                }
+                    }
  
                 ],
             "constraints" : [

@@ -145,6 +145,61 @@ class RotateGripper(smach.State):
 
         return 'success'
 
+class PlanTrajToObject(smach.State):
+    def __init__(self, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['reachedObject', 'notReachedObject','failure'],
+                             input_keys = ['gripperPose','objectPose'],
+                             output_keys = ['jointTraj'])
+        self.ravenPlanner = ravenPlanner
+        self.stepsPerMeter = stepsPerMeter
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
+
+    def execute(self, userdata):
+        if PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        rospy.loginfo('Planning trajectory from gripper to object')
+
+        transBound = .08
+        rotBound = float("inf")
+        if Util.withinBounds(userdata.gripperPose, userdata.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
+            return 'reachedObject'
+
+        deltaPose = Util.deltaPose(userdata.gripperPose, userdata.objectPose, self.transFrame, self.rotFrame)
+
+        endPose = Util.endPose(self.ravenArm.getGripperPose(), deltaPose)
+        n_steps = int(self.stepsPerMeter * endPose.position.norm) + 1
+        jointTraj = self.ravenPlanner.getTrajectoryFromPose(endPose, n_steps=n_steps)
+
+        if jointTraj == None:
+            return 'failure'
+
+        userdata.jointTraj = jointTraj
+        return 'notReachedObject'
+
+class MoveTowardsObject(smach.State):
+    def __init__(self, ravenArm, stepsPerMeter, maxServoDistance):
+        smach.State.__init__(self, outcomes = ['success'], input_keys = ['jointTraj'])
+        self.ravenArm = ravenArm
+        self.stepsPerMeter = stepsPerMeter
+        self.maxServoDistance = maxServoDistance
+
+    def execute(self, userdata):
+        if PAUSE_BETWEEN_STATES:
+            pause_func(self)
+
+        rospy.loginfo('Moving towards the object')
+        jointTraj = userdata.jointTraj
+
+        # limit distance moved
+        endTrajStep = min(int(self.stepsPerMeter*self.maxServoDistance)+1, len(jointTraj))
+        jointTraj = jointTraj[:endTrajStep]
+
+        self.ravenArm.executeJointTrajectory(jointTraj,block=True)
+
+        return 'success'
+
 class MoveNearObject(smach.State):
     """
     Goes near the object
@@ -451,6 +506,12 @@ class MasterClass(object):
 
         self.gripperOpenCloseDuration = 2.5
 
+        # for Trajopt planning, 2 steps/cm
+        self.stepsPerMeter = 200
+
+        # move no more than 5cm per servo
+        self.maxServoDistance = .05
+
         # debugging outputs
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
@@ -468,46 +529,53 @@ class MasterClass(object):
                                    transitions = {'success': 'findGripper',
                                                   'failure': 'findObject'})
             smach.StateMachine.add('findGripper', FindGripper(self.imageDetector, self.gripperName),
-                                   transitions = {'success': 'moveNearObject',
+                                   transitions = {'success': 'planTrajToObject',
                                                   'failure': 'rotateGripper'})
             smach.StateMachine.add('rotateGripper', RotateGripper(self.ravenArm),
                                    transitions = {'success': 'findGripper',
                                                   'failure': 'findGripper'})
-            smach.StateMachine.add('moveNearObject', MoveNearObject(self.ravenArm, self.ravenPlanner, self.transFrame, self.rotFrame, self.openLoopSpeed),
-                                   transitions = {'success': 'servoToObject',
-                                                  'failure': 'moveNearObject'})
-            smach.StateMachine.add('servoToObject', ServoToObject(self.imageDetector, self.ravenArm, self.ravenPlanner, 
-                                                                  self.gripperName, self.transFrame, self.rotFrame, self.toolframe,
-                                                                  self.gripperOpenCloseDuration, self.listener, self.des_pose_pub),
-                                   transitions = {'success': 'objectServoSuccessMoveVertical',
-                                                  'gripperNotFound': 'moveToHome',
-                                                  'timedOut': 'objectServoFailureMoveVertical'})
+            smach.StateMachine.add('planTrajToObject', PlanTrajToObject(self.ravenPlanner, self.stepsPerMeter,
+                                                                        self.transFrame, self.rotFrame),
+                                   transitions = {'reachedObject': 'objectServoSuccessMoveVertical',
+                                                  'notReachedObject': 'moveTowardsObject',
+                                                  'failure': 'moveToHome'})
+            smach.StateMachine.add('moveTowardsObject', MoveTowardsObject(self.ravenArm, self.stepsPerMeter, self.maxServoDistance),
+                                   transitions = {'success': 'findGripper'})
+            #smach.StateMachine.add('moveNearObject', MoveNearObject(self.ravenArm, self.ravenPlanner, self.transFrame, self.rotFrame, self.openLoopSpeed),
+            #                       transitions = {'success': 'servoToObject',
+            #                                      'failure': 'moveNearObject'})
+            #smach.StateMachine.add('servoToObject', ServoToObject(self.imageDetector, self.ravenArm, self.ravenPlanner, 
+            #                                                      self.gripperName, self.transFrame, self.rotFrame, self.toolframe,
+            #                                                      self.gripperOpenCloseDuration, self.listener, self.des_pose_pub),
+            #                       transitions = {'success': 'objectServoSuccessMoveVertical',
+            #                                      'gripperNotFound': 'moveToHome',
+            #                                      'timedOut': 'objectServoFailureMoveVertical'})
             smach.StateMachine.add('objectServoSuccessMoveVertical',MoveVertical(self.ravenArm, self.ravenPlanner, self.openLoopSpeed),
                                    transitions = {'success': 'checkPickup',
                                                   'failure': 'checkPickup'})
             smach.StateMachine.add('checkPickup', CheckPickup(self.ravenArm, self.gripperOpenCloseDuration),
                                    transitions = {'success': 'pickupSuccessMoveToHome',
-                                                  'failure': 'pickupFailureFindObject'})
+                                                  'failure': 'findObject'})#'pickupFailureFindObject'})
             smach.StateMachine.add('pickupSuccessMoveToHome', MoveToHome(self.ravenArm, self.ravenPlanner, self.imageDetector, self.openLoopSpeed),
                                    transitions = {'success': 'moveToReceptacle',
                                                   'failure': 'moveToReceptacle'})
-            smach.StateMachine.add('pickupFailureFindObject', FindObject(self.imageDetector, self.toolframe, self.obj_pub),
-                                   transitions = {'success': 'pickupFailureFindObjectSuccessFindGripper',
-                                                  'failure': 'moveToHome'})
-            smach.StateMachine.add('pickupFailureFindObjectSuccessFindGripper', FindGripper(self.imageDetector, self.gripperName),
-                                   transitions = {'success': 'servoToObject',
-                                                  'failure': 'moveToHome'})
-            smach.StateMachine.add('objectServoFailureMoveVertical',MoveVertical(self.ravenArm, self.ravenPlanner, self.openLoopSpeed),
-                                   transitions = {'success': 'objectServoFailureMoveVerticalSuccessFindObject',
-                                                  'failure': 'moveToReceptacle'})
-            smach.StateMachine.add('objectServoFailureMoveVerticalSuccessFindObject', 
-                                   FindObject(self.imageDetector, self.toolframe, self.obj_pub),
-                                   transitions = {'success': 'moveToHome',
-                                                  'failure': 'objectServoFailureMoveVerticalSuccessFindObjectFailureFindGripper'})
-            smach.StateMachine.add('objectServoFailureMoveVerticalSuccessFindObjectFailureFindGripper',
-                                   FindGripper(self.imageDetector, self.gripperName),
-                                   transitions = {'success': 'servoToObject',
-                                                  'failure': 'moveToHome'})
+            #smach.StateMachine.add('pickupFailureFindObject', FindObject(self.imageDetector, self.toolframe, self.obj_pub),
+            #                       transitions = {'success': 'pickupFailureFindObjectSuccessFindGripper',
+            #                                      'failure': 'moveToHome'})
+            #smach.StateMachine.add('pickupFailureFindObjectSuccessFindGripper', FindGripper(self.imageDetector, self.gripperName),
+            #                       transitions = {'success': 'servoToObject',
+            #                                      'failure': 'moveToHome'})
+            #smach.StateMachine.add('objectServoFailureMoveVertical',MoveVertical(self.ravenArm, self.ravenPlanner, self.openLoopSpeed),
+            #                       transitions = {'success': 'objectServoFailureMoveVerticalSuccessFindObject',
+            #                                      'failure': 'moveToReceptacle'})
+            #smach.StateMachine.add('objectServoFailureMoveVerticalSuccessFindObject', 
+            #                       FindObject(self.imageDetector, self.toolframe, self.obj_pub),
+            #                       transitions = {'success': 'moveToHome',
+            #                                      'failure': 'objectServoFailureMoveVerticalSuccessFindObjectFailureFindGripper'})
+            #smach.StateMachine.add('objectServoFailureMoveVerticalSuccessFindObjectFailureFindGripper',
+            #                       FindGripper(self.imageDetector, self.gripperName),
+            #                       transitions = {'success': 'servoToObject',
+            #                                      'failure': 'moveToHome'})
             smach.StateMachine.add('moveToReceptacle', MoveToReceptacle(self.ravenArm, self.ravenPlanner, self.openLoopSpeed, self.gripperOpenCloseDuration),
                                    transitions = {'success': 'moveToHome',
                                                   'failure': 'moveToHome'})
@@ -516,18 +584,20 @@ class MasterClass(object):
                                                   'failure': 'findObject'})
     
     def run(self):
-        self.ravenArm.start()
+        #self.ravenArm.start()
         sis = smach_ros.IntrospectionServer('master_server', self.sm, '/SM_ROOT')
         sis.start()
         userData = smach.UserData()
         userData['objectHeightOffset'] = self.objectHeightOffset
         
+
         try:
-            outcome = self.sm.execute(userData)
+            raw_input()
+            #outcome = self.sm.execute(userData)
         except:
             pass
 
-        self.ravenArm.stop()
+        #self.ravenArm.stop()
 
 
 def mainloop():
