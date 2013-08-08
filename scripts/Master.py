@@ -584,7 +584,7 @@ class MasterClass(object):
                                                   'failure': 'findObject'})
     
     def run(self):
-        #self.ravenArm.start()
+        self.ravenArm.start()
         sis = smach_ros.IntrospectionServer('master_server', self.sm, '/SM_ROOT')
         sis.start()
         userData = smach.UserData()
@@ -592,12 +592,11 @@ class MasterClass(object):
         
 
         try:
-            raw_input()
-            #outcome = self.sm.execute(userData)
+            outcome = self.sm.execute(userData)
         except:
             pass
 
-        #self.ravenArm.stop()
+        self.ravenArm.stop()
 
 
 def mainloop():

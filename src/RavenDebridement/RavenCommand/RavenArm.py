@@ -584,9 +584,12 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     ee[:3,:3] = np.identity(3)
     box.SetTransform(ee)
     ravenPlanner.env.Add(box,True)
-    ravenPlanner.env.SetViewer('qtcoin')
+    #ravenPlanner.env.SetViewer('qtcoin')
     rospy.loginfo('Box created, press enter')
-    raw_input()
+    ravenFile = os.path.dirname(__file__) + '/../../../models/myRavenEnv.uri'
+    ravenPlanner.env.Save(ravenFile)
+    #code.interact(local=locals())
+    return
     
     ###########
 
@@ -641,11 +644,11 @@ def testOpenraveJoints(arm=MyConstants.Arm.Right):
     code.interact(local=locals())
 
 if __name__ == '__main__':
-    testOpenCloseGripper(close=True)
+    #testOpenCloseGripper(close=True)
     #testMoveToHome()
     #testGoToJoints()
     #testExecuteTrajopt()
     #testGoToPose()
     #testTrajopt()
-    #testExecuteJointTrajectory()
+    testExecuteJointTrajectory()
     #testOpenraveJoints()
