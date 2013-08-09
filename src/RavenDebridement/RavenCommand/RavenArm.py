@@ -91,7 +91,7 @@ class RavenArm:
             if type(duration) != tuple:
                 duration = [duration/len(poseTraj) for _ in range(len(poseTraj))]
             
-            if len(duration) != len(jointTraj):
+            if len(duration) != len(poseTraj):
                 return
 
         prevPose = None
