@@ -18,7 +18,6 @@ import code
 
 import tfx
 from raven_2_msgs.msg import *
-from raven_2_trajectory.trajectory_player import TrajectoryPlayer, Stage
 
 import openravepy as rave
 
@@ -139,7 +138,7 @@ class RavenArm:
         prevTime = rospy.Time.now()
         for stampedDeltaPose in stampedDeltaPoses:
             durations.append(stampedDeltaPose.stamp - prevTime)
-            prevTime = stampedDetlaPose.stamp
+            prevTime = stampedDeltaPose.stamp
 
         if startPose == None:
             startPose = self.getGripperPose()
