@@ -146,14 +146,16 @@ class RotateGripper(smach.State):
         return 'success'
 
 class PlanTrajToObject(smach.State):
-    def __init__(self, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame, gripperOpenCloseDuration):
         smach.State.__init__(self, outcomes = ['reachedObject', 'notReachedObject','failure'],
                              input_keys = ['gripperPose','objectPose'],
-                             output_keys = ['jointTraj'])
+                             output_keys = ['jointTraj','vertAmount'],)
+        self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
         self.stepsPerMeter = stepsPerMeter
         self.transFrame = transFrame
         self.rotFrame = rotFrame
+        self.gripperOpenCloseDuration = gripperOpenCloseDuration
 
     def execute(self, userdata):
         if PAUSE_BETWEEN_STATES:
@@ -161,9 +163,12 @@ class PlanTrajToObject(smach.State):
             
         rospy.loginfo('Planning trajectory from gripper to object')
 
-        transBound = .08
+        transBound = .008
         rotBound = float("inf")
         if Util.withinBounds(userdata.gripperPose, userdata.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
+            rospy.loginfo('Closing the gripper')
+            self.ravenArm.closeGripper(duration=self.gripperOpenCloseDuration)
+            userdata.vertAmount = .04
             return 'reachedObject'
 
         deltaPose = Util.deltaPose(userdata.gripperPose, userdata.objectPose, self.transFrame, self.rotFrame)
@@ -534,8 +539,8 @@ class MasterClass(object):
             smach.StateMachine.add('rotateGripper', RotateGripper(self.ravenArm),
                                    transitions = {'success': 'findGripper',
                                                   'failure': 'findGripper'})
-            smach.StateMachine.add('planTrajToObject', PlanTrajToObject(self.ravenPlanner, self.stepsPerMeter,
-                                                                        self.transFrame, self.rotFrame),
+            smach.StateMachine.add('planTrajToObject', PlanTrajToObject(self.ravenArm, self.ravenPlanner, self.stepsPerMeter,
+                                                                        self.transFrame, self.rotFrame, self.gripperOpenCloseDuration),
                                    transitions = {'reachedObject': 'objectServoSuccessMoveVertical',
                                                   'notReachedObject': 'moveTowardsObject',
                                                   'failure': 'moveToHome'})
