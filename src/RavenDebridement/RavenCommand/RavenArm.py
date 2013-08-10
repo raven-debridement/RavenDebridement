@@ -294,6 +294,8 @@ class RavenArm:
         
         jointType is from raven_2_msgs.msg.Constants
         jointPos is position in radians
+        
+        speed is a factor gain compared to default speeds
         """
         
         self.ravenController.goToJoints(desJoints, startJoints=startJoints, duration=duration, speed=speed)
@@ -378,6 +380,10 @@ def testOpenCloseGripper(close=True,arm=MyConstants.Arm.Right):
     rospy.sleep(1)
 
     ravenArm.start()
+    
+    rospy.loginfo('Press enter to set the gripper')
+    raw_input()
+    
     rospy.loginfo('Setting the gripper')
     if close:
         ravenArm.closeGripper()
@@ -643,11 +649,11 @@ def testOpenraveJoints(arm=MyConstants.Arm.Right):
     code.interact(local=locals())
 
 if __name__ == '__main__':
-    #testOpenCloseGripper(close=True)
+    testOpenCloseGripper(close=True)
     #testMoveToHome()
     #testGoToJoints()
     #testExecuteTrajopt()
     #testGoToPose()
     #testTrajopt()
-    testExecuteJointTrajectory()
+    #testExecuteJointTrajectory()
     #testOpenraveJoints()
