@@ -44,6 +44,8 @@ class GenerateTraj():
         endPose = Util.endPose(startPose, deltaPose)
         #endPose = startPose
         
+        #IPython.embed()
+        
         jointTraj = self.ravenPlanner.getTrajectoryFromPose(endPose,n_steps=15)
         
         return jointTraj
@@ -52,10 +54,14 @@ def testGenerateTraj():
     rospy.init_node('generate_traj_node',anonymous=True)
     gt = GenerateTraj()
     rospy.sleep(2)
-    deltaPose = tfx.pose([0,0,-.05],frame=MyConstants.Frames.Link0)
+    deltaPose = tfx.pose([.04,0,0],frame=MyConstants.Frames.Link0)
+    #IPython.embed()
     jointTraj = gt.generateTraj(deltaPose)
-    for row in jointTraj:
-        print(row)
+    for joints in jointTraj:
+        positions = []
+        for rosJointType in gt.ravenPlanner.rosJointTypes:
+            positions.append(joints[rosJointType])
+        print(positions)
     IPython.embed()
     
 if __name__ == '__main__':

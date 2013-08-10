@@ -331,7 +331,7 @@ class RavenController():
         jointType is from raven_2_msgs.msg.Constants
         jointPos is position in radians
 
-        speed is a dictionary mapping each joint to a speed
+        speed is a factor gain compared to default speeds
         """
 
         if startJoints == None:
@@ -364,6 +364,8 @@ class RavenController():
         if duration is None:
             if speed is None:
                 speed = self.defaultJointSpeed
+            else:
+                speed = dict([ (jointType ,speed * defaultSpeed) for jointType, defaultSpeed in self.defaultJointSpeed.items()])
             duration = max([abs((endJoints[jointType]-startJoints[jointType]))/speed[jointType] for jointType in startJoints.keys()])
         
         
