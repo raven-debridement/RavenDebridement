@@ -31,12 +31,12 @@ class Arm:
     Right = 'R'
 
 class Frames:
-    Camera = '/left_optical_frame'
-    LeftTool = '/tool_L'
-    RightTool = '/tool_R'
-    World = '/world'
-    LeftBase = '/base_link_L'
-    RightBase = '/base_link_R'
+    Camera = 'left_optical_frame'
+    LeftTool = 'tool_L'
+    RightTool = 'tool_R'
+    World = 'world'
+    LeftBase = 'base_link_L'
+    RightBase = 'base_link_R'
     Link0 = '0_link'
     
 class OpenraveLinks:
