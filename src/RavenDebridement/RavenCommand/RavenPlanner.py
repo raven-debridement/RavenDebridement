@@ -138,16 +138,6 @@ class Request():
 
 class RavenPlanner():
 
-    """
-    Joint order:
-    shoulder
-    elbow
-    insertion
-    tool_roll
-    wrist_joint
-    grasper_joint_1
-    grasper_joint_2
-    """
     rosJointTypes = [Constants.JOINT_TYPE_SHOULDER,
                      Constants.JOINT_TYPE_ELBOW,
                      Constants.JOINT_TYPE_INSERTION,
@@ -184,9 +174,6 @@ class RavenPlanner():
 
         self.env = rave.Environment()
 
-        # TEMP
-        #self.env.SetViewer('qtcoin')
-
         ravenFile = os.path.dirname(__file__) + '/../../../models/myRaven.xml'
         self.env.Load(ravenFile)
 
@@ -206,12 +193,6 @@ class RavenPlanner():
             self.robot.SetActiveManipulator('right_arm')
         self.manip = self.robot.GetActiveManipulator()
         self.manipJoints = self.robot.GetJoints(self.manip.GetArmJoints())
-
-        #rospy.loginfo('Loading model')
-        #ikmodel = rave.databases.inversekinematics.InverseKinematicsModel(self.robot, iktype=rave.IkParameterization.Type.Transform6D)
-        #if not ikmodel.load():
-        #    ikmodel.autogenerate()
-        #rospy.loginfo('Model loaded')
 
 
         self.raveJointNames = ['{0}_{1}'.format(name, self.armName[0].upper()) for name in self.raveJointNames]
@@ -398,7 +379,6 @@ class RavenPlanner():
             request = Request.joints(n_steps, self.manip.GetName(), endJointPositions)
         else:
             worldFromEE = tfx.pose(self.transformRelativePoseForIk(endPose.matrix, endPose.frame, self.toolFrame))
-            worldFromEE.position.z -= .01 # tool offset
             request = Request.pose(n_steps, self.manip.GetName(), endJointPositions, self.toolFrame, worldFromEE)
                                    
 
@@ -418,6 +398,14 @@ class RavenPlanner():
             #return
 
         return self.trajoptTrajToDicts(result.GetTraj())
+
+
+
+
+
+
+
+
 
 
 def testIK():

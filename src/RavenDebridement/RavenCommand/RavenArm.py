@@ -149,15 +149,6 @@ class RavenArm:
 
         endPoses = []
         for deltaPose in stampedDeltaPoses:
-            """
-            deltaPose = Util.convertToFrame(tfx.pose(deltaPose), self.commandFrame)
-            
-            endPosition = startPose.position + deltaPose.position
-            endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
-
-            endPose = tfx.pose(endPosition, endQuatMat)
-            endPoses.append(endPose)
-            """
             endPoses.append(Util.endPose(startPose, deltaPose, self.commandFrame))
 
         prevPose = None
@@ -183,7 +174,7 @@ class RavenArm:
         duration is either the time of the whole trajectory
         or a list of the duration of each segment of the trajectory
 
-        speed is the joint speed
+        speed is a scalar factor (compared to default joint speed)
         """
         if duration != None:
             if type(duration) != tuple:
@@ -199,9 +190,7 @@ class RavenArm:
             prevJoints = joints
 
         if block:
-            rospy.loginfo('start joint execution blocking')
             self.blockUntilPaused()
-            rospy.loginfo('end joint execution blocking')
         return True
 
     def executeStampedJointTrajectory(self, stampedJoints, block=True):
@@ -253,7 +242,6 @@ class RavenArm:
         if ignoreOrientation:
             endPose.orientation = startPose.orientation
 
-        self.ravenController.clearStages()
         self.ravenController.goToPose(endPose, start=startPose, duration=duration, speed=speed)
 
         if block:
@@ -273,17 +261,6 @@ class RavenArm:
                 return
 
         endPose = Util.endPose(startPose, deltaPose, self.commandFrame)
-        """
-        # convert to tfx format
-        startPose = Util.convertToFrame(tfx.pose(startPose), self.commandFrame)
-        deltaPose = Util.convertToFrame(tfx.pose(deltaPose), self.commandFrame)
-
-
-        endPosition = startPose.position + deltaPose.position
-        endQuatMat = startPose.orientation.matrix * deltaPose.orientation.matrix
-
-        endPose = tfx.pose(endPosition, endQuatMat)
-        """
 
         self.goToGripperPose(endPose, startPose=startPose, block=block, duration=duration, speed=speed, ignoreOrientation=ignoreOrientation)
 
@@ -370,6 +347,14 @@ class RavenArm:
             rospy.sleep(.05)
 
         return True
+
+
+
+
+
+
+
+
 
 
 
