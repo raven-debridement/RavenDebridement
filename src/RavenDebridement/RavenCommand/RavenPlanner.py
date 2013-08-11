@@ -8,8 +8,6 @@ from math import *
 import copy
 import sys, os
 
-import openravepy as rave
-
 from raven_2_msgs.msg import * 
 from std_msgs.msg import Header
 from geometry_msgs.msg import *
