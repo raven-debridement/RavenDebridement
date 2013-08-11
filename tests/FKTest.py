@@ -42,6 +42,20 @@ def testFK():
     rp.updateOpenraveJoints()
     
     
+    refLinkName = currPose.frame
+    targLinkName = 'world'
+    
+    # ref -> world
+    refFromWorld = rp.robot.GetLink(refLinkName).GetTransform()
+    
+    # target -> world
+    targFromWorld = rp.robot.GetLink(targLinkName).GetTransform()
+    
+    # target -> ref
+    targFromRef = np.dot(np.linalg.inv(targFromWorld), refFromWorld)
+    
+    newCurrPoseMat = np.dot(targFromRef, np.array(currPose.matrix))
+    currPose = tfx.pose(newCurrPoseMat, frame=targLinkName)
     """
     refLinkName = rp.toolFrame
     targLinkName = MyConstants.Frames.Link0
@@ -78,7 +92,7 @@ def testFK():
     
     
     g = []
-    g += Util.plot_transform(rp.env, )
+    g += Util.plot_transform(rp.env, np.array(ravePose.matrix))
     
     
     IPython.embed()
