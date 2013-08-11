@@ -128,7 +128,7 @@ def execAndRecordTraj(arm=Constants.Arm.Right):
     deltaPoses.append(tfx.pose([0,y, 0],frame=Constants.Frames.Link0))
 
     record.startRecording()
-    while not rospy.is_shutdown():
+    while not rospy.is_shutdown() and record.recordCount < 100:
         for deltaPose in deltaPoses:
             startPose = tfx.pose(ravenArm.getGripperPose())
             endPose = Util.endPose(startPose, deltaPose)
@@ -150,3 +150,10 @@ def execAndRecordTraj(arm=Constants.Arm.Right):
 if __name__ == '__main__':
     #testPoseDiff()
     execAndRecordTraj()
+    
+    
+    
+"""
+
+
+"""
