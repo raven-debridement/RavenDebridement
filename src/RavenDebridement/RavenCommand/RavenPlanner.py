@@ -186,11 +186,12 @@ class RavenPlanner():
         if self.armName == MyConstants.Arm.Left:
             self.invKinArm = Constants.ARM_TYPE_GOLD
             self.toolFrame = MyConstants.OpenraveLinks.LeftTool
-            self.robot.SetActiveManipulator('left_arm')
+            self.manipName = 'left_arm'
         else:
             self.invKinArm = Constants.ARM_TYPE_GREEN
             self.toolFrame = MyConstants.OpenraveLinks.RightTool
-            self.robot.SetActiveManipulator('right_arm')
+            self.manipName = 'right_arm'
+        self.robot.SetActiveManipulator(self.manipName)
         self.manip = self.robot.GetActiveManipulator()
         self.manipJoints = self.robot.GetJoints(self.manip.GetArmJoints())
 
@@ -308,6 +309,7 @@ class RavenPlanner():
             jointTraj.append(waypointDict)
 
         return jointTraj
+        
 
     #################################
     # IK and Trajectory planning    #
