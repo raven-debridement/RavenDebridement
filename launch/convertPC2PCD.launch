@@ -1,0 +1,10 @@
+<!-- a general launch file that should work on most systems -->
+<launch>
+
+    <node pkg="pcl_ros" type="pointcloud_to_pcd" name="pc2pcd">
+        <remap from="input" to="/BC/points2" />
+	<remap from="~prefix" to="/home/annal/src/RavenDebridement/" />
+    </node>
+
+</launch>
+
