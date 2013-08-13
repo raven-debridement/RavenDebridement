@@ -22,7 +22,7 @@ from raven_2_msgs.msg import *
 
 import openravepy as rave
 
-import code
+import IPython
 
 def createMarker(pose, id_):
     marker = Marker()
@@ -66,27 +66,28 @@ def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     """
 
     currPose, desPose = tfx.pose(currPose), tfx.pose(desPose)
+    currPoseFrame, desPoseFrame = currPose.frame, desPose.frame
+    
     currPos, desPos = currPose.position, desPose.position
     currRot, desRot = currPose.orientation, desPose.orientation
 
     if posFrame != None:
-        tf_currPos_to_posFrame = tfx.lookupTransform(posFrame, currPos.frame, wait=10)
+        tf_currPos_to_posFrame = tfx.lookupTransform(posFrame, currPoseFrame, wait=10)
         currPos = tf_currPos_to_posFrame * currPos
 
-        tf_desPos_to_posFrame = tfx.lookupTransform(posFrame, desPos.frame, wait=10)
+        tf_desPos_to_posFrame = tfx.lookupTransform(posFrame, desPoseFrame, wait=10)
         desPos = tf_desPos_to_posFrame * desPos
 
     if rotFrame != None:
-        tf_currRot_to_rotFrame = tfx.lookupTransform(rotFrame, currRot.frame, wait=10)
+        tf_currRot_to_rotFrame = tfx.lookupTransform(rotFrame, currPoseFrame, wait=10)
         currRot = tf_currRot_to_rotFrame * currRot
 
-        tf_desRot_to_rotFrame = tfx.lookupTransform(rotFrame, desRot.frame, wait=10)
+        tf_desRot_to_rotFrame = tfx.lookupTransform(rotFrame, desPoseFrame, wait=10)
         desRot = tf_desRot_to_rotFrame * desRot
 
     deltaPosition = desPos - currPos
     
-    #currQuat, desQuat = currRot.orientation.quaternion, desRot.orientation.quaternion
-    currQuat, desQuat = currRot.quaternion, desRot.quaternion
+    currQuat, desQuat = tfx.tb_angles(currRot).quaternion, tfx.tb_angles(desRot).quaternion
     deltaQuat = tft.quaternion_multiply(tft.quaternion_inverse(currQuat), desQuat)
 
     deltaPose = tfx.pose(deltaPosition, deltaQuat)
