@@ -20,7 +20,9 @@ import tfx
 
 from raven_2_msgs.msg import *
 
-import code
+import openravepy as rave
+
+import IPython
 
 def createMarker(pose, id_):
     marker = Marker()
@@ -64,31 +66,52 @@ def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     """
 
     currPose, desPose = tfx.pose(currPose), tfx.pose(desPose)
+    currPoseFrame, desPoseFrame = currPose.frame, desPose.frame
+    
     currPos, desPos = currPose.position, desPose.position
     currRot, desRot = currPose.orientation, desPose.orientation
 
     if posFrame != None:
-        tf_currPos_to_posFrame = tfx.lookupTransform(posFrame, currPos.frame, wait=10)
+        tf_currPos_to_posFrame = tfx.lookupTransform(posFrame, currPoseFrame, wait=10)
         currPos = tf_currPos_to_posFrame * currPos
 
-        tf_desPos_to_posFrame = tfx.lookupTransform(posFrame, desPos.frame, wait=10)
+        tf_desPos_to_posFrame = tfx.lookupTransform(posFrame, desPoseFrame, wait=10)
         desPos = tf_desPos_to_posFrame * desPos
 
     if rotFrame != None:
-        tf_currRot_to_rotFrame = tfx.lookupTransform(rotFrame, currRot.frame, wait=10)
+        tf_currRot_to_rotFrame = tfx.lookupTransform(rotFrame, currPoseFrame, wait=10)
         currRot = tf_currRot_to_rotFrame * currRot
 
-        tf_desRot_to_rotFrame = tfx.lookupTransform(rotFrame, desRot.frame, wait=10)
+        tf_desRot_to_rotFrame = tfx.lookupTransform(rotFrame, desPoseFrame, wait=10)
         desRot = tf_desRot_to_rotFrame * desRot
 
     deltaPosition = desPos - currPos
     
-    currQuat, desQuat = currRot.orientation.quaternion, desRot.orientation.quaternion
+    currQuat, desQuat = tfx.tb_angles(currRot).quaternion, tfx.tb_angles(desRot).quaternion
     deltaQuat = tft.quaternion_multiply(tft.quaternion_inverse(currQuat), desQuat)
 
     deltaPose = tfx.pose(deltaPosition, deltaQuat)
 
     return deltaPose.msg.Pose()
+    
+def endPose(currPose, deltaPose, frame=None):
+    
+    currPose = tfx.pose(currPose)
+    deltaPose = tfx.pose(deltaPose)
+
+    if frame != None:
+        currPose = convertToFrame(currPose, frame)
+        deltaPose = convertToFrame(deltaPose, frame)
+
+    if currPose.frame != None and deltaPose.frame != None and currPose.frame != deltaPose.frame:
+        deltaPose = convertToFrame(deltaPose, currPose.frame)
+
+    endPosition = currPose.position + deltaPose.position
+    endQuatMat = currPose.orientation.matrix * deltaPose.orientation.matrix
+
+    endPose = tfx.pose(endPosition, endQuatMat)
+
+    return endPose
     
     
 def angleBetweenQuaternions(quat0, quat1):
@@ -140,4 +163,30 @@ class Timeout():
         return rospy.Time.now() > self.endTime 
 
 
+def plot_transform(env, T, s=0.1):
+    """
+    Plots transform T in openrave environment.
+    S is the length of the axis markers.
+    """
+    h = []
+    x = T[0:3,0]
+    y = T[0:3,1]
+    z = T[0:3,2]
+    o = T[0:3,3]
+    h.append(env.drawlinestrip(points=np.array([o, o+s*x]), linewidth=3.0, colors=np.array([(1,0,0),(1,0,0)])))
+    h.append(env.drawlinestrip(points=np.array([o, o+s*y]), linewidth=3.0, colors=np.array(((0,1,0),(0,1,0)))))
+    h.append(env.drawlinestrip(points=np.array([o, o+s*z]), linewidth=3.0, colors=np.array(((0,0,1),(0,0,1)))))
+    return h
 
+
+
+def testAngleBetween():
+    quat0 = tfx.tb_angles(-82,90,98).msg
+    quat1 = tfx.tb_angles(-3,90,-8).msg
+
+    theta = angleBetweenQuaternions(quat0, quat1)
+
+    print("theta = {0}".format(theta))
+
+if __name__ == '__main__':
+    testAngleBetween()

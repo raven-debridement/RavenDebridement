@@ -31,13 +31,23 @@ class Arm:
     Right = 'R'
 
 class Frames:
-    Camera = '/left_optical_frame'
-    LeftTool = '/tool_L'
-    RightTool = '/tool_R'
-    World = '/world'
-    LeftBase = '/base_link_L'
-    RightBase = '/base_link_R'
-    Link0 = '/0_link'
+    Camera = 'left_optical_frame'
+    LeftTool = 'tool_L'
+    RightTool = 'tool_R'
+    World = 'world'
+    LeftBase = 'base_link_L'
+    RightBase = 'base_link_R'
+    Link0 = '0_link'
+    
+class OpenraveLinks:
+    LeftWrist = 'wrist_L'
+    RightWrist = 'wrist_R'
+    LeftTool = 'tool_L'
+    RightTool = 'tool_R'
+    LeftToolBase = 'tool_base_L'
+    RightToolBase = 'tool_base_R'
+    LeftToolTip = 'tool_tip_L'
+    RightToolTip = 'tool_tip_R'
 
 class RavenTopics:
     #publish ToolCommandStamped directly

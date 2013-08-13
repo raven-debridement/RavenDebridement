@@ -1,0 +1,14 @@
+syntax: glob
+
+.*project
+.settings
+*~
+build
+\#*
+.#*
+*pyc
+*swp
+bin
+lib
+srv_gen
+src/RavenDebridement/srv/

@@ -71,8 +71,6 @@ class RavenController():
         
         self.thread = None
 
-        # for IK
-        self.ravenPlanner = RavenPlanner(self.arm)
 
         #################
         # PAUSE COMMAND #
@@ -99,6 +97,7 @@ class RavenController():
         ravenPauseCmd.arms.append(armCmd)
         ravenPauseCmd.pedal_down = True
         ravenPauseCmd.header = header
+        #ravenPauseCmd.controller = Constants.CONTROLLER_JOINT_POSITION
         ravenPauseCmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
 
         self.ravenPauseCmd = ravenPauseCmd
@@ -109,7 +108,18 @@ class RavenController():
         for arm in msg.arms:
             if arm.name == self.arm:
                 self.currentPose = tfx.pose(arm.tool.pose, header=msg.header)
-                self.currentGrasp = arm.tool.grasp 
+                self.currentGrasp = arm.tool.grasp
+
+                self.currentJoints = dict((joint.type, joint.position) for joint in arm.joints)
+
+    def getCurrentJoints(self):
+        """
+        Returns is dictionary of {jointType : jointPos}
+        
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
+        """
+        return self.currentJoints
 
 
     ###############################################
@@ -125,12 +135,24 @@ class RavenController():
         self.stages = []
         self.startTime = None
 
-        self.defaultSpeed = .01
+        # cm/sec
+        self.defaultPoseSpeed = .01
+        # rad/sec
+        #self.defaultJointSpeed = pi/30
+
+        self.defaultJointSpeed = {Constants.JOINT_TYPE_SHOULDER      : pi/16,
+                                  Constants.JOINT_TYPE_ELBOW         : pi/16,
+                                  Constants.JOINT_TYPE_INSERTION     : pi/512,
+                                  Constants.JOINT_TYPE_ROTATION      : pi/4,
+                                  Constants.JOINT_TYPE_PITCH         : pi/16,
+                                  Constants.JOINT_TYPE_GRASP_FINGER1 : pi/16,
+                                  Constants.JOINT_TYPE_GRASP_FINGER2 : pi/16}
 
 		
         self.currentState = None
         self.currentPose = None
         self.currentGrasp = None
+        self.currentJoints = None
 		
         # ADDED
         self.stopRunning.clear()
@@ -253,7 +275,11 @@ class RavenController():
             
             else:
                 # no stages
-                cmd = self.ravenPauseCmd
+                #cmd = self.ravenPauseCmd
+                # if last command was gripper, then ignore
+                if cmd.arms[0].tool_command.grasp_option != ToolCommand.GRASP_OFF:
+                    cmd = self.ravenPauseCmd
+                
 
             self.header.stamp = now
             cmd.header = self.header
@@ -275,13 +301,16 @@ class RavenController():
     def goToPose(self, end, start=None, duration=None, speed=None):
         if start == None:
             start = self.currentPose
+            if start == None:
+                rospy.loginfo('Have not received currentPose yet, aborting goToPose')
+                return
 
         start = tfx.pose(start)
         end = tfx.pose(end)
         
         if duration is None:
             if speed is None:
-                speed = self.defaultSpeed
+                speed = self.defaultPoseSpeed
             duration = end.position.distance(start.position) / speed
 
         def fn(cmd, t):
@@ -290,32 +319,68 @@ class RavenController():
             toolPose = pose.msg.Pose()
 
             # not sure if correct
-            cmd.controller = Constants.CONTROLLER_NONE
+            cmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
             RavenController.addArmPoseCmd(cmd, self.arm, toolPose)
 
         self.addStage('goToPose', duration, fn)
 
-    def goToPoseUsingJoints(self, end, duration=None, speed=None):
+    def goToJoints(self, endJoints, startJoints=None, duration=None, speed=None):
         """
-        go to the end pose, but use joint commands and joint interpolation
-        """
-        end = tfx.pose(end)
+        joints is dictionary of {jointType : jointPos}
         
-        jointTypes = self.ravenPlanner.getRosJointTypes()
+        jointType is from raven_2_msgs.msg.Constants
+        jointPos is position in radians
 
-        startJointPositions = self.ravenPlanner.getCurrentJointPositions()
-        endJointPositions = self.ravenPlanner.getJointPositionsFromPose(end)
-        
-        # TEMP
+        speed is a factor gain compared to default speeds
+        """
+
+        if startJoints == None:
+            startJoints = self.currentJoints
+            if startJoints == None:
+                rospy.loginfo('Have not received startJoints yet, aborting goToJoints')
+                return
+
+        # if there doesn't exist a start joint for an end joint, return
+        for endJointType in endJoints.keys():
+            if not startJoints.has_key(endJointType):
+                return
+
+        # if there doesn't exist an end joint for a start joint, ignore it
+        for startJointType in startJoints.keys():
+            if not endJoints.has_key(startJointType):
+                del startJoints[startJointType]
+
+        # make sure no pseudo joints are commanded
+        pseudoJoints = [Constants.JOINT_TYPE_YAW, Constants.JOINT_TYPE_GRASP]
+        for pseudoJoint in pseudoJoints:
+            if startJoints.has_key(pseudoJoint):
+                del startJoints[pseudoJoint]
+            if endJoints.has_key(pseudoJoint):
+                del endJoints[pseudoJoint]
+                
+        # now there should be one-to-one correspondence
+        # between startJoints and endJoints
+
         if duration is None:
-            duration = 10
-
+            if speed is None:
+                speed = self.defaultJointSpeed
+            else:
+                speed = dict([ (jointType ,speed * defaultSpeed) for jointType, defaultSpeed in self.defaultJointSpeed.items()])
+            duration = max([abs((endJoints[jointType]-startJoints[jointType]))/speed[jointType] for jointType in startJoints.keys()])
+        
+        
         def fn(cmd, t):
-            # TEMP
-            # how to interpolate
             # t is percent along trajectory
             cmd.controller = Constants.CONTROLLER_JOINT_POSITION
-            pass
+
+            desJoints = dict()
+            for jointType in startJoints.keys():
+                startJointPos = startJoints[jointType]
+                endJointPos = endJoints[jointType]
+                desJoints[jointType] = startJointPos + (endJointPos-startJointPos)*t
+            
+            RavenController.addArmJointCmds(cmd, self.arm, desJoints)
+
 
         self.addStage('goToPoseUsingJoints', duration, fn)
         
@@ -361,6 +426,7 @@ class RavenController():
 
         arm_cmd.tool_command = tool_cmd
 
+        cmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
         cmd.arms.append(arm_cmd)
 
     @staticmethod
@@ -372,25 +438,27 @@ class RavenController():
         return RavenController.addArmCmd(cmd, armName, grasp=grasp, graspOption=graspOption, poseOption=ToolCommand.POSE_OFF)
 
     @staticmethod
-    def addArmJointCmds(cmd,armName,jointsTypeValue):
+    def addArmJointCmds(cmd,armName,joints):
         """
-        jointsTypeValue is tuple of (jointType, value)
+        joints is dictionary of {jointType : jointPos}
         
         jointType is from raven_2_msgs.msg.Constants
-        value is position in radians
+        jointPos is position in radians
         """
         cmd.arm_names.append(armName)
 
         arm_cmd = ArmCommand()
         arm_cmd.active = True
 
-        for jointType, value in jointsTypeValue:
+        for jointType, jointPos in joints.items():
             jointCmd = JointCommand()
             jointCmd.command_type = JointCommand.COMMAND_TYPE_POSITION
-            jointCmd.value = value
+            jointCmd.value = jointPos
 
             arm_cmd.joint_types.append(jointType)
             arm_cmd.joint_commands.append(jointCmd)
+
+        cmd.arms.append(arm_cmd)
             
 
         
@@ -400,25 +468,11 @@ class RavenController():
 
 
 
-    def add_go_to_pose_using_joints(self, name, startJoints, endPose, arm=None, duration=None, speed=None):
-        """
-        Calculate the the joints for endPose using openrave IK
-
-        Then, return callback function for moving with linear angular velocity
-        from startJoints to endJoints
-        """
-        env = rave.Environment()
-        ravenFile = os.path.dirname(__file__) + '/../models/raven2.zae'
-        env.Load(ravenFile)
-        robot = env.GetRobots()[0]
-
-        code.interact(local=locals())
-
 
 
 
 def test_startstop():
-    rospy.init_node('raven_arm',anonymous=True)
+    rospy.init_node('raven_controller',anonymous=True)
     leftArm = RavenController(MyConstants.Arm.Left)
     rospy.sleep(2)
 
@@ -435,5 +489,20 @@ def test_startstop():
     rospy.loginfo('Press enter to exit')
     raw_input()
 
+def test_goToPoseUsingJoints():
+    rospy.init_node('raven_controller',anonymous=True)
+    rightArmController = RavenController(MyConstants.Arm.Right)
+    rospy.sleep(2)
+
+    #rightArmController.start()
+
+    rospy.loginfo('Press enter to move')
+    raw_input()
+
+    endJointPositions = list((pi/180.0)*np.array([21.9, 95.4, -7.5, 20.4, -29.2, -11.8]))
+
+    rightArmController.goToPoseUsingJoints(tfx.pose([0,0,0]), endJointPositions=endJointPositions)
+
 if __name__ == '__main__':
-    test_startstop()
+    #test_startstop()
+    test_goToPoseUsingJoints()
