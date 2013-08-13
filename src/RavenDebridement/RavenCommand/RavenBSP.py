@@ -52,28 +52,29 @@ class InitializationType:
 
 class RavenBSP(RavenPlanner):
 
-    def __init__(self, armName=MyConstants.Arm.Left):
+    def __init__(self, armName=MyConstants.Arm.Left, simPlotting=False, stagePlotting=False):
         """
         openrave planner for the raven
         """
         rospy.loginfo('Initialize BSP planner')
         RavenPlanner.__init__(self, armName)
 
-        self.viewer = ravenbsp.GetViewer(self.env)
-
         self.wrapper = ravenbsp.RavenBSPWrapper(self.env)
         
         self.wrapper.set_manip_name(self.manipName)
         self.wrapper.set_start_sigma(np.eye(len(self.rosJointTypes))*(.0001**2))
         self.wrapper.set_link_name(self.toolFrame)
-        
-            
+
+        self.wrapper.set_sim_plotting(simPlotting)
+        self.wrapper.set_stage_plotting(stagePlotting)
+                
+        if simPlotting:
+            self.viewer = ravenbsp.GetViewer(self.env)
+
         
     #################################
     # Control initializations       #
     #################################
-    
-
         
     def zeroControlInitialization(self, T):
         controlList = []
@@ -92,6 +93,21 @@ class RavenBSP(RavenPlanner):
         
         return controlList
                 
+    #################################
+    # Miscellaneous methods         #
+    #################################
+    
+    def controlsToPositions(self, startJointPositions, controlList):
+        """
+        Converts control solution to numpy joint trajectory position array
+        """
+        jointPositions = np.ndarray((1,len(startJointPositions)))
+        jointPositions[0] = np.array(startJointPositions)
+        
+        for control in controlList:
+            jointPositions = np.vstack((jointPositions, jointPositions[-1] + np.array(control)))
+            
+        return jointPositions[1:]
     
     #################################
     # IK and Trajectory planning    #
@@ -100,7 +116,7 @@ class RavenBSP(RavenPlanner):
 
     def getTrajectoryFromPose(self, endPose, startJoints=None, initType=InitializationType.Zero, n_steps=15):
         """
-        Use trajopt to compute trajectory
+        Use bsp to compute trajectory
 
         Returns a list of joint dictionaries
         """
@@ -108,6 +124,9 @@ class RavenBSP(RavenPlanner):
         endPose = tfx.pose(endPose)
         
         endJoints = self.getJointsFromPose(endPose)
+        
+        if endJoints == None:
+            return
         
         if startJoints == None:
             startJoints = self.currentJoints
@@ -134,17 +153,23 @@ class RavenBSP(RavenPlanner):
         else:
             initialControls = self.zeroControlInitialization(n_steps)
             
+        rospy.loginfo('BSP: set controls')
         self.wrapper.set_controls(initialControls)
         
         # setup, solve, execute
+        rospy.loginfo('BSP: initialize')
         self.wrapper.initialize()
+        rospy.loginfo('BSP: solve')
         self.wrapper.solve()
+        rospy.loginfo('BSP: simulate execution')
         self.wrapper.simulate_execution()
         
-        # get the controls
+        # controls -> positions -> dicts
         finalControls = self.wrapper.get_controls()
+        finalPositions = self.controlsToPositions(np.array(startJointPositions), finalControls)
+        finalJointDicts = self.jointTrajToDicts(finalPositions)
         
-        IPython.embed()
+        return finalJointDicts
     
     
 def testBSP(armName = MyConstants.Arm.Right):
@@ -157,10 +182,21 @@ def testBSP(armName = MyConstants.Arm.Right):
     tf_tool_to_link0 = tfx.lookupTransform(MyConstants.Frames.Link0, desPose.frame, wait=5)
     desPose = tf_tool_to_link0 * desPose
     
-    desPose.position.y -= .03
+    desPose.position.x -= .03
     
-    bsp.getTrajectoryFromPose(desPose)
+    jointTraj = bsp.getTrajectoryFromPose(desPose,initType=InitializationType.IK)
     
+    bsp.updateOpenraveJoints()
+    startEE = bsp.manip.GetEndEffectorTransform()
+    
+    bsp.updateOpenraveJoints(jointTraj[-1])
+    endEE = bsp.manip.GetEndEffectorTransform()
+    
+    startPose = tfx.pose(startEE)
+    endPose = tfx.pose(endEE)
+    deltaPose = tfx.pose(Util.deltaPose(startPose,endPose))
+    
+    IPython.embed()
     
 if __name__ == '__main__':
     testBSP()

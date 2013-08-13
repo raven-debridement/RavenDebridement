@@ -20,6 +20,10 @@ from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 import code
 
+WRITE_TO_FILE = True
+numFailedPickups = 0
+numGripperRotations = 0
+
 class MasterClass():
     """
     Contains the master pipeline for RavenDebridement in the run method
@@ -72,7 +76,7 @@ class MasterClass():
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
 
         self.timeout = Util.Timeout(30)
-        self.findGripperTimeout = Util.Timeout(1)
+        self.findGripperTimeout = Util.Timeout(2)
 
         self.rotateBy = -30
 
@@ -146,6 +150,9 @@ class MasterClass():
     def rotateGripper(self, failMethod=None, successMethod=None):
         failMethod = failMethod or self.findGripper
         successMethod = successMethod or self.findGripper
+        
+        global numGripperRotations
+        numGripperRotations += 1
         
         rospy.loginfo('Rotating the gripper by ' + str(self.rotateBy) + ' degrees')
         deltaPose = tfx.pose([0,0,.001], tfx.tb_angles(0,0,self.rotateBy))
@@ -233,6 +240,8 @@ class MasterClass():
             if self.timeout.hasTimedOut() or rospy.is_shutdown():
                 rospy.loginfo('Timed out')
                 self.objectHeightOffset = self.objectHeightOffset - .0005 if self.objectHeightOffset > 0 else 0
+                global numFailedPickups
+                numFailedPickups += 1
                 return failMethod(.02)
                 
             rospy.sleep(.1)
@@ -266,7 +275,7 @@ class MasterClass():
         successMethod = successMethod or (lambda: self.moveToHome(self.moveToReceptacle, self.moveToReceptacle))
 
         rospy.loginfo('Check if red foam piece successfully picked up')
-	rospy.sleep(1)
+        rospy.sleep(1)
 
         try:
             rospy.wait_for_service(Constants.Services.isFoamGrasped, timeout=5)
@@ -278,6 +287,9 @@ class MasterClass():
                 return successMethod
             else:
                 rospy.loginfo('Failed pickup')
+                
+                global numFailedPickups
+                numFailedPickups += 1
                 
                 rospy.loginfo('Opening the gripper')
                 # open gripper (consider not all the way)
@@ -334,24 +346,46 @@ class MasterClass():
         The pipeline consists of the above methods.
         Each method has a fail and success return method.
         """
-        delay = .1
+        delay = .5
         currentStage = self.findReceptacle
         
         self.ravenArm.start()
+        
+        if WRITE_TO_FILE:
+            import datetime
+            startTime = rospy.Time.now()
+            fileName = '/home/gkahn/ros_workspace/RavenDebridement/test_files/OldMasterTest_{0}'.format(datetime.datetime.now())
+            file = open(fileName,'w')
 
         while not rospy.is_shutdown():
             rospy.loginfo('Next stage')
             #rospy.loginfo('Press enter')
             #raw_input()
+            if WRITE_TO_FILE:
+                stageStartTime = rospy.Time.now()
+                file.write('{0}, Start time = {1}\n'.format(currentStage.__name__,stageStartTime.to_sec()-startTime.to_sec()))
+                
             currentStage = currentStage()
+            
+            if WRITE_TO_FILE:
+                stageEndTime = rospy.Time.now()
+                file.write('End time = {0}, Stage duration = {1}\n\n'.format(stageEndTime.to_sec()-startTime.to_sec(),stageEndTime.to_sec()-stageStartTime.to_sec()))
             rospy.sleep(delay)
+            
+        if WRITE_TO_FILE:
+            file.write('Total elapsed time = {0}\n'.format(rospy.Time.now().to_sec()-startTime.to_sec()))
+            file.write('Number of failed pickups = {0}\n'.format(numFailedPickups))
+            file.write('Number of gripper rotations = {0}\n'.format(numGripperRotations))
+            file.close()
 
         self.ravenArm.stop()
 
     def publishObjectPose(self, pose):
-        self.obj_pub.publish(pose)
+        #self.obj_pub.publish(pose)
+        pass
 
     def publishDesiredPose(self, delta_pose, gripper_pose):
+        """
         frame = gripper_pose.frame
         time = self.listener.getLatestCommonTime(frame, Constants.Frames.Link0)
         pose_stamped = gripper_pose.msg.PoseStamped()
@@ -366,7 +400,8 @@ class MasterClass():
         ori = tfx.pose(gripper_pose).orientation.matrix * delta_pose.orientation.matrix
         pose.pose.orientation = tfx.pose([0,0,0], ori).orientation.msg.Quaternion()
         self.des_pose_pub.publish(pose)
-
+        """
+        pass
 
 
 
@@ -378,7 +413,8 @@ def mainloop():
     """
     rospy.init_node('master_node',anonymous=True)
     imageDetector = ARImageDetector()
-    master = MasterClass(Constants.Arm.Left, imageDetector)
+    master = MasterClass(Constants.Arm.Right, imageDetector)
+    rospy.sleep(2)
     master.run()
 
 def rotateTest():

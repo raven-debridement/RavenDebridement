@@ -634,8 +634,8 @@ def testOpenraveJoints(arm=MyConstants.Arm.Right):
     code.interact(local=locals())
 
 if __name__ == '__main__':
-    testOpenCloseGripper(close=True)
-    #testMoveToHome()
+    #testOpenCloseGripper(close=True)
+    testMoveToHome()
     #testGoToJoints()
     #testExecuteTrajopt()
     #testGoToPose()

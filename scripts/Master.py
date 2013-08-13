@@ -21,6 +21,7 @@ from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
 from RavenDebridement.RavenCommand.RavenArm import RavenArm
 from RavenDebridement.RavenCommand.RavenPlanner import RavenPlanner
+from RavenDebridement.RavenCommand.RavenBSP import RavenBSP
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 import code
@@ -163,7 +164,7 @@ class PlanTrajToObject(smach.State):
             
         rospy.loginfo('Planning trajectory from gripper to object')
 
-        transBound = .008
+        transBound = .006
         rotBound = float("inf")
         if Util.withinBounds(userdata.gripperPose, userdata.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
             rospy.loginfo('Closing the gripper')
@@ -171,11 +172,16 @@ class PlanTrajToObject(smach.State):
             userdata.vertAmount = .04
             return 'reachedObject'
 
-        deltaPose = Util.deltaPose(userdata.gripperPose, userdata.objectPose, self.transFrame, self.rotFrame)
+        deltaPose = tfx.pose(Util.deltaPose(userdata.gripperPose, userdata.objectPose, self.transFrame, self.rotFrame))
 
         endPose = Util.endPose(self.ravenArm.getGripperPose(), deltaPose)
-        n_steps = int(self.stepsPerMeter * endPose.position.norm) + 1
+        n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
         jointTraj = self.ravenPlanner.getTrajectoryFromPose(endPose, n_steps=n_steps)
+        
+        rospy.loginfo('deltaPose')
+        rospy.loginfo(deltaPose)
+        rospy.loginfo('n_steps')
+        rospy.loginfo(n_steps)
 
         if jointTraj == None:
             return 'failure'
@@ -200,6 +206,11 @@ class MoveTowardsObject(smach.State):
         # limit distance moved
         endTrajStep = min(int(self.stepsPerMeter*self.maxServoDistance)+1, len(jointTraj))
         jointTraj = jointTraj[:endTrajStep]
+        
+        rospy.loginfo('Total steps')
+        rospy.loginfo(len(jointTraj))
+        rospy.loginfo('endTrajStep')
+        rospy.loginfo(endTrajStep)
 
         self.ravenArm.executeJointTrajectory(jointTraj,block=True)
 
@@ -496,7 +507,8 @@ class MasterClass(object):
         # image detection, gripper control, and arm control
         self.imageDetector = imageDetector
         self.ravenArm = RavenArm(self.armName)
-        self.ravenPlanner = RavenPlanner(self.armName)
+        #self.ravenPlanner = RavenPlanner(self.armName)
+        self.ravenPlanner = RavenBSP(self.armName)
 
         # translation frame
         self.transFrame = Constants.Frames.Link0

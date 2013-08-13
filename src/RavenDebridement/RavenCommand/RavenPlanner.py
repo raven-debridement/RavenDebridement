@@ -29,6 +29,7 @@ from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants as MyConstants
 
 import code
+import IPython
 
 class Request():
     """
@@ -283,9 +284,9 @@ class RavenPlanner():
 
         return newWorldFromEE
 
-    def trajoptTrajToDicts(self, trajoptTraj):
+    def jointTrajToDicts(self, jointTrajArray):
         """
-        Converts a trajopt numpy array trajectory
+        Converts a numpy array trajectory
         to a list of joint dictionaries
 
         dicts contain ros joints:
@@ -293,9 +294,9 @@ class RavenPlanner():
         rotation, pitch, finger1, finger2
         """
         grasp = self.currentGrasp
-        jointTraj = []
-        for trajIndex in range(len(trajoptTraj)):
-            waypointJointPositions = list(trajoptTraj[trajIndex])
+        jointTrajDicts = []
+        for trajIndex in range(len(jointTrajArray)):
+            waypointJointPositions = list(jointTrajArray[trajIndex])
             
             # since yaw is pseudo-joint, convert to finger1 and finger2
             yaw = waypointJointPositions[-1]
@@ -306,9 +307,9 @@ class RavenPlanner():
             rosJointTypesPlusFingers = self.rosJointTypes[:] + [Constants.JOINT_TYPE_GRASP_FINGER1, Constants.JOINT_TYPE_GRASP_FINGER2]
             
             waypointDict = dict(zip(rosJointTypesPlusFingers, waypointJointPositions))
-            jointTraj.append(waypointDict)
+            jointTrajDicts.append(waypointDict)
 
-        return jointTraj
+        return jointTrajDicts
         
 
     #################################
@@ -399,7 +400,7 @@ class RavenPlanner():
             rospy.loginfo('Still returning trajectory')
             #return
 
-        return self.trajoptTrajToDicts(result.GetTraj())
+        return self.jointTrajToDicts(result.GetTraj())
 
 
 
