@@ -624,7 +624,7 @@ def mainloop():
     """
     rospy.init_node('master_node',anonymous=True)
     imageDetector = ARImageDetector()
-    master = MasterClass(Constants.Arm.Right, imageDetector)
+    master = MasterClass(Constants.Arm.Left, imageDetector)
     master.run()
 
 def rotateTest():

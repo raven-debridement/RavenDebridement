@@ -75,8 +75,8 @@ class ImageDetector():
         #self.newLeftGripperPose = True
         self.newRightGripperPose = True
         self.tapeMsg = msg
-        #self.leftGripperPose = msg
-        self.rightGripperPose = msg
+        self.leftGripperPose = msg
+        #self.rightGripperPose = msg
         self.gripperPoseIsEstimate = False
 
     def foamCallback(self, msg):

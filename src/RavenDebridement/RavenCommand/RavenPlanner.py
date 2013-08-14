@@ -249,7 +249,10 @@ class RavenPlanner():
         # NOTE: this is for the right arm, may be diff for left arm
         raveJointTypes += self.raveGrasperJointTypes
         #currentGrasp = self.currentGrasp if self.armName == MyConstants.Arm.Left else -self.currentGrasp
-        jointPositions += [self.currentGrasp/2, -self.currentGrasp/2]
+        if self.armName == MyConstants.Arm.Left:
+            jointPositions += [self.currentGrasp/2, self.currentGrasp/2]
+        else:
+            jointPositions += [self.currentGrasp/2, -self.currentGrasp/2]
 
         self.robot.SetJointValues(jointPositions, raveJointTypes)
 
@@ -302,6 +305,9 @@ class RavenPlanner():
             yaw = waypointJointPositions[-1]
             finger1 = yaw - grasp/2
             finger2 = -(yaw + grasp/2)
+            if self.armName == MyConstants.Arm.Left:
+                finger1 = -finger1
+                finger2 = -finger2
             # try keeping yaw
             waypointJointPositions = waypointJointPositions[:] + [finger1, finger2]
             rosJointTypesPlusFingers = self.rosJointTypes[:] + [Constants.JOINT_TYPE_GRASP_FINGER1, Constants.JOINT_TYPE_GRASP_FINGER2]
@@ -413,11 +419,13 @@ class RavenPlanner():
 
 def testIK():
     rospy.init_node('test_IK',anonymous=True)
-    rp = RavenPlanner(MyConstants.Arm.Right)
+    rp = RavenPlanner(MyConstants.Arm.Left)
+    rp.env.SetViewer('qtcoin')
     rospy.sleep(2)
+    
 
     currPose = tfx.pose([0,0,0], frame=rp.toolFrame)
-    tf_tool_to_link0 = tfx.lookupTransform('0_link', currPose.frame, wait=5)
+    tf_tool_to_link0 = tfx.lookupTransform('0_link', currPose.frame, wait=10)
     currPose = tf_tool_to_link0 * currPose
     currPose.frame = '0_link'
 
@@ -426,8 +434,8 @@ def testIK():
         print("jointType = {0}, jointPos = {1}".format(jointType,((180.0/pi)*jointPos)))
 
     rp.updateOpenraveJoints()
-    #rp.env.SetViewer('qtcoin')
-
+    IPython.embed()
+    return
     """
     link0 = rp.robot.GetLink('0_link')
     Tcur_w_link = link0.GetTransform()
@@ -480,8 +488,6 @@ def testIK():
     #Util.plot_transform(rp.env, rp.transformRelativePoseForIk(pose.matrix, targLinkName, targLinkName))
     Util.plot_transform(rp.env, rp.transformRelativePoseForIk(currPose.matrix, currPose.frame, rp.toolFrame))
 
-
-    code.interact(local=locals())
 
     rospy.spin()
 

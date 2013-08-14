@@ -10,7 +10,7 @@ from raven_2_msgs.msg import *
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
 from RavenDebridement.RavenCommand.RavenArm import RavenArm
-from RavenDebridement.RavenCommand.RavenPlanner import RavenPlanner
+from RavenDebridement.RavenCommand.RavenPlanner import RavenPlanner, Request
 
 import tfx
 
@@ -80,9 +80,11 @@ class Test():
         self.deltaPoses.append(deltaPose)
         
         
-def testPoseDiff(arm=Constants.Arm.Right):
+def testPoseDiff(arm=Constants.Arm.Left):
     rospy.init_node('testPoseDiff',anonymous=True)
     t = Test(arm)
+    ravenArm = RavenArm(arm)
+    ravenPlanner = RavenPlanner(arm)
     
     rospy.loginfo('Press enter to start recording')
     raw_input()
@@ -99,10 +101,27 @@ def testPoseDiff(arm=Constants.Arm.Right):
     
     t.printPoses()
     
+    rospy.loginfo('Press enter to compare joints')
+    raw_input()
+    
+    tapePose = t.tapePoses[-1]
+    
+    ravenJoints = ravenArm.getCurrentJoints()
+    ikJoints = ravenPlanner.getJointsFromPose(tapePose)
+    
+    for jointType in ravenPlanner.rosJointTypes:
+        ravenJoint = (180.0/math.pi)*ravenJoints[jointType]
+        ikJoint = (180.0/math.pi)*ikJoints[jointType]
+        print('JointType = {0}'.format(jointType))
+        print('ravenJoint = {0}'.format(ravenJoint))
+        print('ikJoint = {0}'.format(ikJoint))
+        print('Joint difference = {0}\n'.format(abs(ravenJoint-ikJoint)))
+        
+    
     rospy.loginfo('Press enter to exit')
     raw_input()
     
-def execAndRecordTraj(arm=Constants.Arm.Right):
+def execAndRecordTraj(arm=Constants.Arm.Left):
     rospy.init_node('execAndRecordTraj',anonymous=True)
     rospy.sleep(1)
     ravenArm = RavenArm(arm)
@@ -119,23 +138,30 @@ def execAndRecordTraj(arm=Constants.Arm.Right):
     startPose = tfx.pose(ravenArm.getGripperPose())    
     
     x = .03
-    y = .03
-    z = .03
+    y = .06
+    z = .01
     deltaPoses = []
-    deltaPoses.append(tfx.pose([x,0, -z],frame=Constants.Frames.Link0))
+    #deltaPoses.append(tfx.pose([x,0, -z],frame=Constants.Frames.Link0))
     deltaPoses.append(tfx.pose([0,-y, 0],frame=Constants.Frames.Link0))
-    deltaPoses.append(tfx.pose([-x,0,z],frame=Constants.Frames.Link0))
+    #deltaPoses.append(tfx.pose([-x,0,z],frame=Constants.Frames.Link0))
     deltaPoses.append(tfx.pose([0,y, 0],frame=Constants.Frames.Link0))
 
-    record.startRecording()
-    while not rospy.is_shutdown() and record.recordCount < 100:
+    #record.startRecording()
+    while not rospy.is_shutdown():
         for deltaPose in deltaPoses:
             startPose = tfx.pose(ravenArm.getGripperPose())
-            endPose = Util.endPose(startPose, deltaPose)
-            jointTraj = ravenPlanner.getTrajectoryFromPose(endPose)
-            #rospy.loginfo('Press enter to execute')
-            #raw_input()
+            endPose = tfx.pose(Util.endPose(startPose, deltaPose))
+            #ravenArm.goToGripperPose(endPose,speed=.04)
+            jointTraj = ravenPlanner.getTrajectoryFromPose(endPose,n_steps=10)
+            rospy.loginfo('startPose')
+            rospy.loginfo(startPose)
+            rospy.loginfo('endPose')
+            rospy.loginfo(endPose)
+            rospy.loginfo('Used trajopt, now move')
+            raw_input()
             ravenArm.executeJointTrajectory(jointTraj, speed=.5)
+            #endJoints = ravenPlanner.getJointsFromPose(endPose)
+            #ravenArm.goToJoints(endJoints,speed=1.5)
     record.stopRecording()
             
     rospy.loginfo('Press enter to print and exit')
@@ -153,7 +179,3 @@ if __name__ == '__main__':
     
     
     
-"""
-
-
-"""

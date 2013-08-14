@@ -46,15 +46,8 @@ class Stage(object):
         return stageBreaks
 
 class RavenController():
-    def __init__(self, arm, tfListener=None):
+    def __init__(self, arm):
         self.arm = arm
-
-        self.tfListener = tfListener
-        if self.tfListener is None:
-            self.tfListener = tfx.TransformListener.instance()
-        rospy.loginfo('waiting for transform')
-        
-        self.tfListener.waitForTransform('/0_link','/tool_'+self.arm,rospy.Time(0),rospy.Duration(5))
 
         self.stopRunning = threading.Event()
 
@@ -141,7 +134,7 @@ class RavenController():
         #self.defaultJointSpeed = pi/30
 
         self.defaultJointSpeed = {Constants.JOINT_TYPE_SHOULDER      : pi/16,
-                                  Constants.JOINT_TYPE_ELBOW         : pi/16,
+                                  Constants.JOINT_TYPE_ELBOW         : pi/25,
                                   Constants.JOINT_TYPE_INSERTION     : pi/512,
                                   Constants.JOINT_TYPE_ROTATION      : pi/4,
                                   Constants.JOINT_TYPE_PITCH         : pi/16,
