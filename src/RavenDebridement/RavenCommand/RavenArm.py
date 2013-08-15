@@ -96,7 +96,7 @@ class RavenArm:
 
         prevPose = None
         for pose in poseTraj:
-            self.goToPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed)
+            self.goToGripperPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed)
             prevPose = pose
 
         if block:
