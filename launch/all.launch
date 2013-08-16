@@ -31,9 +31,11 @@
     <!-- For AR marker detection -->
     <include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />
     
-    <node name="color_gripper_segmenter" type="color_gripper_segmenter" pkg="RavenDebridement">
+    <node name="color_gripper_segmenter" type="color_gripper_segmenter" pkg="raven_pose_estimator">
         
     </node>
+    
+    <include file="$(find RavenDebridement)/launch/IK_server.launch" />
 
 </launch>
 
