@@ -140,7 +140,27 @@ def convertToFrame(p, frame):
 
     return p
 
+def openraveTransformFromTo(robot, poseMatInRef, refLinkName, targLinkName):
+    # ref -> world
+    refFromWorld = robot.GetLink(refLinkName).GetTransform()
 
+    # target -> world
+    targFromWorld = robot.GetLink(targLinkName).GetTransform()
+
+    # target -> ref
+    targFromRef = np.dot(np.linalg.inv(targFromWorld), refFromWorld)
+
+    poseMatInTarg = np.dot(targFromRef, poseMatInRef)
+    return poseMatInTarg
+    
+def setWithinLimits(val, lower, upper, increment):
+    while val >= upper:
+        val -= increment
+        
+    while val <= lower:
+        val += increment
+        
+    return val
 
 class Timeout():
     def __init__(self, timeoutTime):

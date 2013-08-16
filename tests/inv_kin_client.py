@@ -5,6 +5,8 @@ import rospy
 import math
 
 from RavenDebridement.srv import InvKinSrv
+from RavenDebridement.RavenCommand.RavenArm import RavenArm
+from RavenDebridement.Utils import Constants as MyConstants
 
 from raven_2_msgs.msg import *
 
@@ -14,13 +16,15 @@ import code
 
 def invKinClient():
     rospy.init_node('inv_kin_client',anonymous=True)
+    rospy.sleep(4)
+    ravenArm = RavenArm(MyConstants.Arm.Left)
+    rospy.sleep(4)
     try:
         rospy.wait_for_service('inv_kin_server',timeout=5)
         inv_kin_service = rospy.ServiceProxy('inv_kin_server', InvKinSrv)
-        arm = Constants.ARM_TYPE_GREEN
-        grasp = (math.pi/180.0)/71.734
-        angle = tfx.tb_angles(-68.8,68.4,-140) # -20.2, 84.0, 50.5
-        pose = tfx.pose([-.136,-.017,-.068], angle).msg.Pose()
+        arm = Constants.ARM_TYPE_GOLD
+        pose = tfx.pose(ravenArm.getGripperPose())
+        grasp = ravenArm.ravenController.currentGrasp
         rospy.loginfo('Find ik for ' + str(pose))
         resp = inv_kin_service(arm, grasp, pose)
         rospy.loginfo('Called service')

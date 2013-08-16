@@ -27,6 +27,7 @@ import thread
 from RavenDebridement.Utils import Constants as MyConstants
 from RavenDebridement.Utils import Util
 from RavenPlanner import Request, RavenPlanner
+from RavenBSP import RavenBSP, InitializationType
 from RavenController import RavenController
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
@@ -95,7 +96,7 @@ class RavenArm:
 
         prevPose = None
         for pose in poseTraj:
-            self.goToPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed)
+            self.goToGripperPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed)
             prevPose = pose
 
         if block:
@@ -337,6 +338,10 @@ class RavenArm:
     # other methods #
     #################
     
+    @property
+    def name(self):
+        return self.armName
+    
     def blockUntilPaused(self, timeoutTime=999999):
         timeout = Util.Timeout(timeoutTime)
         timeout.start()
@@ -555,7 +560,7 @@ def testExecuteJointTrajectory(arm=MyConstants.Arm.Right):
     tf_tool_to_link0 = tfx.lookupTransform(MyConstants.Frames.Link0, currPose.frame, wait=5)
     currPose = tf_tool_to_link0 * currPose
 
-    angle = tfx.tb_angles(0,90,0)
+    angle = tfx.tb_angles(-90,90,0)
     endPosition = currPose.position
     endPosition.x -= .05
     endPose = tfx.pose(endPosition, angle,frame=MyConstants.Frames.Link0)
@@ -632,13 +637,56 @@ def testOpenraveJoints(arm=MyConstants.Arm.Right):
     ravenPlanner.env.SetViewer('qtcoin')
 
     code.interact(local=locals())
+    
+def testExecuteJointTrajectoryBSP(arm=MyConstants.Arm.Right):
+    rospy.init_node('test_trajopt',anonymous=True)
+    ravenArm = RavenArm(arm)
+    ravenPlanner = RavenBSP(arm)
+    rospy.sleep(4)
+
+
+    if arm == MyConstants.Arm.Right:
+        toolframe = MyConstants.Frames.RightTool
+    else:
+        toolframe = MyConstants.Frames.LeftTool
+
+    currPose = tfx.pose([0,0,0], frame=toolframe)
+    tf_tool_to_link0 = tfx.lookupTransform(MyConstants.Frames.Link0, currPose.frame, wait=5)
+    currPose = tf_tool_to_link0 * currPose
+
+    angle = tfx.tb_angles(-90,90,0)
+    endPosition = currPose.position
+    endPosition.y += .05
+    endPose = tfx.pose(endPosition, angle,frame=MyConstants.Frames.Link0)
+
+
+    rospy.loginfo('Press enter to call bsp')
+    raw_input()
+
+    jointTraj = ravenPlanner.getTrajectoryFromPose(endPose)
+    
+    if jointTraj == None:
+        return
+    
+    rospy.loginfo('Press enter to move')
+    raw_input()
+
+    ravenArm.start()
+    rospy.sleep(1)
+    
+    ravenArm.executeJointTrajectory(jointTraj)
+    
+    
+    rospy.loginfo('Press enter to exit')
+    raw_input()
 
 if __name__ == '__main__':
     #testOpenCloseGripper(close=True)
-    testMoveToHome()
+    #testMoveToHome()
     #testGoToJoints()
     #testExecuteTrajopt()
     #testGoToPose()
     #testTrajopt()
     #testExecuteJointTrajectory()
     #testOpenraveJoints()
+    testExecuteJointTrajectoryBSP()

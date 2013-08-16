@@ -351,12 +351,19 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	float d = -pz / sin(thp);
 
 	float d_act, thp_act, thy_act, g1_act, g2_act;
-	d_act = D_FROM_IK(armId,d);
-	thp_act = fix_angle(-thp-WRIST_OFFSET_GOLD);//thp_act = THP_FROM_IK(armId,thp);
-	thy_act = THY_FROM_IK(armId,thy,grasp);
-	g1_act = FINGER2_FROM_IK(armId,thy,grasp);//FINGER1_FROM_IK(armId,thy,grasp);
-	g2_act = FINGER1_FROM_IK(armId,thy,grasp);//FINGER2_FROM_IK(armId,thy,grasp);
-
+	if (mech->type == GOLD_ARM) {
+		d_act = D_FROM_IK(armId,d);
+		thp_act = -THP_FROM_IK(armId,thp);
+		thy_act = THY_FROM_IK(armId,thy,grasp);
+		g1_act = FINGER2_FROM_IK(armId,thy,grasp);
+		g2_act = FINGER1_FROM_IK(armId,thy,grasp);
+	} else {
+		d_act = D_FROM_IK(armId,d);
+		thp_act = fix_angle(-thp-WRIST_OFFSET_GOLD);//thp_act = THP_FROM_IK(armId,thp);
+		thy_act = THY_FROM_IK(armId,thy,grasp);
+		g1_act = FINGER2_FROM_IK(armId,thy,grasp);//FINGER1_FROM_IK(armId,thy,grasp);
+		g2_act = FINGER1_FROM_IK(armId,thy,grasp);//FINGER2_FROM_IK(armId,thy,grasp);
+	}
 	//check angles
 	int validity1[4];
 	bool valid1 = check_joint_limits1_new(d_act,thp_act,g1_act,g2_act,validity1);
@@ -452,7 +459,7 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 		if (mech->type == GOLD_ARM) {
 		  //ths_act[i] = fix_angle(ths_opt[i]);
 		  //the_act[i] = the_opt[i];
-		  thr_act[i] = fix_angle(-thr_opt[i]-M_PI_2); // UNSURE
+		  thr_act[i] = -fix_angle(thr_opt[i]-M_PI_2); // UNSURE
 		} else {
 		  //ths_act[i] = fix_angle(M_PI - ths_opt[i]);
 		  //the_act[i] = -the_opt[i];
@@ -579,13 +586,20 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
     joint->type = YAW;
     joint->state = raven_2_msgs::JointState::STATE_READY;
     joint->position = (mech->joint[GRASP1].jpos_d - mech->joint[GRASP2].jpos_d)/2;
+    if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GOLD) {
+    	joint->position = -joint->position;
+    }
     res.joints.push_back(*joint);
 
     
     joint = new raven_2_msgs::JointState();
     joint->type = GRASP;
     joint->state = raven_2_msgs::JointState::STATE_READY;
-    joint->position = abs(mech->joint[GRASP1].jpos_d) + abs(mech->joint[GRASP2].jpos_d);
+    if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GOLD) {
+    	joint->position = fabs(mech->joint[GRASP2].jpos_d) - fabs(mech->joint[GRASP1].jpos_d);
+    } else {
+    	joint->position = fabs(mech->joint[GRASP1].jpos_d) + fabs(mech->joint[GRASP2].jpos_d);
+    }
     res.joints.push_back(*joint);
     
 

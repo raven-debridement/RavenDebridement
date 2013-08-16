@@ -54,11 +54,6 @@ class ImageDetector():
         self.listener = tf.TransformListener()
         self.tf_br = tf.TransformBroadcaster()
         self.registerObjectPublisher()
-
-
-        # Temporary. Will eventually be placed with real image detection
-        # Will subscribe to camera feeds eventually 
-        #rospy.Subscriber(Constants.StereoClick.StereoName, PointStamped, self.stereoCallback)
         
         rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
         rospy.Subscriber(Constants.GripperTape.Topic, PoseStamped, self.tapeCallback)
@@ -72,11 +67,11 @@ class ImageDetector():
 
     def tapeCallback(self, msg):
         # TEMP hard coded for left gripper
-        #self.newLeftGripperPose = True
-        self.newRightGripperPose = True
+        self.newLeftGripperPose = True
+        #self.newRightGripperPose = True
         self.tapeMsg = msg
-        #self.leftGripperPose = msg
-        self.rightGripperPose = msg
+        self.leftGripperPose = msg
+        #self.rightGripperPose = msg
         self.gripperPoseIsEstimate = False
 
     def foamCallback(self, msg):
@@ -99,35 +94,6 @@ class ImageDetector():
         marker = Util.createMarker(self.getObjectPose(), 0)
         self.objPublisher.publish(marker)
         
-    def stereoCallback(self, msg):
-        """
-        Temporary. First click sets receptaclePoint, all others are objectPoints
-        
-        Also, always sets gripper poses
-        """
-        if self.receptaclePoint == None:
-            self.receptaclePoint = msg 
-            self.receptaclePoint.point.z += .1
-        else:
-            #msg.point.z -= .03 # so gripper doesn't pick up right on the edge
-            self.objectPoint = msg
-            
-            marker = Marker()
-            marker.header.frame_id = msg.header.frame_id
-            marker.type = marker.CUBE
-            marker.action = marker.ADD
-            marker.scale.x = 0.002
-            marker.scale.y = 0.002
-            marker.scale.z = 0.002
-            marker.color.a = 1.0
-            marker.color.r = 255
-            marker.color.g = 255
-            marker.pose.orientation.w = 1.0
-            marker.pose.position.x = msg.point.x
-            marker.pose.position.y = msg.point.y
-            marker.pose.position.z = msg.point.z
-            self.objMarker = marker
-            self.objPublisher.publish(marker)
         
     def gripperPoseEstimated(self):
         return self.gripperPoseIsEstimate
@@ -135,7 +101,7 @@ class ImageDetector():
     def hasFoundObject(self):
         return self.objectPoint != None
 
-    def getObjectPose(self,desFrame=None):
+    def getObjectPose(self):
         """
         Returns object point plus the table normal as the orientation
         
@@ -150,13 +116,6 @@ class ImageDetector():
 
 
         objectPose = tfx.pose(self.objectPoint, self.normal)
-
-
-        """
-        if desFrame != None:
-            tf_obj_to_tool = tfx.lookupTransform(desFrame, objectPose.frame, wait=5)
-            objectPose = tf_obj_to_tool * objectPose
-        """
 
         return objectPose.msg.PoseStamped()
         
@@ -223,24 +182,14 @@ class ImageDetector():
         if not self.hasFoundGripper(armName):
             return None
 
-        # may want to make a copy of gripper pose eventually
         if armName == Constants.Arm.Left:
             self.newLeftGripperPose = False
             return self.leftGripperPose
-            #frame = Constants.Frames.LeftTool
-            #gripper = tfx.pose(self.leftGripperPose)
         else:
             self.newRightGripperPose = False
             return self.rightGripperPose
-            #frame = Constants.Frames.RightTool
-            #gripper =  tfx.pose(self.rightGripperPose)
 
-        """
-        tf_arm_to_tool = tfx.lookupTransform(frame, gripper.frame, wait=5)
-        gripper = tf_arm_to_tool * gripper
 
-        return gripper.msg.PoseStamped()
-        """
 
     def getGripperPoint(self, armName):
         """
