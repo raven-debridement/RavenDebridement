@@ -17,7 +17,7 @@
     <!--<node pkg="transforms" type="transform_server.py" name="transform_broadcaster" />-->
 
     <!-- Foam pose detection -->
-    <node name="foam_poses" type="foam_segmenter" pkg="raven_pose_estimator" output="screen">
+    <node name="foam_poses" type="foam_segmenter" pkg="RavenDebridement" output="screen">
         <remap from="disparity" to="BC/disparity" />
         <remap from="left/camera_info" to="BC/left/camera_info" />
         <remap from="right/camera_info" to="BC/right/camera_info" />
@@ -30,6 +30,10 @@
 
     <!-- For AR marker detection -->
     <include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />
+    
+    <node name="color_gripper_segmenter" type="color_gripper_segmenter" pkg="RavenDebridement">
+        
+    </node>
 
 </launch>
 
