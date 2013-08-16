@@ -338,6 +338,10 @@ class RavenArm:
     # other methods #
     #################
     
+    @property
+    def name(self):
+        return self.armName
+    
     def blockUntilPaused(self, timeoutTime=999999):
         timeout = Util.Timeout(timeoutTime)
         timeout.start()

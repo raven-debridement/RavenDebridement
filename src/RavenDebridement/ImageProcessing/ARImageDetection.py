@@ -50,7 +50,7 @@ class ARImageDetector(ImageDetector):
 
 
             # home position. likely in front of the camera, close
-            self.homePoint = tfx.point([.002,.022,-.13],frame=Constants.Frames.Link0).msg.PointStamped()
+            self.homePoint = tfx.point([-.005,.022,-.13],frame=Constants.Frames.Link0).msg.PointStamped()
             
             #receptacle point. Must have frame_id of link_0
             #is the exact place to drop off (i.e. don't need to do extra calcs to move away

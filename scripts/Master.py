@@ -176,7 +176,7 @@ class PlanTrajToObject(smach.State):
 
         endPose = Util.endPose(self.ravenArm.getGripperPose(), deltaPose)
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
-        poseTraj = self.ravenPlanner.getTrajectoryFromPose(endPose, n_steps=n_steps)
+        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
         
         rospy.loginfo('deltaPose')
         rospy.loginfo(deltaPose)
@@ -236,7 +236,7 @@ class MoveVertical(smach.State):
         deltaPose = tfx.pose([0,0,userdata.vertAmount]).msg.Pose()
         
         endPose = Util.endPose(self.ravenArm.getGripperPose(), deltaPose)
-        endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(endPose)
+        endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose)
 
         if endPoseTraj != None:
             self.ravenArm.executePoseTrajectory(endPoseTraj)
@@ -303,7 +303,7 @@ class MoveToReceptacle(smach.State):
         #ignore orientation
         receptaclePose.orientation = currPose.orientation
 
-        endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(receptaclePose)
+        endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, receptaclePose)
 
         if endPoseTraj != None:
             self.ravenArm.executePoseTrajectory(endPoseTraj)
@@ -337,7 +337,7 @@ class MoveToHome(smach.State):
         #ignore orientation
         homePose.orientation = currPose.orientation
 
-        endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(homePose)
+        endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, homePose)
 
         if endPoseTraj != None:
             self.ravenArm.executePoseTrajectory(endPoseTraj)
@@ -402,7 +402,7 @@ class MasterClass(object):
                                                  'failure': 'findHome'})
             smach.StateMachine.add('findObject', FindObject(self.imageDetector, self.toolframe, self.obj_pub),
                                    transitions = {'success': 'findGripper',
-                                                  'failure': 'findObject'})
+                                                  'failure': 'success'})
             smach.StateMachine.add('findGripper', FindGripper(self.imageDetector, self.gripperName),
                                    transitions = {'success': 'planTrajToObject',
                                                   'failure': 'rotateGripper'})
@@ -454,7 +454,7 @@ def mainloop():
     
     imageDetector = ARImageDetector()
     ravenArm = RavenArm(armName)
-    ravenPlanner = RavenPlanner(armName)
+    ravenPlanner = RavenPlanner([armName])
     master = MasterClass(Constants.Arm.Left, ravenArm, ravenPlanner, imageDetector)
     master.run()
 
