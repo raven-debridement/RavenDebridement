@@ -5,8 +5,6 @@ import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
 from math import *
-import copy
-import sys, os
 import numpy as np
 
 from raven_2_msgs.msg import * 
@@ -21,7 +19,6 @@ import trajoptpy
 
 import cravenbsppy as ravenbsp
 
-import tf
 import tfx
 
 from RavenDebridement.Utils import Util

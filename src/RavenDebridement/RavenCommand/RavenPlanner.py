@@ -5,11 +5,9 @@ import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
 from math import *
-import copy
-import sys, os
+import os
 
 from raven_2_msgs.msg import * 
-from std_msgs.msg import Header
 from geometry_msgs.msg import *
 
 from RavenDebridement.srv import InvKinSrv
@@ -22,13 +20,11 @@ import numpy as np
 
 import threading
 
-import tf
 import tfx
 
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants as MyConstants
 
-import code
 import IPython
 
 class Request():

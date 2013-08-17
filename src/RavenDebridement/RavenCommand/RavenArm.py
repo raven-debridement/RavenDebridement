@@ -2,26 +2,17 @@
 
 import roslib; roslib.load_manifest('RavenDebridement')
 import numpy as np
-import os, sys
-import random
+import os
 import math
 
 import rospy
 
-import tf
-import tf.transformations as tft
-
-from geometry_msgs.msg import *
-from std_msgs.msg import Header
-
 import code
 
 import tfx
-from raven_2_msgs.msg import *
 
 import openravepy as rave
 
-import thread
 
 # rename so no conflict with raven_2_msgs.msg.Constants
 from RavenDebridement.Utils import Constants as MyConstants
