@@ -126,7 +126,7 @@ class Request():
                     "params" : {
                         "coeffs" : [100],
                         "continuous" : True,
-                        "dist_pen" : [0.001]
+                        "dist_pen" : [0.01]
                         }
                     },
                 ],
