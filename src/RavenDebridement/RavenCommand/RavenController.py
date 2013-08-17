@@ -8,29 +8,21 @@ import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
 from math import *
-import copy
-import sys, os
 
 from raven_2_msgs.msg import * 
 from std_msgs.msg import Header
 from geometry_msgs.msg import *
 
-import openravepy as rave
 import numpy as np
 
 
-import tf
 import tfx
 
-import thread
 import threading
-
-from RavenPlanner import RavenPlanner
 
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants as MyConstants
 
-import code
 
 class Stage(object):
     def __init__(self,name,duration,cb):

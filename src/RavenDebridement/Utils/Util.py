@@ -9,9 +9,7 @@ for conversions, etc.
 import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
-from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion, Point
 from visualization_msgs.msg import Marker
-import tf
 import tf.transformations as tft
 import numpy as np
 import math
@@ -19,8 +17,6 @@ import math
 import tfx
 
 from raven_2_msgs.msg import *
-
-import openravepy as rave
 
 import IPython
 
