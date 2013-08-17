@@ -56,14 +56,14 @@ class Request():
                         "dist_pen" : [0.001]
                         }
                     },
-                #{
-                #    "type" : "collision",
-                #    "params" : {
-                #        "coeffs" : [100000],
-                #        "continuous" : False,
-                #        "dist_pen" : [0.003]
-                #        }
-                #    },
+                {
+                    "type" : "collision",
+                    "params" : {
+                        "coeffs" : [100000],
+                        "continuous" : False,
+                        "dist_pen" : [0.01]
+                        }
+                    },
                 ],
             "constraints" : [
                 ],
@@ -92,7 +92,7 @@ class Request():
                                     }
                         })
             
-            
+            """
             for timestep in range(int(n_steps)):
                 request["costs"].append({
                         "type" : "pose",
@@ -104,7 +104,7 @@ class Request():
                                     "pos_coeffs" : [0,0,0]
                                     }
                         })
-            
+            """
             
         return request
 
@@ -584,20 +584,60 @@ def testGeneral(armNames=[MyConstants.Arm.Left, MyConstants.Arm.Right]):
     print(raveLeft)
     
     
-def testSwitchPlaces(armNames=[MyConstants.Arm.Left,MyConstants.Arm.Right]):
+def testSwitchPlaces(armNames=[MyConstants.Arm.Left,MyConstants.Arm.Right],fixedPose=False):
     rospy.init_node('testSwitchPlaces',anonymous=True)
     rp = RavenPlanner(armNames)
     rospy.sleep(2)
     
+    leftStartJoints = None
+    rightStartJoints = None
+    
+    if fixedPose:
+        rightCurrPose = tfx.pose([-0.068,-0.061,-0.129],tfx.tb_angles(-139.6,88.5,111.8),frame=MyConstants.Frames.Link0)
+        
+        leftCurrPose = tfx.pose([-.072,-.015,-.153],tfx.tb_angles(43.9,78.6,100.9),frame=MyConstants.Frames.Link0)
+    
+        leftStartJoints = rp.getJointsFromPose(MyConstants.Arm.Left, leftCurrPose)
+        rightStartJoints = rp.getJointsFromPose(MyConstants.Arm.Right, rightCurrPose)
+    else:
+        leftCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Left]),MyConstants.Frames.Link0)
+        rightCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Right]),MyConstants.Frames.Link0)
+        
+    
+    print('leftstartjoints')
+    print(leftStartJoints)
+    print('actual raven left joints')
+    print(rp.currentJoints[MyConstants.Arm.Left])
+    
+    print('rightstartjoints')
+    print(rightStartJoints)
+    print('actual raven right joints')
+    print(rp.currentJoints[MyConstants.Arm.Right])
+    
+    print('rightCurrPose')
+    print(rightCurrPose)
+    
+    print('leftCurrPose')
+    print(leftCurrPose)
+    
+    
+    
+
+    rp.getTrajectoryFromPose(MyConstants.Arm.Left, rightCurrPose, leftStartJoints, debug=True)
+    rp.getTrajectoryFromPose(MyConstants.Arm.Right, leftCurrPose, rightStartJoints, debug=True)
+    
+    """
     for index in range(len(armNames)):
         armName = armNames[index]
         otherArmName = armNames[(index+1)%len(armNames)]
         desPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[otherArmName]),MyConstants.Frames.Link0)
         
         rp.getTrajectoryFromPose(armName, desPose, debug=True)
+    """
         
     while rp.trajRequest[armNames[0]] and rp.trajRequest[armNames[1]] and not rospy.is_shutdown():
         rospy.sleep(.05)
+        
         
     leftTraj = rp.jointTraj[MyConstants.Arm.Left]
     rightTraj = rp.jointTraj[MyConstants.Arm.Right]
@@ -643,9 +683,70 @@ def testJointDictsToPoses(arm=MyConstants.Arm.Left):
     IPython.embed()
 
 if __name__ == '__main__':
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('--fixed-pose',action='store_true',default=False)
+    
+    args = parser.parse_args()
+    
     #testGeneral()
-    testSwitchPlaces()
+    testSwitchPlaces(fixedPose=args.fixed_pose)
     #testGetTrajectoryFromPose()
     #testJointDictsToPoses()
 
+"""
+Pose:         (-0.063, -0.062, -0.126)
+              [yaw:16.0, pitch:55.1, roll:-93.0]
+Pose command: (-0.063, -0.062, -0.126)
+              [yaw:16.0, pitch:55.1, roll:-93.0]
+Grasp:         0.879
+Grasp command: 0.879
 
+------------------------------JOINTS------------------------------
+            SHOULDE  ELBOW  INSERTI ROTATIO  PITCH  FINGER1 FINGER2   YAW    GRASP 
+state     :   READY   READY   READY   READY   READY   READY   READY   READY   READY
+jpos      :   0.817   2.055 -14.692   3.197   0.613  -0.617  -0.262  -0.177   0.879
+jvel      :   0.000   0.000  -0.000   0.000   0.000   0.000   0.000  -0.000   0.000
+jcmd_type :     NON     NON     NON     NON     NON     NON     NON     NON     NON
+jcmd      :     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+jpos_d    :   0.823   2.047 -14.692   3.022   0.613  -0.617  -0.262  -0.177   0.879
+jvel_d    :  -0.001  -0.001  -0.006   0.000   0.000   0.000   0.000  -0.000   0.000
+
+------------------------------MOTORS------------------------------
+            SHOULDE  ELBOW  INSERTI ROTATIO  PITCH  FINGER1 FINGER2
+mpos      :   103.2   245.0 -26890.0   -74.7   -86.9   -97.3   -94.2
+mvel      :     0.0     0.0    -0.8    -0.0    -0.0    -0.0    -0.0
+torque    :  -0.060  -0.057   0.008   0.000   0.000   0.000   0.000
+mpos_d    :   104.0   244.2 -26893.4   -75.7   -86.9   -97.3   -94.2
+mvel_d    :     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+
+****Arm L [GOLD]****
+
+Pose:         (-0.071, -0.000, -0.153)
+              [yaw:55.3, pitch:74.7, roll:113.3]
+Pose command: (-0.071, -0.000, -0.153)
+              [yaw:55.3, pitch:74.7, roll:113.3]
+Grasp:         1.045
+Grasp command: 1.045
+
+------------------------------JOINTS------------------------------
+            SHOULDE  ELBOW  INSERTI ROTATIO  PITCH  FINGER1 FINGER2   YAW    GRASP 
+state     :   READY   READY   READY   READY   READY   READY   READY   READY   READY
+jpos      :   0.255   1.969 -14.914   6.877  -0.148  -0.124   1.169   0.647   1.045
+jvel      :  -0.000  -0.000   0.000   0.000   0.000   0.000   0.000   0.000   0.000
+jcmd_type :     NON     NON     NON     NON     NON     NON     NON     NON     NON
+jcmd      :     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+jpos_d    :   0.258   1.972 -14.914   6.703  -0.148  -0.124   1.169   0.647   1.045
+jvel_d    :   0.000  -0.001   0.004   0.000   0.000   0.000   0.000   0.000   0.000
+
+------------------------------MOTORS------------------------------
+            SHOULDE  ELBOW  INSERTI ROTATIO  PITCH  FINGER1 FINGER2
+mpos      :    32.2   226.1 -28479.3   -60.5   -98.4   -98.4   -86.9
+mvel      :    -0.0    -0.0     0.5    -0.0    -0.0    -0.0    -0.0
+torque    :   0.058  -0.070   0.010   0.000   0.000   0.000   0.000
+mpos_d    :    32.6   226.4 -28471.1   -61.4   -98.4   -98.3   -86.9
+mvel_d    :     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+
+"""
