@@ -221,13 +221,34 @@ class RavenPlanner:
 
     def _ravenStateCallback(self, msg):
         self.currentState = msg
-        for arm in msg.arms:
-            if arm.name in self.armNames:
-                self.currentJoints[arm.name] = dict((joint.type, joint.position) for joint in arm.joints)
-                    
-                if self.currentJoints[arm.name].has_key(Constants.JOINT_TYPE_GRASP):
-                    self.currentGrasp[arm.name] = self.currentJoints[arm.name][Constants.JOINT_TYPE_GRASP]
     
+    def getCurrentPose(self, armName=None):
+        if not self.currentState:
+            return None
+        currentPose = {}
+        for arm in self.currentState.arms:
+            armPose = tfx.pose(arm.tool.pose,header=self.currentState.header)
+            if armName is None:
+                currentPose[arm.name] = armPose
+            elif arm.name == armName:
+                currentPose = armPose
+                break
+        return currentPose
+                    
+    def getCurrentGrasp(self, armName = None):
+        if not self.currentState:
+            return None
+        currentGrasp = {}
+        for arm in self.currentState.arms:
+            armGrasp = dict((joint.type, joint.position) for joint in arm.joints)[Constants.JOINT_TYPE_GRASP]
+            if armName is None:
+                currentGrasp[arm.name] = armGrasp
+            elif arm.name == armName:
+                currentGrasp = armGrasp
+                break
+        print currentGrasp
+        return currentGrasp
+                    
     def getCurrentJoints(self, armName=None):
         if not self.currentState:
             return None
@@ -240,19 +261,6 @@ class RavenPlanner:
                 currentJoints = armJoints
                 break
         return currentJoints
-                    
-    def getCurrentGrasp(self, armName = None):
-        if not self.currentState:
-            return None
-        currentGrasp = {}
-        for arm in msg.arms:
-            armGrasp = dict((joint.type, joint.position) for joint in arm.joints)[Constants.JOINT_TYPE_GRASP]
-            if armName is None:
-                currentGrasp[arm.name] = armGrasp
-            elif arm.name == armName:
-                currentGrasp = armGrasp
-                break
-        return currentGrasp
     
     def waitForState(self):
         if not self.currentState:
@@ -536,7 +544,7 @@ class RavenPlanner:
         startGrasp = self.getCurrentGrasp(armName)
         if endGrasp is None:
             endGrasp = startGrasp
-        self.setStartAndEndPose(armName, startPose, endPose, startGrasp=startGrasp, endGrasp=endGrasp)
+        self.setStartAndEndPose(armName, self.getCurrentPose(armName), endPose, startGrasp=startGrasp, endGrasp=endGrasp)
         self.trajSteps[armName] = n_steps
         self.trajRequest[armName] = True
     
@@ -547,17 +555,23 @@ class RavenPlanner:
         while not self.trajReady() and not rospy.is_shutdown():
             rospy.sleep(.05)
         
-def testSwitchPlaces():
+def testSwitchPlaces(show=True):
     #trajoptpy.SetInteractive(True)
     
     rospy.init_node('testSwitchPlaces',anonymous=True)
     rp = RavenPlanner([MyConstants.Arm.Left,MyConstants.Arm.Right], thread=True)
     
-    rightCurrPose = tfx.pose([-0.068,-0.061,-0.129],tfx.tb_angles(-139.6,88.5,111.8),frame=MyConstants.Frames.Link0)
-    leftCurrPose = tfx.pose([-.072,-.015,-.153],tfx.tb_angles(43.9,78.6,100.9),frame=MyConstants.Frames.Link0)
+    #rightCurrPose = tfx.pose([-0.068,-0.061,-0.129],tfx.tb_angles(-139.6,88.5,111.8),frame=MyConstants.Frames.Link0)
+    #leftCurrPose = tfx.pose([-.072,-.015,-.153],tfx.tb_angles(43.9,78.6,100.9),frame=MyConstants.Frames.Link0)
+    
+    leftCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Left]),MyConstants.Frames.Link0)
+    rightCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Right]),MyConstants.Frames.Link0)
 
-    rp.getTrajectoryPoseToPose(MyConstants.Arm.Left, leftCurrPose, rightCurrPose, n_steps=50)
-    rp.getTrajectoryPoseToPose(MyConstants.Arm.Right, rightCurrPose, leftCurrPose, n_steps=50)
+    #rp.getTrajectoryPoseToPose(MyConstants.Arm.Left, leftCurrPose, rightCurrPose, n_steps=50)
+    #rp.getTrajectoryPoseToPose(MyConstants.Arm.Right, rightCurrPose, leftCurrPose, n_steps=50)
+    
+    rp.getPoseTrajectory(MyConstants.Arm.Left, rightCurrPose, n_steps=50)
+    rp.getPoseTrajectory(MyConstants.Arm.Right, leftCurrPose, n_steps=50)
     
     #IPython.embed()
     
@@ -569,6 +583,9 @@ def testSwitchPlaces():
         return
     
     #IPython.embed()
+    
+    if not show:
+        return
     
     leftTraj = rp.jointTraj[MyConstants.Arm.Left]
     rightTraj = rp.jointTraj[MyConstants.Arm.Right]
@@ -586,4 +603,9 @@ def testSwitchPlaces():
     #IPython.embed()
 
 if __name__ == '__main__':
-    testSwitchPlaces()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--show',action='store_true',default=False)
+    
+    args = parser.parse_args()
+    testSwitchPlaces(**vars(args))
