@@ -65,12 +65,21 @@ class ImageDetector():
         self.objPublisher = rospy.Publisher(object_topic, Marker)
         self.objMarker = None
 
-    def tapeCallback(self, msg):
+    def tapeCallbackLeft(self, msg):
         # TEMP hard coded for left gripper
         self.newLeftGripperPose = True
         #self.newRightGripperPose = True
         self.tapeMsg = msg
         self.leftGripperPose = msg
+        #self.rightGripperPose = msg
+        self.gripperPoseIsEstimate = False
+
+    def tapeCallbackRight(self, msg):
+        # TEMP hard coded for left gripper
+        self.newRightGripperPose = True
+        #self.newRightGripperPose = True
+        self.tapeMsg = msg
+        self.rightGripperPose = msg
         #self.rightGripperPose = msg
         self.gripperPoseIsEstimate = False
 

@@ -85,7 +85,8 @@ class ARImageDetector(ImageDetector):
             rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
 
             # tape callback
-            rospy.Subscriber(Constants.GripperTape.Topic, PoseStamped, self.tapeCallback)
+            rospy.Subscriber(Constants.GripperTape.Topic+'_L', PoseStamped, self.tapeCallbackLeft)
+            rospy.Subscriber(Constants.GripperTape.Topic+'_R', PoseStamped, self.tapeCallbackRight)
 
             rospy.sleep(2)
         

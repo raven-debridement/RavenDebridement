@@ -106,7 +106,7 @@ class FindGripper(smach.State):
         self.imageDetector = imageDetector
         self.gripperName = gripperName
         
-        self.findGripperTimeout = Util.Timeout(1)
+        self.findGripperTimeout = Util.Timeout(3)
     
     def execute(self, userdata):
         if PAUSE_BETWEEN_STATES:
