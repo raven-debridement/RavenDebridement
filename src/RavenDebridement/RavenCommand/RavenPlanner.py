@@ -172,10 +172,12 @@ class RavenPlanner():
     defaultJointPositions = [.512, 1.6, -5, .116, .088, 0]
     defaultJoints = dict([(jointType,jointPos) for jointType, jointPos in zip(rosJointTypes,defaultJointPositions)])
 
-    def __init__(self, armNames=[MyConstants.Arm.Left]):
+    def __init__(self, armNames):
         """
         openrave planner for the raven
         """
+        if isinstance(armNames,basestring):
+            armNames = [armNames]
         rospy.loginfo('Initializing openrave planner for {0} raven arm'.format(armNames))
 
         armNames.sort()

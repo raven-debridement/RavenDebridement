@@ -190,7 +190,7 @@ class RavenController():
 		
         while self.currentState is None and not rospy.is_shutdown():
             rate.sleep()
-		
+        
         if self.currentState.runlevel == 0:
             rospy.loginfo("Raven in E-STOP, waiting")
             while self.currentState.runlevel == 0 and not rospy.is_shutdown():

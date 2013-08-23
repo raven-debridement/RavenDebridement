@@ -122,7 +122,7 @@ class ImageDetector():
         return self.gripperPoseIsEstimate
 
     def hasFoundObject(self):
-        return self.objectPoint != None
+        return self.objectPoint is not None
 
     def getObjectPose(self):
         """

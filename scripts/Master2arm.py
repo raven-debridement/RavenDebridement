@@ -32,6 +32,91 @@ def pause_func(myclass):
     rospy.loginfo('In {0} method. Press enter to continue'.format(myclass))
     raw_input()
 
+class DoNothing(smach.State):
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['success','failure'])
+        self.ravenArm = ravenArm
+        self.ravenPlanner = ravenPlanner
+        self.stepsPerMeter = stepsPerMeter
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
+
+    def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        rospy.loginfo('Doing nothing')
+
+        transBound = .006
+        rotBound = float("inf")
+        endPose = self.ravenArm.getGripperPose()
+        n_steps = 5
+        print 'requesting trajectory for otherarm', self.ravenArm.name
+        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
+        
+        if poseTraj == None:
+            return 'failure'
+
+        return 'success'
+
+class MoveUp(smach.State):
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['success','failure'])
+        self.ravenArm = ravenArm
+        self.ravenPlanner = ravenPlanner
+        self.stepsPerMeter = stepsPerMeter
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
+
+    def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        rospy.loginfo('Moving up')
+
+        transBound = .006
+        rotBound = float("inf")
+        endPose = self.ravenArm.getGripperPose() + [0,0,0.01]
+        n_steps = 5
+        print 'requesting trajectory for otherarm', self.ravenArm.name
+        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
+        
+        if poseTraj == None:
+            return 'failure'
+        
+        self.ravenArm.executePoseTrajectory(poseTraj,block=True)
+
+        return 'success'
+
+class MoveDown(smach.State):
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['success','failure'])
+        self.ravenArm = ravenArm
+        self.ravenPlanner = ravenPlanner
+        self.stepsPerMeter = stepsPerMeter
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
+
+    def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        rospy.loginfo('Moving down')
+
+        transBound = .006
+        rotBound = float("inf")
+        endPose = self.ravenArm.getGripperPose() + [0,0,-0.01]
+        n_steps = 5
+        print 'requesting trajectory for otherarm', self.ravenArm.name
+        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
+        
+        if poseTraj == None:
+            return 'failure'
+        
+        self.ravenArm.executePoseTrajectory(poseTraj,block=True)
+
+        return 'success'
+
 class FindReceptacle(smach.State):
     def __init__(self, imageDetector):
         smach.State.__init__(self, outcomes = ['success','failure'], output_keys = ['receptaclePose'])
@@ -87,6 +172,8 @@ class FindObject(smach.State):
 
         rospy.loginfo('Searching for object point')
         # find object point and pose
+        if not self.imageDetector.hasFoundObject():
+            rospy.sleep(1)
         if not self.imageDetector.hasFoundObject():
             rospy.loginfo('Did not find object')
             return 'failure'
@@ -310,16 +397,17 @@ class MoveToReceptacle(smach.State):
 
         print 'getting trajectory'
         endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, receptaclePose)
-        print 'got receptacle trajectory', endPoseTraj is None
+        print 'got receptacle trajectory'
 
         if endPoseTraj != None:
+            print 'executing receptacle trajectory'
             self.ravenArm.executePoseTrajectory(endPoseTraj)
         
 
         rospy.loginfo('Opening the gripper')
         # open gripper (consider not all the way)
         #self.ravenArm.openGripper(duration=self.gripperOpenCloseDuration)
-        self.ravenArm.setGripper(0.75)
+        self.ravenArm.setGripper(0.65)
         return 'success'
 
 class MoveToHome(smach.State):
@@ -356,21 +444,27 @@ class MoveToHome(smach.State):
         return 'success'
 
 class MasterClass(object):
-    PAUSE_BETWEEN_STATES = None
+    PAUSE_BETWEEN_STATES = False
     
     def __init__(self, armName, ravenArm, ravenPlanner, imageDetector):
         self.armName = armName
         
-        if (armName == Constants.Arm.Left):
+        if armName == Constants.Arm.Left:
             self.gripperName = Constants.Arm.Left
             self.toolframe = Constants.Frames.LeftTool
             #self.calibrateGripperState = ImageDetectionClass.State.CalibrateLeft
-        else:
+            self.otherArmName = Constants.Arm.Right
+            self.otherGripperName = Constants.Arm.Right
+            self.otherToolframe = Constants.Frames.RightTool
+        elif armName == Constants.Arm.Right:
             self.gripperName = Constants.Arm.Right
             self.toolframe = Constants.Frames.RightTool
             #self.calibrateGripperState = ImageDetectionClass.State.CalibrateRight
+            self.otherArmName = Constants.Arm.Left
+            self.otherGripperName = Constants.Arm.Left
+            self.otherToolframe = Constants.Frames.LeftTool
 
-        self.listener = tf.TransformListener()
+        self.listener = tf.TransformListener.instance()
 
         # initialize the three main control mechanisms
         # image detection, gripper control, and arm control
@@ -380,8 +474,10 @@ class MasterClass(object):
         
         # translation frame
         self.transFrame = Constants.Frames.Link0
+        self.otherTransFrame = Constants.Frames.Link0
         # rotation frame
         self.rotFrame = self.toolframe
+        self.otherRotFrame = self.otherToolframe
 
         # height offset for foam
         self.objectHeightOffset = .004
@@ -436,9 +532,21 @@ class MasterClass(object):
                                    transitions = {'success': 'moveToHome'})
             smach.StateMachine.add('moveToHome', MoveToHome(self.ravenArm, self.ravenPlanner, self.imageDetector, self.openLoopSpeed),
                                    transitions = {'success': 'findObject'})
+        
+        self.otherRavenArm = RavenArm(self.otherArmName)
+        
+        self.other_sm = smach.StateMachine(outcomes=['success','failure'])
+        with self.other_sm:
+#             smach.StateMachine.add('doNothing',DoNothing(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
+#                                    transitions = {'success': 'doNothing'})
+            smach.StateMachine.add('moveUp',MoveUp(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
+                                   transitions = {'success': 'moveDown'})
+            smach.StateMachine.add('moveDown',MoveDown(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
+                                   transitions = {'success': 'moveUp'})
     
     def run(self):
         self.ravenArm.start()
+        self.otherRavenArm.start()
         sis = smach_ros.IntrospectionServer('master_server', self.sm, '/SM_ROOT')
         sis.start()
         userData = smach.UserData()
@@ -446,12 +554,21 @@ class MasterClass(object):
         
         
         try:
-            outcome = self.sm.execute(userData)
-        except:
-            pass
+            #outcome = self.sm.execute(userData)
+            thread1 = threading.Thread(target=self.sm.execute,args=(userData,))
+            thread1.daemon = True
+            thread1.start()
+            
+            thread2 = threading.Thread(target=self.other_sm.execute,args=(userData,))
+            thread2.daemon = True
+            thread2.start()
+        except Exception, e:
+            print e
+        
+        rospy.spin()
 
         self.ravenArm.stop()
-
+        self.otherRavenArm.stop()
 
 def mainloop():
     """
@@ -467,11 +584,11 @@ def mainloop():
     parser.add_argument('--smooth',action='store_true',default=False)
     args = parser.parse_args(rospy.myargv()[1:])
     
-    MasterClass.PAUSE_BETWEEN_STATES = not args.smooth
+    #MasterClass.PAUSE_BETWEEN_STATES = not args.smooth
     
     imageDetector = ARImageDetector()
     ravenArm = RavenArm(armName)
-    ravenPlanner = RavenPlanner([armName])
+    ravenPlanner = RavenPlanner(Constants.Arm.Both)
     master = MasterClass(armName, ravenArm, ravenPlanner, imageDetector)
     master.run()
 
