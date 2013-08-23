@@ -24,7 +24,7 @@ LOWERHSV2 = cv.Scalar(170, 120, 50)
 UPPERHSV2 = cv.Scalar(180, 255, 255)
 
 class DisparitySegmenter():
-    def __init__(self, left_camera, right_camera, disparity, topic):
+    def __init__(self, left_camera, right_camera, disparity, topic, show_image=False):
         self.image = {'l': None, 'r': None}
         self.info = {'l': None, 'r': None}
         self.bridge = cv_bridge.CvBridge()
@@ -39,6 +39,8 @@ class DisparitySegmenter():
         self.pointpub = rospy.Publisher(topic, PointStamped)
         self.markerpub = rospy.Publisher(topic+'_marker', Marker)
         self.imagepub = rospy.Publisher(topic + '_image', Image)
+        
+        self.show_image = show_image
 
         rospy.Subscriber(left_camera + "/camera_info", CameraInfo, self.leftInfoCallback)
         rospy.Subscriber(right_camera + "/camera_info", CameraInfo, self.rightInfoCallback)
@@ -68,8 +70,10 @@ class DisparitySegmenter():
         # Threshold the image
         self.image['l'] = self.process(msg, 'l')
         image = self.image['l']
-        # Uncomment to show the thresholded image
-        # Util.showImage(image, "threshed")
+        if self.show_image:
+            # Uncomment to show the thresholded image
+            # Util.showImage(image, "threshed")
+            pass
 
         # find contours
         storage = cv.CreateMemStorage(0)
@@ -93,7 +97,8 @@ class DisparitySegmenter():
             #found, self.xClose, self.yClose, xCentroid, yCentroid = Util.find_centroid(image)
             self.xClose, self.yClose = self.getCenterOfMass(contour)
             break
-        Util.showImage(image, "left")
+        if self.show_image:
+            Util.showImage(image, "left")
         imgmsg = self.bridge.cv_to_imgmsg(image)
         self.imagepub.publish(imgmsg)
         #cv.DrawContours(image, contours, color, holeColor, maxLevel, thickness)
@@ -185,7 +190,11 @@ class DisparitySegmenter():
 
 if __name__ == '__main__':
     rospy.init_node('foam_segmenter')
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--show-image','-i',action='store_true',default=False)
+    args = parser.parse_args(rospy.myargv()[1:])
     left_camera = 'left'
     right_camera = 'right'
-    segmenter = DisparitySegmenter(left_camera, right_camera, 'disparity', 'foam_points')
+    segmenter = DisparitySegmenter(left_camera, right_camera, 'disparity', 'foam_points', **vars(args))
     rospy.spin()
