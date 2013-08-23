@@ -20,13 +20,11 @@ from raven_pose_estimator.srv import ThreshRed
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
 from RavenDebridement.RavenCommand.RavenArm import RavenArm
-from RavenDebridement.RavenCommand.RavenPlanner import RavenPlanner
+from RavenDebridement.RavenCommand.RavenPlanner2 import RavenPlanner
 from RavenDebridement.RavenCommand.RavenBSP import RavenBSP
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
 import code
-
-PAUSE_BETWEEN_STATES = True
 
 def pause_func(myclass):
     rospy.loginfo('In {0} method. Press enter to continue'.format(myclass))
@@ -38,7 +36,7 @@ class FindReceptacle(smach.State):
         self.imageDetector = imageDetector
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Searching for the receptacle')
@@ -56,7 +54,7 @@ class FindHome(smach.State):
         self.imageDetector = imageDetector
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Searching for the home position')
@@ -79,7 +77,7 @@ class FindObject(smach.State):
         self.obj_pub.publish(pose)
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         # reset rotateBy
@@ -109,7 +107,7 @@ class FindGripper(smach.State):
         self.findGripperTimeout = Util.Timeout(3)
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Searching for ' + self.gripperName)
@@ -135,7 +133,7 @@ class RotateGripper(smach.State):
         self.ravenArm = ravenArm
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Rotating the gripper by ' + str(userdata.rotateBy) + ' degrees')
@@ -159,20 +157,25 @@ class PlanTrajToObject(smach.State):
         self.gripperOpenCloseDuration = gripperOpenCloseDuration
 
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
         rospy.loginfo('Planning trajectory from gripper to object')
+        
+        objectPose = tfx.pose(userdata.objectPose)
+        gripperPose = tfx.pose(userdata.gripperPose)
+        
+        #objectPose.orientation = gripperPose.orientation
 
         transBound = .006
         rotBound = float("inf")
-        if Util.withinBounds(userdata.gripperPose, userdata.objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        if Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
             rospy.loginfo('Closing the gripper')
             self.ravenArm.closeGripper(duration=self.gripperOpenCloseDuration)
             userdata.vertAmount = .04
             return 'reachedObject'
 
-        deltaPose = tfx.pose(Util.deltaPose(userdata.gripperPose, userdata.objectPose, self.transFrame, self.rotFrame))
+        deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, self.transFrame, self.rotFrame))
 
         endPose = Util.endPose(self.ravenArm.getGripperPose(), deltaPose)
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
@@ -197,7 +200,7 @@ class MoveTowardsObject(smach.State):
         self.maxServoDistance = maxServoDistance
 
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
 
         rospy.loginfo('Moving towards the object')
@@ -228,7 +231,7 @@ class MoveVertical(smach.State):
         self.openLoopSpeed = openLoopSpeed
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Moving vertical with the object')
@@ -253,7 +256,7 @@ class CheckPickup(smach.State):
         self.gripperOpenCloseDuration = gripperOpenCloseDuration
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Check if red foam piece successfully picked up')
@@ -292,7 +295,7 @@ class MoveToReceptacle(smach.State):
         self.gripperOpenCloseDuration = gripperOpenCloseDuration
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Moving to receptacle')
@@ -303,7 +306,9 @@ class MoveToReceptacle(smach.State):
         #ignore orientation
         receptaclePose.orientation = currPose.orientation
 
+        print 'getting trajectory'
         endPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, receptaclePose)
+        print 'got it'
 
         if endPoseTraj != None:
             self.ravenArm.executePoseTrajectory(endPoseTraj)
@@ -311,7 +316,8 @@ class MoveToReceptacle(smach.State):
 
         rospy.loginfo('Opening the gripper')
         # open gripper (consider not all the way)
-        self.ravenArm.openGripper(duration=self.gripperOpenCloseDuration)
+        #self.ravenArm.openGripper(duration=self.gripperOpenCloseDuration)
+        self.ravenArm.setGripper(0.75)
         return 'success'
 
 class MoveToHome(smach.State):
@@ -326,7 +332,7 @@ class MoveToHome(smach.State):
         self.openLoopSpeed = openLoopSpeed
     
     def execute(self, userdata):
-        if PAUSE_BETWEEN_STATES:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
 
         rospy.loginfo('Moving to home position')
@@ -348,6 +354,8 @@ class MoveToHome(smach.State):
         return 'success'
 
 class MasterClass(object):
+    PAUSE_BETWEEN_STATES = None
+    
     def __init__(self, armName, ravenArm, ravenPlanner, imageDetector):
         self.armName = armName
         
@@ -394,9 +402,9 @@ class MasterClass(object):
         self.sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['objectHeightOffset'])
         
         with self.sm:
-            smach.StateMachine.add('findReceptable', FindReceptacle(self.imageDetector), 
+            smach.StateMachine.add('findReceptacle', FindReceptacle(self.imageDetector), 
                                    transitions = {'success': 'findHome',
-                                                  'failure': 'findReceptable'})
+                                                  'failure': 'findReceptacle'})
             smach.StateMachine.add('findHome', FindHome(self.imageDetector),
                                    transitions = {'success': 'moveToReceptacle',
                                                  'failure': 'findHome'})
@@ -434,7 +442,7 @@ class MasterClass(object):
         userData = smach.UserData()
         userData['objectHeightOffset'] = self.objectHeightOffset
         
-
+        
         try:
             outcome = self.sm.execute(userData)
         except:
@@ -450,12 +458,19 @@ def mainloop():
     run loop
     """
     rospy.init_node('master_node',anonymous=True)
-    armName = Constants.Arm.Left
+    armName = Constants.Arm.Right
+    
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--smooth',action='store_true',default=False)
+    args = parser.parse_args(rospy.myargv()[1:])
+    
+    MasterClass.PAUSE_BETWEEN_STATES = not args.smooth
     
     imageDetector = ARImageDetector()
     ravenArm = RavenArm(armName)
     ravenPlanner = RavenPlanner([armName])
-    master = MasterClass(Constants.Arm.Left, ravenArm, ravenPlanner, imageDetector)
+    master = MasterClass(armName, ravenArm, ravenPlanner, imageDetector)
     master.run()
 
 

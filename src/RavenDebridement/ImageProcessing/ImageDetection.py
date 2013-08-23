@@ -34,13 +34,22 @@ class ImageDetector():
 
         self.newLeftGripperPose = False
         self.newRightGripperPose = False
+        
+        self.gripperPoseIsEstimate = False
 
-        # home position. likely in front of the camera, close
-        self.homePoint = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
-            
-        #receptacle point. Must have frame_id of link_0
-        #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-        self.receptaclePoint = tfx.point([.039, .045, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
+        #arm = 'L'
+        arm = 'R'
+        
+        # home position: likely in front of the camera, close
+        #receptacle point: must have frame_id of link_0
+        #  is the exact place to drop off (i.e. don't need to do extra calcs to move away)
+        
+        if arm == 'L':
+            self.homePoint = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
+            self.receptaclePoint = tfx.point([.039, .045, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
+        else:
+            self.homePoint = tfx.point([-.11,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
+            self.receptaclePoint = tfx.point([-.13, .025, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
 
         #table normal. Must be according to global (or main camera) frame
         if normal != None:
@@ -56,7 +65,12 @@ class ImageDetector():
         self.registerObjectPublisher()
         
         rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
-        rospy.Subscriber(Constants.GripperTape.Topic, PoseStamped, self.tapeCallback)
+        
+        self.tapeMsg = None
+        
+        # tape callback
+        rospy.Subscriber(Constants.GripperTape.Topic+'_L', PoseStamped, self.tapeCallbackLeft)
+        rospy.Subscriber(Constants.GripperTape.Topic+'_R', PoseStamped, self.tapeCallbackRight)
 
         rospy.sleep(2)
 
