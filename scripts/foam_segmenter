@@ -38,10 +38,12 @@ class DisparitySegmenter():
 
         self.pointpub = rospy.Publisher(topic, PointStamped)
         self.markerpub = rospy.Publisher(topic+'_marker', Marker)
+        self.imagepub = rospy.Publisher(topic + '_image', Image)
 
         rospy.Subscriber(left_camera + "/camera_info", CameraInfo, self.leftInfoCallback)
         rospy.Subscriber(right_camera + "/camera_info", CameraInfo, self.rightInfoCallback)
         rospy.Subscriber(disparity, DisparityImage, self.disparityCallback)
+        
 
     def disparityCallback(self, msg):
         image = self.bridge.imgmsg_to_cv(msg.image, "mono8")
@@ -92,6 +94,8 @@ class DisparitySegmenter():
             self.xClose, self.yClose = self.getCenterOfMass(contour)
             break
         Util.showImage(image, "left")
+        imgmsg = self.bridge.cv_to_imgmsg(image)
+        self.imagepub.publish(imgmsg)
         #cv.DrawContours(image, contours, color, holeColor, maxLevel, thickness)
 
         if not found:
@@ -180,8 +184,8 @@ class DisparitySegmenter():
             return threshImg
 
 if __name__ == '__main__':
-    rospy.init_node('disparity_segmenter')
+    rospy.init_node('foam_segmenter')
     left_camera = 'left'
     right_camera = 'right'
-    segmenter = DisparitySegmenter(left_camera, right_camera, '/disparity', 'foam_points')
+    segmenter = DisparitySegmenter(left_camera, right_camera, 'disparity', 'foam_points')
     rospy.spin()
