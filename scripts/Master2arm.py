@@ -23,6 +23,7 @@ from RavenDebridement.RavenCommand.RavenArm import RavenArm
 from RavenDebridement.RavenCommand.RavenPlanner2 import RavenPlanner
 from RavenDebridement.RavenCommand.RavenBSP import RavenBSP
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
+from RavenDebridement.ImageProcessing.FoamSegmenter import FoamSegmenter
 
 import threading
 
@@ -155,7 +156,7 @@ class FindHome(smach.State):
 
 class FindObject(smach.State):
     def __init__(self, imageDetector, toolframe, obj_pub):
-        smach.State.__init__(self, outcomes = ['success','failure'], input_keys = ['objectHeightOffset'], output_keys = ['objectPose','rotateBy'])
+        smach.State.__init__(self, outcomes = ['success','failure'], input_keys = ['objectHeightOffset'], output_keys = ['rotateBy'], io_keys=['objectPose'])
         self.imageDetector = imageDetector
         self.toolframe = toolframe
         self.obj_pub = obj_pub

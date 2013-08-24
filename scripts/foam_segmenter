@@ -6,6 +6,8 @@ import rospy
 
 import RavenDebridement.foam_util as Util
 
+from RavenDebridement.msg import FoamPoints
+
 import cv
 
 from sensor_msgs.msg import Image, CameraInfo
@@ -23,20 +25,24 @@ UPPERHSV = RED_UPPER_HSV
 LOWERHSV2 = cv.Scalar(170, 120, 50)
 UPPERHSV2 = cv.Scalar(180, 255, 255)
 
-class DisparitySegmenter():
-    def __init__(self, left_camera, right_camera, disparity, topic, show_image=False):
+class FoamSegmenter():
+    def __init__(self, left_camera, right_camera, disparity, topic, num_objects=None, show_image=False):
         self.image = {'l': None, 'r': None}
         self.info = {'l': None, 'r': None}
         self.bridge = cv_bridge.CvBridge()
         self.calculating = False
         self.foundCentroidInLeft = False
+        
+        self.num_objects = num_objects
+        self.object_centers = [None] * num_objects
+        self.center_threshold = 0.015
 
         self.disparityImg = None
         self.hsvImg = cv.CreateImage((1280, 960), 8, 3)
         self.threshImg = cv.CreateImage((1280, 960), 8, 1)
         self.threshImg2 = cv.CreateImage((1280, 960), 8, 1)
 
-        self.pointpub = rospy.Publisher(topic, PointStamped)
+        self.pointpub = rospy.Publisher(topic, FoamPoints)
         self.markerpub = rospy.Publisher(topic+'_marker', Marker)
         self.imagepub = rospy.Publisher(topic + '_image', Image)
         
@@ -66,7 +72,7 @@ class DisparitySegmenter():
     def leftImageCallback(self, msg):
         if not self.disparityImg:
             return
-
+        
         # Threshold the image
         self.image['l'] = self.process(msg, 'l')
         image = self.image['l']
@@ -86,6 +92,7 @@ class DisparitySegmenter():
         holeColor = cv.Scalar(255)
         maxLevel = 1
         thickness = cv.CV_FILLED
+        xys = []
         found = False
         while contours is not None:
             contour = contours[:]
@@ -95,31 +102,64 @@ class DisparitySegmenter():
             found = True
             cv.FillPoly(image, [contour], color)
             #found, self.xClose, self.yClose, xCentroid, yCentroid = Util.find_centroid(image)
-            self.xClose, self.yClose = self.getCenterOfMass(contour)
-            break
+            x,y = self.getCenterOfMass(contour)
+            xys.append((x,y))
+        
         if self.show_image:
             Util.showImage(image, "left")
         imgmsg = self.bridge.cv_to_imgmsg(image)
         self.imagepub.publish(imgmsg)
         #cv.DrawContours(image, contours, color, holeColor, maxLevel, thickness)
 
-        if not found:
-            return
-
-        # Search for the closest disparity pixel by searching in a square with larger and larger radius
-        disparity = -1000
-        for radius in range(50):
-            x, y, disparity = self.getBoxDisparity(radius, image)
-            if disparity > self.minDisparity:
-                break
-
-        # Use disparity value to find 3d location of point
-        if disparity > self.minDisparity:
+        points = []
+        for xClose,yClose in xys:
+            # Search for the closest disparity pixel by searching in a square with larger and larger radius
+            disparity = -1000
+            for radius in range(50):
+                x, y, disparity = self.getBoxDisparity((xClose,yClose), radius, image)
+                if disparity > self.minDisparity:
+                    break
+    
+            # Use disparity value to find 3d location of point
+            if disparity <= self.minDisparity:
+                continue
+            
             point = Util.convertStereo(x, y , disparity, self.info)
-            self.pointpub.publish(point)
-
+            points.append(tfx.point(point))
             marker = Util.createMarker(tfx.pose(point).msg.PoseStamped(),1)
             self.markerpub.publish(marker)
+        
+        print '-------------------------'
+        print points
+        print self.object_centers
+        
+        def find_existing_center(pt):
+            for idx, ctr in enumerate(self.object_centers):
+                if ctr is None or (point-ctr).norm < self.center_threshold:
+                    return idx
+            raise RuntimeError("Point %s not in existing points %s" % (pt, self.object_centers))
+        
+        found_ids = [find_existing_center(point) for point in points]
+        
+        for id in xrange(self.num_objects):
+            if id in found_ids:
+                self.object_centers[id] = point
+        
+        msg = FoamPoints()
+        msg.header.frame_id = self.info['l'].header.frame_id
+        msg.header.stamp = rospy.Time.now()
+        ids = []
+        points = []
+        for id, center in enumerate(self.object_centers):
+            if center is None:
+                continue
+            ids.append(id)
+            points.append(center.msg.Point())
+        print ids
+        if ids:
+            msg.ids = ids
+            msg.points = points
+            self.pointpub.publish(msg)
 
     def getCenterOfMass(self, image):
         """
@@ -133,30 +173,32 @@ class DisparitySegmenter():
         yavg = float(cv.GetSpatialMoment(moments, 0, 1))
         return int(xavg / total), int(yavg / total)
 
-    def getBoxDisparity(self, radius, image):
+    def getBoxDisparity(self, pt, radius, image):
         """
         Gets a disparity value in a square of radius radius, or None if no disparity value can be found.
         """
+        
+        xClose, yClose = pt
 
         dispImg = self.disparityImg
         
         # check left edge
-        x = self.xClose - radius
-        for y in range(self.yClose - radius, self.yClose + radius + 1):
+        x = xClose - radius
+        for y in range(yClose - radius, yClose + radius + 1):
             d = self.getDisparity(x, y, image, dispImg)
             if d > self.minDisparity:
                 return (x, y, d)
                 
         # check top edge
-        y = self.yClose + radius
-        for x in range(self.xClose - radius, self.xClose + radius + 1):
+        y = yClose + radius
+        for x in range(xClose - radius, xClose + radius + 1):
             d = self.getDisparity(x, y, image, dispImg)
             if d > self.minDisparity:
                 return (x, y, d)
 
         # check right edge
-        x = self.xClose + radius
-        for y in range(self.yClose - radius, self.yClose + radius + 1):
+        x = xClose + radius
+        for y in range(yClose - radius, yClose + radius + 1):
             d = self.getDisparity(x, y, image, dispImg)
             if d > self.minDisparity:
                 return (x, y, d)
@@ -164,8 +206,8 @@ class DisparitySegmenter():
         return 0,0,0
 
         # check bottom edge
-        y = self.yClose - radius
-        for x in range(self.xClose - radius, self.xClose + radius + 1):
+        y = yClose - radius
+        for x in range(xClose - radius, xClose + radius + 1):
             d = self.getDisparity(x, y, image, dispImg)
             if d > self.minDisparity:
                 return (x, y, d)
@@ -192,9 +234,10 @@ if __name__ == '__main__':
     rospy.init_node('foam_segmenter')
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--num-objects','-n',type=int,default=1)
     parser.add_argument('--show-image','-i',action='store_true',default=False)
     args = parser.parse_args(rospy.myargv()[1:])
     left_camera = 'left'
     right_camera = 'right'
-    segmenter = DisparitySegmenter(left_camera, right_camera, 'disparity', 'foam_points', **vars(args))
+    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', 'foam_points', **vars(args))
     rospy.spin()
