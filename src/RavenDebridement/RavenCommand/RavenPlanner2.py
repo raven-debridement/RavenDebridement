@@ -575,7 +575,7 @@ class RavenPlanner:
             print armName, startPose, endPose, kwargs
             raise Exception()
     
-    def getPoseTrajectory(self, armName, endPose, endGrasp = None, n_steps=50, block=True):
+    def getTrajectoryFromPose(self, armName, endPose, endGrasp = None, n_steps=50, block=True):
         self.waitForState()
         joints1 = self.getCurrentJoints(armName)
         startPose = self.getCurrentPose(armName)
@@ -600,7 +600,7 @@ class RavenPlanner:
                 
             return self.poseTraj[armName]
         
-    getTrajectoryFromPose = getPoseTrajectory
+    getPoseTrajectory = getTrajectoryFromPose
     
     def trajReady(self):
         return not any(self.trajRequest.values())

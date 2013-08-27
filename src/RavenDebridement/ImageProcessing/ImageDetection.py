@@ -16,7 +16,7 @@ from visualization_msgs.msg import Marker
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
 
-import code
+import IPython
 
 
 class ImageDetector():
@@ -37,20 +37,17 @@ class ImageDetector():
         
         self.gripperPoseIsEstimate = False
 
-        #arm = 'L'
-        arm = 'R'
-        
         # home position: likely in front of the camera, close
         #receptacle point: must have frame_id of link_0
         #  is the exact place to drop off (i.e. don't need to do extra calcs to move away)
+        self.homePoint = {}
+        self.receptaclePoint = {}
+        self.homePoint[Constants.Arm.Left] = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
+        self.receptaclePoint[Constants.Arm.Left] = tfx.point([.039, .045, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
         
-        if arm == 'L':
-            self.homePoint = tfx.point([.005,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
-            self.receptaclePoint = tfx.point([.039, .045, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
-        else:
-            self.homePoint = tfx.point([-.11,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
-            self.receptaclePoint = tfx.point([-.13, .025, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
-
+        self.homePoint[Constants.Arm.Right] = tfx.point([-.11,.016,-.095],frame=Constants.Frames.Link0).msg.PointStamped()
+        self.receptaclePoint[Constants.Arm.Right] = tfx.point([-.13, .025, -.173],frame=Constants.Frames.Link0).msg.PointStamped()
+        
         #table normal. Must be according to global (or main camera) frame
         if normal != None:
             self.normal = normal
@@ -226,43 +223,47 @@ class ImageDetector():
         return tfx.pose(self.getGripperPose(armName)).position.msg.PointStamped()
       
       
-    def hasFoundReceptacle(self):
-        return (self.receptaclePoint != None)
+    def hasFoundReceptacle(self, armName):
+        return (self.receptaclePoint.get(armName) != None)
 
-    def getReceptaclePose(self):
+    def getReceptaclePose(self, armName):
         """
         Returns PoseStamped with position of centroid of receptacle and
         orientation of the table normal
         """
-        receptaclePoint = self.getReceptaclePoint()
+        receptaclePoint = self.getReceptaclePoint(armName)
 
-        return tfx.pose(self.receptaclePoint, self.normal).msg.PoseStamped()
+        receptaclePose = tfx.pose(receptaclePoint, self.normal).msg.PoseStamped()
         
-    def getReceptaclePoint(self):
+        return receptaclePose
+        
+    def getReceptaclePoint(self, armName):
         """
         Returns PointStamped of the centroid of the receptacle
         """
-        self.receptaclePoint.header.stamp = rospy.Time.now()
-        return self.receptaclePoint
+        pt = self.receptaclePoint.get(armName)
+        pt.header.stamp = rospy.Time.now()
+        return pt
 
-    def hasFoundHome(self):
-        return (self.homePoint != None)
+    def hasFoundHome(self, armName):
+        return (self.homePoint.get(armName) != None)
 
-    def getHomePose(self):
+    def getHomePose(self, armName):
         """
         Returns PoseStamped with position of the home position and
         orientation of the table normal
         """
-        homePoint = self.getHomePoint()
+        homePoint = self.getHomePoint(armName)
 
-        return tfx.pose(self.homePoint, self.normal).msg.PoseStamped()
+        return tfx.pose(homePoint, self.normal).msg.PoseStamped()
         
-    def getHomePoint(self):
+    def getHomePoint(self, armName):
         """
         Returns PointStamped of the home position
         """
-        self.homePoint.header.stamp = rospy.Time.now()
-        return self.homePoint
+        pt = self.homePoint.get(armName)
+        pt.header.stamp = rospy.Time.now()
+        return pt
 
 
 def test():     
