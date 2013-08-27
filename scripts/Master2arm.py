@@ -22,8 +22,9 @@ from RavenDebridement.Utils import Constants
 from RavenDebridement.RavenCommand.RavenArm import RavenArm
 from RavenDebridement.RavenCommand.RavenPlanner2 import RavenPlanner
 from RavenDebridement.RavenCommand.RavenBSP import RavenBSP
-from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
-from RavenDebridement.ImageProcessing.FoamSegmenter import FoamSegmenter
+from RavenDebridement.ImageProcessing.ImageDetection import ImageDetector
+from RavenDebridement.ImageProcessing.FoamAllocator import FoamAllocator,\
+    ArmFoamAllocator
 
 import threading
 
@@ -155,9 +156,9 @@ class FindHome(smach.State):
         return 'success'
 
 class FindObject(smach.State):
-    def __init__(self, imageDetector, toolframe, obj_pub):
+    def __init__(self, foamSegmenter, toolframe, obj_pub):
         smach.State.__init__(self, outcomes = ['success','failure'], input_keys = ['objectHeightOffset'], output_keys = ['rotateBy'], io_keys=['objectPose'])
-        self.imageDetector = imageDetector
+        self.foamSegmenter = foamSegmenter
         self.toolframe = toolframe
         self.obj_pub = obj_pub
     
@@ -170,20 +171,24 @@ class FindObject(smach.State):
 
         # reset rotateBy
         userdata.rotateBy = -30
+        
+        new = userdata.objectPose is None
 
         rospy.loginfo('Searching for object point')
         # find object point and pose
-        if not self.imageDetector.hasFoundObject():
+        if not self.foamSegmenter.hasFoam(new=new):
             rospy.sleep(1)
-        if not self.imageDetector.hasFoundObject():
+        if not self.foamSegmenter.hasFoam(new=new):
             rospy.loginfo('Did not find object')
             return 'failure'
         # get object w.r.t. toolframe
-        objectPose = self.imageDetector.getObjectPose()
-        objectPose.pose.position.z += userdata.objectHeightOffset
-        self.publishObjectPose(objectPose)
+        objectPose = self.foamSegmenter.allocateFoam(new=new)
+        objectPose.position.z += userdata.objectHeightOffset
+        self.publishObjectPose(objectPose.msg.PoseStamped())
+        
+        print objectPose
 
-        userdata.objectPose = objectPose
+        userdata.objectPose = objectPose.msg.PoseStamped()
 
         rospy.loginfo('Found object')
         return 'success'
@@ -245,6 +250,9 @@ class PlanTrajToObject(smach.State):
         self.transFrame = transFrame
         self.rotFrame = rotFrame
         self.gripperOpenCloseDuration = gripperOpenCloseDuration
+        
+        self.objectPosePub = rospy.Publisher('traj_obj_pose',PoseStamped)
+        self.endPosePub = rospy.Publisher('traj_end_pose',PoseStamped)
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
@@ -254,9 +262,12 @@ class PlanTrajToObject(smach.State):
         
         objectPose = tfx.pose(userdata.objectPose)
         gripperPose = tfx.pose(userdata.gripperPose)
+        calcGripperPose = tfx.pose(self.ravenArm.getGripperPose())
         
         #objectPose.orientation = gripperPose.orientation
-
+        
+        self.objectPosePub.publish(objectPose.msg.PoseStamped())
+        
         transBound = .006
         rotBound = float("inf")
         if Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
@@ -266,15 +277,28 @@ class PlanTrajToObject(smach.State):
             return 'reachedObject'
 
         deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, self.transFrame, self.rotFrame))
+        
+        endPoseForPub = Util.endPose(gripperPose, deltaPose, frame=Constants.Frames.Link0)
+        self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
 
-        endPose = Util.endPose(self.ravenArm.getGripperPose(), deltaPose)
+        endPose = Util.endPose(calcGripperPose, deltaPose, frame=Constants.Frames.Link0)
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
         poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
         
-        rospy.loginfo('deltaPose')
-        rospy.loginfo(deltaPose)
-        rospy.loginfo('n_steps')
-        rospy.loginfo(n_steps)
+        print('objectPose')
+        print(objectPose)
+        print('gripperPose')
+        print(gripperPose)
+        print('calcGripperPose')
+        print(calcGripperPose)
+        print('endPoseForPub')
+        print(endPoseForPub)
+        print('endPose')
+        print(endPose)
+        print('deltaPose')
+        print(deltaPose)
+        
+        # gripperPose + deltaPose = objectPose
 
         if poseTraj == None:
             return 'failure'
@@ -378,7 +402,7 @@ class MoveToReceptacle(smach.State):
     Then, open the gripper
     """
     def __init__(self, ravenArm, ravenPlanner, openLoopSpeed, gripperOpenCloseDuration):
-        smach.State.__init__(self, outcomes = ['success'],input_keys=['receptaclePose'])
+        smach.State.__init__(self, outcomes = ['success'],input_keys=['receptaclePose'], output_keys=['objectPose'])
         self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
         self.openLoopSpeed = openLoopSpeed
@@ -408,7 +432,9 @@ class MoveToReceptacle(smach.State):
         rospy.loginfo('Opening the gripper')
         # open gripper (consider not all the way)
         #self.ravenArm.openGripper(duration=self.gripperOpenCloseDuration)
-        self.ravenArm.setGripper(0.65)
+        self.ravenArm.setGripper(0.5)
+        
+        userdata.objectPose = None
         return 'success'
 
 class MoveToHome(smach.State):
@@ -447,7 +473,7 @@ class MoveToHome(smach.State):
 class MasterClass(object):
     PAUSE_BETWEEN_STATES = False
     
-    def __init__(self, armName, ravenArm, ravenPlanner, imageDetector):
+    def __init__(self, armName, ravenArm, ravenPlanner, imageDetector, foamSegmenter):
         self.armName = armName
         
         if armName == Constants.Arm.Left:
@@ -472,6 +498,7 @@ class MasterClass(object):
         self.imageDetector = imageDetector
         self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
+        self.foamSegmenter = foamSegmenter
         
         # translation frame
         self.transFrame = Constants.Frames.Link0
@@ -507,7 +534,7 @@ class MasterClass(object):
             smach.StateMachine.add('findHome', FindHome(self.imageDetector),
                                    transitions = {'success': 'moveToReceptacle',
                                                  'failure': 'findHome'})
-            smach.StateMachine.add('findObject', FindObject(self.imageDetector, self.toolframe, self.obj_pub),
+            smach.StateMachine.add('findObject', FindObject(self.foamSegmenter, self.toolframe, self.obj_pub),
                                    transitions = {'success': 'findGripper',
                                                   'failure': 'success'})
             smach.StateMachine.add('findGripper', FindGripper(self.imageDetector, self.gripperName),
@@ -538,12 +565,12 @@ class MasterClass(object):
         
         self.other_sm = smach.StateMachine(outcomes=['success','failure'])
         with self.other_sm:
-#             smach.StateMachine.add('doNothing',DoNothing(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-#                                    transitions = {'success': 'doNothing'})
-            smach.StateMachine.add('moveUp',MoveUp(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                   transitions = {'success': 'moveDown'})
-            smach.StateMachine.add('moveDown',MoveDown(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                   transitions = {'success': 'moveUp'})
+            smach.StateMachine.add('doNothing',DoNothing(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
+                                   transitions = {'success': 'doNothing'})
+#             smach.StateMachine.add('moveUp',MoveUp(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
+#                                    transitions = {'success': 'moveDown'})
+#             smach.StateMachine.add('moveDown',MoveDown(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
+#                                    transitions = {'success': 'moveUp'})
     
     def run(self):
         self.ravenArm.start()
@@ -587,10 +614,11 @@ def mainloop():
     
     #MasterClass.PAUSE_BETWEEN_STATES = not args.smooth
     
-    imageDetector = ARImageDetector()
+    imageDetector = ImageDetector()
+    foamSegmenter = ArmFoamAllocator(armName)
     ravenArm = RavenArm(armName)
     ravenPlanner = RavenPlanner(Constants.Arm.Both)
-    master = MasterClass(armName, ravenArm, ravenPlanner, imageDetector)
+    master = MasterClass(armName, ravenArm, ravenPlanner, imageDetector, foamSegmenter)
     master.run()
 
 

@@ -13,8 +13,10 @@ import cv
 from sensor_msgs.msg import Image, CameraInfo
 from stereo_msgs.msg import DisparityImage
 from geometry_msgs.msg import PointStamped
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 import cv_bridge
+
+import operator
 
 import tfx
 
@@ -43,7 +45,7 @@ class FoamSegmenter():
         self.threshImg2 = cv.CreateImage((1280, 960), 8, 1)
 
         self.pointpub = rospy.Publisher(topic, FoamPoints)
-        self.markerpub = rospy.Publisher(topic+'_marker', Marker)
+        self.markerpub = rospy.Publisher(topic+'_marker_array', MarkerArray)
         self.imagepub = rospy.Publisher(topic + '_image', Image)
         
         self.show_image = show_image
@@ -70,7 +72,7 @@ class FoamSegmenter():
         self.info['r'] = msg
 
     def leftImageCallback(self, msg):
-        if not self.disparityImg:
+        if not self.disparityImg or rospy.is_shutdown():
             return
         
         # Threshold the image
@@ -94,7 +96,7 @@ class FoamSegmenter():
         thickness = cv.CV_FILLED
         xys = []
         found = False
-        while contours is not None:
+        while contours is not None and not rospy.is_shutdown():
             contour = contours[:]
             contours = contours.h_next()
             if len(contour) < 60:
@@ -112,6 +114,7 @@ class FoamSegmenter():
         #cv.DrawContours(image, contours, color, holeColor, maxLevel, thickness)
 
         points = []
+        marker_array = MarkerArray()
         for xClose,yClose in xys:
             # Search for the closest disparity pixel by searching in a square with larger and larger radius
             disparity = -1000
@@ -126,24 +129,54 @@ class FoamSegmenter():
             
             point = Util.convertStereo(x, y , disparity, self.info)
             points.append(tfx.point(point))
-            marker = Util.createMarker(tfx.pose(point).msg.PoseStamped(),1)
-            self.markerpub.publish(marker)
+            marker = Util.createMarker(tfx.pose(point).msg.PoseStamped(),id=1,lifetime=2)
+            marker_array.markers.append(marker)
+        for i in xrange(len(marker_array.markers)):
+            marker_array.markers[i].id = i
+        self.markerpub.publish(marker_array)
+        
+        import random
+        random.shuffle(points)
         
         print '-------------------------'
-        print points
-        print self.object_centers
+        print 'current state:'
+        print 'ctrs', [c.tostring() for c in self.object_centers if c is not None]
         
-        def find_existing_center(pt):
-            for idx, ctr in enumerate(self.object_centers):
-                if ctr is None or (point-ctr).norm < self.center_threshold:
-                    return idx
+        def find_existing_center(pt, ids):
+            for id, ctr in enumerate(self.object_centers):
+                if ctr is None and id not in ids:
+                    return id
+                if ctr is not None and (pt-ctr).norm < self.center_threshold:
+                    return id
+            print 'dists', [(pt-ctr).norm for ctr in self.object_centers if ctr is not None]
             raise RuntimeError("Point %s not in existing points %s" % (pt, self.object_centers))
         
-        found_ids = [find_existing_center(point) for point in points]
+        print 'input:'
+        print 'pts ', [p.tostring() for p in points]
         
-        for id in xrange(self.num_objects):
-            if id in found_ids:
-                self.object_centers[id] = point
+        found_ids = []
+        for point in points:
+            id = find_existing_center(point, found_ids)
+            found_ids.append(id)
+        print 'ids ', found_ids
+        
+        unique_found_ids = list(set(found_ids))
+        unique_found_points = []
+        for id in unique_found_ids:
+            points_with_id = [pt for pt_id, pt in zip(found_ids,points) if pt_id==id]
+            unique_found_points.append(reduce(operator.add, points_with_id)/len(points_with_id))
+            
+        if len(unique_found_ids) != len(found_ids):
+            print 'combined pts ', [p.tostring() for p in unique_found_points]
+            print 'combined ids ', unique_found_ids
+        
+        found_ids = unique_found_ids
+        points = unique_found_points
+        
+        print 'new state:'
+        for id, point in zip(found_ids, points):
+            self.object_centers[id] = point
+        print 'ctrs', [c.tostring() for c in self.object_centers if c is not None]
         
         msg = FoamPoints()
         msg.header.frame_id = self.info['l'].header.frame_id
@@ -155,7 +188,7 @@ class FoamSegmenter():
                 continue
             ids.append(id)
             points.append(center.msg.Point())
-        print ids
+        print 'ids ', ids
         if ids:
             msg.ids = ids
             msg.points = points
@@ -239,5 +272,5 @@ if __name__ == '__main__':
     args = parser.parse_args(rospy.myargv()[1:])
     left_camera = 'left'
     right_camera = 'right'
-    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', 'foam_points', **vars(args))
+    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', '/foam_points', **vars(args))
     rospy.spin()
