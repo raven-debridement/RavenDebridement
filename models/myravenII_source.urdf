@@ -51,7 +51,7 @@
 
  <joint name="shoulder_L" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5" />
+    <limit effort="1000.0" lower="0.0" upper="1.57079633" velocity="0.5" />
     <origin rpy="1.5707963267948966 -1.9383641042662245 0" xyz="0.0 0.0 0" /> 
     <parent link="base_link_L" />
     <child link="link1_L" />
@@ -69,7 +69,7 @@
 
   <joint name="elbow_L" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5" />
+    <limit effort="1000.0" lower="0.785398163" upper="2.35619449" velocity="0.5" />
     <origin rpy="-1.3088095959974027 0 0" xyz="0.0 0.0 0" />
     <parent link="link1_L" />
     <child link="link2_L" />
@@ -87,7 +87,7 @@
 
   <joint name="insertion_L" type="prismatic">
     <axis xyz="0 0 -1" />
-    <limit effort="1000.0" lower="-.17" upper=".1" velocity="0.5" />
+    <limit effort="1000.0" lower="-.230" upper=".010" velocity="0.5" />
     <origin rpy="-0.90695995069604551 0 0" xyz="0 0 0" />
     <parent link="link2_L" />
     <child link="link3_L" />
@@ -104,7 +104,7 @@
 
   <joint name="tool_roll_L" type="revolute">
     <axis xyz="0 0 -1" />
-    <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5" />
+    <limit effort="1000.0" lower="-3.17649924" upper="3.17649924" velocity="0.5" />
     <origin rpy="0 0 -3.141592653589793" xyz="0 0 0" />
     <parent link="link3_L" />
     <child link="instrument_shaft_L" />
@@ -121,7 +121,7 @@
 
   <joint name="wrist_joint_L" type="revolute">
     <axis xyz="0 0 -1"/>
-    <limit effort="1000.0" lower="-2" upper="2" velocity="0.5"/>
+    <limit effort="1000.0" lower="-1.30899694" upper="1.30899694" velocity="0.5"/>
     <origin rpy="1.5707963267948966 -1.5707963267948966 1.5707963267948966" xyz="0 0 0"/>
     <parent link="instrument_shaft_L"/>
     <child link="wrist_L"/>
@@ -138,7 +138,7 @@
 
   <joint name="grasper_joint_1_L" type="revolute">
     <axis xyz="0 0 -1" />
-    <limit effort="1000.0" lower="-2" upper="2" velocity=".5" />
+    <limit effort="1000.0" lower="-1.55334303" upper="1.55334303" velocity=".5" />
     <origin rpy="0 0 0" xyz="0 0 0" />                                                                      <!-- <origin rpy="-1.5707963267948966 0 0" xyz="0.012 0 0" /> -->
     <parent link="tool_base_L" />                                                                           <!-- <parent link="wrist_L" /> -->
     <child link="grasper1_L" />
@@ -155,7 +155,7 @@
 
   <joint name="grasper_joint_2_L" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-2" upper="2" velocity=".5" />
+    <limit effort="1000.0" lower="-1.55334303" upper="1.55334303" velocity=".5" />
     <origin rpy="0 0 0" xyz="0 0 0" />                                                                       <!-- <origin rpy="-1.5707963267948966 0 0" xyz="0.012 0 0" /> -->
     <parent link="tool_base_L" />                                                                            <!-- <parent link="wrist_L" /> -->
     <child link="grasper2_L" />
@@ -172,7 +172,7 @@
 
   <joint name="grasper_yaw_L" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-2" upper="2" velocity=".5" />
+    <limit effort="1000.0" lower="-1.57079633" upper="1.57079633" velocity=".5" />
     <origin rpy="-1.5707963267948966 0 0" xyz="0.012 0 0" />
     <parent link="wrist_L" />
     <child link="tool_base_L" />
@@ -248,7 +248,7 @@
 
   <joint name="shoulder_R" type="revolute">
     <axis xyz="0 0 -1" />
-    <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5" />
+    <limit effort="1000.0" lower="0.0" upper="1.57079633" velocity="0.5" />
     <origin rpy="1.5707963267948966 -1.2032285493235686 0" xyz="0 0.0 0" /> 
     <parent link="base_link_R" />
     <child link="link1_R" />
@@ -266,7 +266,7 @@
 
   <joint name="elbow_R" type="revolute">
     <axis xyz="0 0 -1" />
-    <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5" />
+    <limit effort="1000.0" lower="0.785398163" upper="2.35619449" velocity="0.5" />
     <origin rpy="1.3088095959974027 0 0" xyz="0.0 0.0 0" />
     <parent link="link1_R" />
     <child link="link2_R" />
@@ -284,7 +284,7 @@
 
   <joint name="insertion_R" type="prismatic">
     <axis xyz="0 0 -1" />
-    <limit effort="1000.0" lower="-.17" upper=".1" velocity="0.5" />
+    <limit effort="1000.0" lower="-.230" upper=".010" velocity="0.5" />
     <origin rpy="0.90695995069604551 0 0" xyz="0 0 0" />
     <parent link="link2_R" />
     <child link="link3_R" />
@@ -302,7 +302,7 @@
 
   <joint name="tool_roll_R" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5" />
+    <limit effort="1000.0" lower="-3.17649924" upper="3.17649924" velocity="0.5" />
     <!--origin rpy="0 0 -0.37732519171346124" xyz="0 0 0" /-->
     <origin rpy="0 0 0" xyz="0 0 0" />
     <parent link="link3_R" />
@@ -321,7 +321,7 @@
 
   <joint name="wrist_joint_R" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-2" upper="2" velocity="0.5" />
+    <limit effort="1000.0" lower="-1.30899694" upper="1.30899694" velocity="0.5" />
       
     <origin rpy="1.5707963267948966 -1.5707963267948966 1.5707963267948966" xyz="0 0 0" />  
     <parent link="instrument_shaft_R" />
@@ -341,7 +341,7 @@
 
   <joint name="grasper_joint_1_R" type="revolute">
     <axis xyz="0 0 1" />                                                                                      
-    <limit effort="1000.0" lower="-2" upper="2" velocity=".5" />
+    <limit effort="1000.0" lower="-1.55334303" upper="1.55334303" velocity=".5" />
     <origin rpy="0 0 0" xyz="0 0 0" />                                                                         <!-- <origin rpy="-1.5707963267948966 0 0" xyz="0.012 0 0" /> -->
     <parent link="tool_base_R" />                                                                              <!-- <parent link="wrist_R" /> -->
     <child link="grasper1_R" />
@@ -363,7 +363,7 @@
 
   <joint name="grasper_joint_2_R" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-2" upper="2" velocity=".5" />
+    <limit effort="1000.0" lower="-1.55334303" upper="1.55334303" velocity=".5" />
     <origin rpy="0 0 0" xyz="0 0 0" />                                                                        <!-- <origin rpy="1.5707963267948966 0 0" xyz="0.012 0 0" /> -->
     <parent link="tool_base_R" />                                                                             <!-- <parent link="wrist_R" /> -->
     <child link="grasper2_R" />
@@ -381,7 +381,7 @@
 
   <joint name="grasper_yaw_R" type="revolute">
     <axis xyz="0 0 1" />
-    <limit effort="1000.0" lower="-2" upper="2" velocity=".5" />
+    <limit effort="1000.0" lower="-1.57079633" upper="1.57079633" velocity=".5" />
     <origin rpy="-1.5707963267948966 0 0" xyz="0.012 0 0" />
     <parent link="wrist_R" />
     <child link="tool_base_R" />
