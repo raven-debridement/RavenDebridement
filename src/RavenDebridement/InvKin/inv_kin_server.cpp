@@ -1,5 +1,6 @@
 #include "ros/ros.h"
 #include "ros/console.h"
+#include "ros/exceptions.h"
 #include "RavenDebridement/InvKinSrv.h"
 
 #include "raven_2_msgs/Constants.h"
@@ -18,6 +19,10 @@
 
 #include "DS0.h"
 #include "raven/kinematics/kinematics_defines.h"
+
+#include <sstream>
+
+static ros::Publisher requested_pose_pub;
 
 // from raven_2_msgs
 #define YAW 8
@@ -269,21 +274,14 @@ int set_joints_with_limits2(mechanism* mech, float ths_act, float the_act, float
 
 
 int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3 matrix, float grasp) {
-        struct position*    pos_d = &(mech->pos_d);
-	struct orientation* ori_d = &(mech->ori_d);
-
-
 	int armId = armIdFromMechType(mech->type);
 
-
 	// desired tip position
-	//btVector3 actualPoint = btVector3(pos_d->x,pos_d->y,pos_d->z) / MICRON_PER_M;
-	btVector3 actualPoint = btVector3(x, y, z);
-	//btMatrix3x3 actualOrientation = toBt(ori_d->R);
-	btMatrix3x3 actualOrientation = matrix;
-	btTransform actualPose(actualOrientation,actualPoint);
+	btVector3 point = btVector3(x, y, z);
+	btMatrix3x3 orientation = matrix;
+	btTransform pose(orientation,point);
 
-	btQuaternion quat = actualPose.getRotation();
+	btQuaternion quat = pose.getRotation();
 	printf("quaternion %f %f %f %f\n",quat.x(),quat.y(),quat.z(),quat.w());
 
 	printf("matrix\n");
@@ -291,9 +289,9 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	    printf("%f %f %f\n",matrix[i][0],matrix[i][1],matrix[i][2]);
 	}
 
-	printf("actual point %f %f %f\n", actualPoint[0], actualPoint[1], actualPoint[2]);
-	tb_angles tb(actualOrientation);
-	printf("actual orientation %f %f %f\n",tb.yaw_deg,tb.pitch_deg,tb.roll_deg);
+	printf("point %f %f %f\n", point[0], point[1], point[2]);
+	tb_angles tb(orientation);
+	printf("orientation %f %f %f\n",tb.yaw_deg,tb.pitch_deg,tb.roll_deg);
 	
 	//float grasp = GRASP_TO_IK(armId,mech->ori_d.grasp);
 
@@ -310,7 +308,7 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	 * Since the ik is based on the yaw frame (to which the gripper is fixed), we
 	 * take the pose of the yaw frame, not the gripper frame
 	 */
-	btTransform ik_pose = ik_world_to_actual_world(armId) * actualPose * Tg.inverse();
+	btTransform ik_pose = ik_world_to_actual_world(armId) * pose * Tg.inverse();
 
 	btVector3 ik_origin = ik_pose.getOrigin();
 	btMatrix3x3 ik_basis = ik_pose.getBasis();
@@ -374,6 +372,18 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 					validity1[0],              d_act,
 					validity1[1],              thp_act RAD2DEG,
 					validity1[2],validity1[3], thy_act RAD2DEG);
+	    std::stringstream ss;
+	    ss << "ik for " << armId << " invalid: ";
+	    if (validity1[0]) {
+	    	ss << " ins (" << d_act << ")";
+	    }
+	    if (validity1[1]) {
+	    	ss << " pitch (" << thp_act RAD2DEG << ")";
+	    }
+	    if (validity1[2] || validity1[3]) {
+			ss << " yaw[" << validity1[2] << "," << validity1[3] << "] (" << thy_act RAD2DEG << ")";
+		}
+	    throw ros::Exception(ss.str());
 	    return 0;
 	}
 
@@ -510,6 +520,14 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 		    set_joints_with_limits2(mech,ths_act[1],the_act[1],thr_act[1]);
 		}
 
+
+//	    std::stringstream ss;
+//	    ss << "ik for " >> armId << " invalid: ";
+//		if (validity2[0]) {
+//			ss << " ins (" << d_act << ")";
+//		}
+	    throw ros::Exception("check_joint_limits_2_new failed");
+
 		return 0;
 	}
 }
@@ -527,7 +545,12 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 	     RavenDebridement::InvKinSrv::Response &res)
 {
-    
+	geometry_msgs::PoseStamped pose_req;
+	pose_req.header.frame_id = "/0_link";
+	pose_req.header.stamp = ros::Time::now();
+	pose_req.pose = req.pose;
+	requested_pose_pub.publish(pose_req);
+
 
     float x = req.pose.position.x;
     float y = req.pose.position.y;
@@ -611,6 +634,8 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "inv_kin_server_node");
     ros::NodeHandle node;
+
+    requested_pose_pub = node.advertise<geometry_msgs::PoseStamped>("ik_requested_pose",10);
 
     ros::ServiceServer service = node.advertiseService("inv_kin_server", inv_kin);
     ROS_INFO("Raven IK server is ready");

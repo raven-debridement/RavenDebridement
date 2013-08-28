@@ -44,13 +44,13 @@ def jointRequest(n_steps, endJointPositions):
                     "params" : {
                         "coeffs" : [100],
                         "continuous" : True,
-                        "dist_pen" : [0.001]
+                        "dist_pen" : [0.01]
                         }
                     },
                {
                 "type" : "collision",
                 "params" : {
-                    "coeffs" : [100000],
+                    "coeffs" : [100],
                     "continuous" : False,
                     "dist_pen" : [0.01]
                     }
@@ -134,6 +134,8 @@ class RavenPlanner:
     defaultJoints = dict([(jointType,jointPos) for jointType, jointPos in zip(rosJointTypes,defaultJointPositions)])
 
     def __init__(self, armNames, thread=True):
+        if isinstance(armNames,basestring):
+            armNames = [armNames]
         self.armNames = sorted(armNames)
         
         self.refFrame = MyConstants.Frames.Link0
@@ -177,7 +179,7 @@ class RavenPlanner:
         self.poseTraj = dict()
         
         activeDOFs = []
-        for armName in [MyConstants.Arm.Left,MyConstants.Arm.Right]:
+        for armName in self.armNames:
             self._init_arm(armName)
             activeDOFs += self.raveJointTypes[armName]
             
@@ -186,6 +188,7 @@ class RavenPlanner:
         self.currentState = None
         rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
         
+        self.lock = threading.RLock()
         if thread:
             self.thread = threading.Thread(target=self.optimizeLoop)
             self.thread.setDaemon(True)
@@ -294,7 +297,7 @@ class RavenPlanner:
 
         return dict((joint.type, joint.position) for joint in resp.joints)
 
-    def updateOpenraveJoints(self, armName, joints=None, grasp=None):
+    def updateOpenraveJoints(self, armName, joints1=None, grasp=None):
         """
         Updates the openrave raven model using rosJoints
 
@@ -306,7 +309,7 @@ class RavenPlanner:
         Updates based on: shoulder, elbow, insertion,
                           rotation, pitch, yaw, grasp (self.currentGrasp)
         """
-        rosJoints = joints
+        rosJoints = joints1
         
         if rosJoints is None:
             rosJoints = self.getCurrentJoints(armName)
@@ -348,7 +351,7 @@ class RavenPlanner:
         Converts a numpy array trajectory
         to a list of joint dictionaries
 
-        dicts contain ros joints:
+        dicts contain ros joints1:
         shoulder, elbow, insertion,
         rotation, pitch, finger1, finger2
         """
@@ -420,6 +423,8 @@ class RavenPlanner:
         endJointPositions = []
         for armName in self.armNames:
             endJoints = trajEndJoints[armName]
+            if endJoints is None:
+                print trajEndJoints, self.trajRequest
             endJoints = dict([(jointType,jointPos) for jointType, jointPos in endJoints.items() if jointType in self.rosJointTypes])
             
             startJoints = trajStartJoints[armName]
@@ -486,16 +491,17 @@ class RavenPlanner:
             rospy.sleep(.05)
             
             # block until all traj submissions received
-            while False in self.trajRequest.values():
+            while False in [self.trajRequest.get(armName,False) for armName in self.armNames]:
                 if rospy.is_shutdown():
                     return
-                rospy.sleep(.05)
+                rospy.sleep(0.05)
             
             print "it's go time"
             self.optimize3()
             
-            for armName in self.armNames:
-                self.trajRequest[armName] = False
+            with self.lock:
+                for armName in self.armNames:
+                    self.trajRequest[armName] = False
             
             if once:
                 break
@@ -531,22 +537,44 @@ class RavenPlanner:
     def getTrajectoryJointsToPose(self, armName, endPose, startJoints=None, n_steps=50, debug=False, **kwargs):
         self.setStartJointsAndEndPose(armName, startJoints, endPose, **kwargs)
         self.trajSteps[armName] = n_steps
-        self.trajRequest[armName] = True
+        with self.lock:
+            self.trajRequest[armName] = True
+        if self.trajEndJoints[armName] is None:
+            print armName, endPose, startJoints, kwargs
+            raise Exception()
     
     def getTrajectoryPoseToPose(self, armName, startPose, endPose, n_steps=50, **kwargs):
         self.setStartAndEndPose(armName, startPose, endPose, **kwargs)
         self.trajSteps[armName] = n_steps
-        self.trajRequest[armName] = True
+        with self.lock:
+            self.trajRequest[armName] = True
+        if self.trajEndJoints[armName] is None:
+            print armName, startPose, endPose, kwargs
+            raise Exception()
     
-    def getPoseTrajectory(self, armName, endPose, endGrasp = None, n_steps=50, block=False):
+    def getPoseTrajectory(self, armName, endPose, endGrasp = None, n_steps=50, block=True):
         self.waitForState()
-        joints = self.getCurrentJoints(armName)
+        joints1 = self.getCurrentJoints(armName)
+        startPose = self.getCurrentPose(armName)
         startGrasp = self.getCurrentGrasp(armName)
         if endGrasp is None:
             endGrasp = startGrasp
-        self.setStartAndEndPose(armName, self.getCurrentPose(armName), endPose, startGrasp=startGrasp, endGrasp=endGrasp)
+        self.setStartAndEndPose(armName, startPose, endPose, startGrasp=startGrasp, endGrasp=endGrasp)
         self.trajSteps[armName] = n_steps
-        self.trajRequest[armName] = True
+        with self.lock:
+            self.trajRequest[armName] = True
+        if self.trajEndJoints[armName] is None:
+            print armName, startPose, startGrasp, endPose, endGrasp
+            raise Exception()
+        
+        if block:
+            print 'waiting for traj'
+            while self.trajRequest[armName] and not rospy.is_shutdown():
+                rospy.sleep(0.05)
+                
+            return self.poseTraj[armName]
+        
+    getTrajectoryFromPose = getPoseTrajectory
     
     def trajReady(self):
         return not any(self.trajRequest.values())
@@ -554,7 +582,7 @@ class RavenPlanner:
     def waitForTrajReady(self):
         while not self.trajReady() and not rospy.is_shutdown():
             rospy.sleep(.05)
-        
+
 def testSwitchPlaces(show=True):
     #trajoptpy.SetInteractive(True)
     
@@ -570,8 +598,10 @@ def testSwitchPlaces(show=True):
     #rp.getTrajectoryPoseToPose(MyConstants.Arm.Left, leftCurrPose, rightCurrPose, n_steps=50)
     #rp.getTrajectoryPoseToPose(MyConstants.Arm.Right, rightCurrPose, leftCurrPose, n_steps=50)
     
-    rp.getPoseTrajectory(MyConstants.Arm.Left, rightCurrPose, n_steps=50)
-    rp.getPoseTrajectory(MyConstants.Arm.Right, leftCurrPose, n_steps=50)
+    #rp.getPoseTrajectory(MyConstants.Arm.Left, rightCurrPose, n_steps=50)
+    #rp.getPoseTrajectory(MyConstants.Arm.Right, leftCurrPose, n_steps=50)
+    rp.getPoseTrajectory(MyConstants.Arm.Left, leftCurrPose+[0.01,0,0], n_steps=50)
+    rp.getPoseTrajectory(MyConstants.Arm.Right, rightCurrPose-[0.01,0,0], n_steps=50)
     
     #IPython.embed()
     
@@ -586,19 +616,31 @@ def testSwitchPlaces(show=True):
     
     if not show:
         return
+    rp.env.SetViewer('qtcoin')
+    
+    leftPoseTraj = rp.poseTraj[MyConstants.Arm.Left]
+    rightPoseTraj = rp.poseTraj[MyConstants.Arm.Right]
+    
+    for left, right in zip(leftPoseTraj,rightPoseTraj):
+        if rospy.is_shutdown():
+            break
+        rp.updateOpenraveJoints('L', rp.getJointsFromPose('L', left, rp.getCurrentGrasp('L')), grasp=rp.getCurrentGrasp('L'))
+        rp.updateOpenraveJoints('R', rp.getJointsFromPose('R', right, rp.getCurrentGrasp('R')), grasp=rp.getCurrentGrasp('R'))
+        rospy.loginfo('Press enter to go to next step')
+        raw_input()
+        
+    return
     
     leftTraj = rp.jointTraj[MyConstants.Arm.Left]
     rightTraj = rp.jointTraj[MyConstants.Arm.Right]
     
-    rp.env.SetViewer('qtcoin')
-    
     for left, right in zip(leftTraj,rightTraj):
         if rospy.is_shutdown():
             break
-        rospy.loginfo('Press enter to go to next step')
-        raw_input()
         rp.updateOpenraveJoints('L', left)
         rp.updateOpenraveJoints('R', right)
+        rospy.loginfo('Press enter to go to next step')
+        raw_input()
     
     #IPython.embed()
 

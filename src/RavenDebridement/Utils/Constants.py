@@ -29,6 +29,7 @@ class AR:
 class Arm:
     Left = 'L'
     Right = 'R'
+    Both = [Left,Right]
 
 class Frames:
     Camera = 'left_optical_frame'

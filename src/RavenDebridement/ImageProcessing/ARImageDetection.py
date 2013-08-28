@@ -27,95 +27,57 @@ id_map = {32: Constants.AR.Frames.Object}
 
 class ARImageDetector(ImageDetector):
     
-      class State():
-            CalibrateLeft = 0
-            CalibrateRight = 1
-            Calibrated = 2
-            Calibrating = 3 # waiting for signal to calibrate left or right
-
-      """
-      Used to detect object, grippers, and receptacle
-      """
-      def __init__(self, normal=None):
-            
-            self.objectPoint = None
-            self.registerObjectPublisher()
-
-            #gripper pose. Must both have frame_id of respective tool frame
-            self.leftGripperPose = None
-            self.rightGripperPose = None
-
-            self.newLeftGripperPose = False
-            self.newRightGripperPose = False
-
-
-            # home position. likely in front of the camera, close
-            self.homePoint = tfx.point([-.005,.022,-.13],frame=Constants.Frames.Link0).msg.PointStamped()
-            
-            #receptacle point. Must have frame_id of link_0
-            #is the exact place to drop off (i.e. don't need to do extra calcs to move away
-            self.receptaclePoint = tfx.point([.007,.033,-.165],frame=Constants.Frames.Link0).msg.PointStamped()
-
-            #table normal. Must be according to global (or main camera) frame
-            if normal != None:
-                  self.normal = normal
-            else:
-                  # for tape side
-                  self.normal = tfx.tb_angles(-90,90,0).msg
-                  # for non-tape side
-                  #self.normal = tfx.tb_angles(90,90,0).msg
-
-            self.state = None
-            self.transforms = {}
-            self.tapeMsg = None
-            self.gripperPoseIsEstimate = False
-            self.estimatedPosePub = rospy.Publisher('estimated_pose', PoseStamped)
-
-            self.listener = tf.TransformListener()
-            self.tf_br = tf.TransformBroadcaster()
-
-            self.locks = dict()
-            self.locks['ar_pose'] = Lock()
-
-            # Make gripper location more robust using AR
-            self.debugArCount = 0
-            rospy.Subscriber(Constants.AR.Stereo, ARMarkers, self.arCallback)
-
-            # foam callback
-            rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
-
-            # tape callback
-            rospy.Subscriber(Constants.GripperTape.Topic+'_L', PoseStamped, self.tapeCallbackLeft)
-            rospy.Subscriber(Constants.GripperTape.Topic+'_R', PoseStamped, self.tapeCallbackRight)
-
-            rospy.sleep(2)
+    class State():
+        CalibrateLeft = 0
+        CalibrateRight = 1
+        Calibrated = 2
+        Calibrating = 3 # waiting for signal to calibrate left or right
+    
+    """
+    Used to detect object, grippers, and receptacle
+    """
+    def __init__(self, normal=None):
+        ImageDetector.__init__(self, normal=normal)
         
-      def setState(self, state):
-            self.state = state
-
-      def arCallback(self, msg):
-            self.locks['ar_pose'].acquire()
-            markers = msg.markers
-            for marker in markers:
-                markerType = id_map.get(marker.id)
-                if markerType != None:
-                    continue
-                self.arHandlerWithOrientation(marker, "left")
-            self.locks['ar_pose'].release() 
-
-      def debugAr(self, gp):
+        self.state = None
+        self.transforms = {}
+        self.estimatedPosePub = rospy.Publisher('estimated_pose', PoseStamped)
+        
+        self.locks = dict()
+        self.locks['ar_pose'] = Lock()
+        
+        # Make gripper location more robust using AR
+        self.debugArCount = 0
+        rospy.Subscriber(Constants.AR.Stereo, ARMarkers, self.arCallback)
+        
+        rospy.sleep(2)
+      
+    def setState(self, state):
+        self.state = state
+    
+    def arCallback(self, msg):
+        self.locks['ar_pose'].acquire()
+        markers = msg.markers
+        for marker in markers:
+            markerType = id_map.get(marker.id)
+            if markerType != None:
+                continue
+            self.arHandlerWithOrientation(marker, "left")
+        self.locks['ar_pose'].release() 
+    
+    def debugAr(self, gp):
         self.debugArCount += 1
         if self.debugArCount % 10 == 0:
             print self.listener.transformPose(Constants.Frames.RightTool, gp)
-
-      def arHandlerWithOrientation(self, marker, armname):
+    
+    def arHandlerWithOrientation(self, marker, armname):
         pose = PoseStamped()
         pose.header.stamp = marker.header.stamp
         pose.header.frame_id = marker.header.frame_id
         pose.pose = marker.pose.pose
-
+        
         self.markerPose = pose
-
+        
         if self.tapePoseRecent(marker.header.stamp, APPROX_TIME):
             self.registerTransform(pose, marker.id)
         elif not self.tapePoseRecent(rospy.Time.now(), 0):
@@ -131,24 +93,24 @@ class ARImageDetector(ImageDetector):
                     self.rightGripperPose = estimatedPose
                     self.newRightGripperPose = True
                 self.gripperPoseIsEstimate = True
-
-      def registerTransform(self, pose, id_):
+    
+    def registerTransform(self, pose, id_):
         rospy.loginfo('registering transform for id %d', id_)
         stereoFrame = 'stereo_' + str(id_)
         self.tapeMsg.header.stamp = self.listener.getLatestCommonTime(stereoFrame, self.tapeMsg.header.frame_id)
         transform = self.listener.transformPose(stereoFrame, self.tapeMsg)
         self.transforms[id_] = transform
-
-      def tapePoseRecent(self, comparisonStamp, maxTime):
+    
+    def tapePoseRecent(self, comparisonStamp, maxTime):
         if not self.tapeMsg:
             return False
-
+        
         tapeStamp = self.tapeMsg.header.stamp
         timeDiff = (comparisonStamp - tapeStamp).to_sec()
         return timeDiff < maxTime
-
-      def isCalibrated(self):
-            return self.state == ARImageDetector.State.Calibrated
+    
+    def isCalibrated(self):
+        return self.state == ARImageDetector.State.Calibrated
 
 def testTransforms():
     rospy.init_node('ar_image_detection')

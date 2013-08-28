@@ -46,6 +46,7 @@ class RavenArm:
         Starts the raven arm (releases the e-brake)
         (does nothing if raven arm is already running)
         """
+        print 'starting raven arm ', self.armName
         return self.ravenController.start()
 
     def pause(self):

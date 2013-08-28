@@ -172,10 +172,12 @@ class RavenPlanner():
     defaultJointPositions = [.512, 1.6, -5, .116, .088, 0]
     defaultJoints = dict([(jointType,jointPos) for jointType, jointPos in zip(rosJointTypes,defaultJointPositions)])
 
-    def __init__(self, armNames=[MyConstants.Arm.Left]):
+    def __init__(self, armNames):
         """
         openrave planner for the raven
         """
+        if isinstance(armNames,basestring):
+            armNames = [armNames]
         rospy.loginfo('Initializing openrave planner for {0} raven arm'.format(armNames))
 
         armNames.sort()
@@ -234,7 +236,7 @@ class RavenPlanner():
             
         self.thread = threading.Thread(target=self.getTrajectoryFromPoseThread)
         self.thread.setDaemon(True)
-        #self.thread.start()
+        self.thread.start()
         
 
         
@@ -245,17 +247,11 @@ class RavenPlanner():
         if self._currentGrasp:
             return self._currentGrasp
         return self._currentGrasp
-    @currentGrasp.setter
-    def currentGrasp(self, value):
-        self._currentGrasp = value
 
     @property
     def currentJoints(self):
         self.waitForState()
         return self._currentJoints
-    @currentGrasp.setter
-    def currentJoints(self, value):
-        self._currentJoints = value
     
     def waitForState(self):
         if not self.currentState:
@@ -298,10 +294,10 @@ class RavenPlanner():
         self.currentState = msg
         for arm in msg.arms:
             if arm.name in self.armNames:
-                self.currentJoints[arm.name] = dict((joint.type, joint.position) for joint in arm.joints)
+                self._currentJoints[arm.name] = dict((joint.type, joint.position) for joint in arm.joints)
                     
-                if self.currentJoints[arm.name].has_key(Constants.JOINT_TYPE_GRASP):
-                    self.currentGrasp[arm.name] = self.currentJoints[arm.name][Constants.JOINT_TYPE_GRASP]
+                if self._currentJoints[arm.name].has_key(Constants.JOINT_TYPE_GRASP):
+                    self._currentGrasp[arm.name] = self._currentJoints[arm.name][Constants.JOINT_TYPE_GRASP]
                 
     ######################
     # Openrave methods   #
@@ -386,7 +382,7 @@ class RavenPlanner():
         Converts a numpy array trajectory
         to a list of joint dictionaries
 
-        dicts contain ros joints:
+        dicts contain ros joints1:
         shoulder, elbow, insertion,
         rotation, pitch, finger1, finger2
         """
@@ -486,6 +482,7 @@ class RavenPlanner():
         
         if startJoints == None:
             self.trajStartJoints[armName] = self.currentJoints[armName]
+            print 'cj', self.currentJoints[armName]
         else:
             self.trajStartJoints[armName] = startJoints
             
@@ -497,6 +494,7 @@ class RavenPlanner():
         if debug:
             return
         
+        print 'waiting for traj'
         while self.trajRequest[armName] and not rospy.is_shutdown():
             rospy.sleep(.05)
             
