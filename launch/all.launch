@@ -17,29 +17,30 @@
     <!--<node pkg="transforms" type="transform_server.py" name="transform_broadcaster" />-->
 
     <!-- Foam pose detection -->
-    <node name="foam_poses" type="foam_segmenter" pkg="RavenDebridement" output="screen">
+    <!--node name="foam_poses" type="foam_segmenter" pkg="RavenDebridement" output="screen">
         <remap from="disparity" to="BC/disparity" />
         <remap from="left/camera_info" to="BC/left/camera_info" />
         <remap from="right/camera_info" to="BC/right/camera_info" />
         <remap from="left/image_rect_color" to="BC/left/image_rect_color" />
         <remap from="right/image_rect_color" to="BC/right/image_rect_color" />
-    </node>
+    </node-->
 
 	<!-- Gripper Segmentation -->
     <!--<node pkg="raven_pose_estimator" type="color_gripper_segmenter.new" name="gripper_segmenter" output="screen" />-->
 
     <!-- For AR marker detection -->
-    <include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />
+    <!--<include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />-->
     
-    <node name="color_gripper_segmenter" type="color_gripper_segmenter" pkg="raven_pose_estimator">
+    
+    <node name="color_gripper_segmenter_R" type="color_gripper_segmenter"  pkg="raven_pose_estimator">
+        <param name="arm" type="string" value="R" />
+    </node>
         
+    <node name="color_gripper_segmenter_L" type="color_gripper_segmenter"  pkg="raven_pose_estimator">
+        <param name="arm" type="string" value="L" />
     </node>
     
-    <include file="$(find RavenDebridement)/launch/IK_server.launch" />
-
-    <node name="color_gripper_segmenter" type="color_gripper_segmenter" pkg="raven_pose_estimator">
-        
-    </node>
+    <!--include file="$(find RavenDebridement)/launch/IK_server.launch" /-->
 
 </launch>
 
