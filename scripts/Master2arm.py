@@ -204,11 +204,11 @@ class FindGripper(smach.State):
         self.findGripperTimeout = Util.Timeout(3)
     
     def execute(self, userdata):
-        if MasterClass.PAUSE_BETWEEN_STATES or True:
+        if MasterClass.PAUSE_BETWEEN_STATES:
            pause_func(self)
            
         # due to image processing lag
-        #rospy.sleep(8)
+        rospy.sleep(.5)
 
         rospy.loginfo('Searching for ' + self.gripperName)
         # find gripper point
@@ -476,7 +476,9 @@ class MoveToHome(smach.State):
         return 'success'
 
 class MasterClass(object):
-    PAUSE_BETWEEN_STATES = False
+    PAUSE_BETWEEN_STATES = True
+    LEFT_ARM_THREAD = None
+    RIGHT_ARM_THREAD = None
     
     def __init__(self, armName, ravenArm, ravenPlanner, imageDetector, foamAllocator):
         self.armName = armName
@@ -631,7 +633,6 @@ class MasterClass(object):
         otherSis.start()
         otherUserData = smach.UserData()
         otherUserData['objectHeightOffset'] = self.objectHeightOffset
-        
         
         try:
             #outcome = self.sm.execute(userData)
