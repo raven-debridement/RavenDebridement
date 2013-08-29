@@ -18,9 +18,13 @@
 #include "raven/state/runlevel.h"
 
 #include "DS0.h"
+
 #include "raven/kinematics/kinematics_defines.h"
 
+#include <iostream>
 #include <sstream>
+
+using namespace std;
 
 static ros::Publisher requested_pose_pub;
 
@@ -68,34 +72,42 @@ bool check_joint_limits1_new(float d_act, float thp_act, float g1_act, float g2_
 
 	bool bad = false;
 	if (d_act < Z_INS_MIN_LIMIT) {
+		printf("past insertion min limit %.1f < %.1f\n", d_act, Z_INS_MIN_LIMIT);
 		validity[0] = -1;
 		bad = true;
 	}
 	if (d_act > Z_INS_MAX_LIMIT) {
+		printf("past insertion max limit %.1f > %.1f\n", d_act, Z_INS_MAX_LIMIT);
 		validity[0] = +1;
 		bad = true;
 	}
 	if (thp_act < TOOL_WRIST_MIN_LIMIT) {
+		printf("past tool wrist min limit %.1f < %.1f\n", thp_act RAD2DEG, TOOL_WRIST_MIN_LIMIT RAD2DEG);
 		validity[1] = -1;
 		bad = true;
 	}
 	if (thp_act > TOOL_WRIST_MAX_LIMIT) {
+		printf("past tool wrist max limit %.1f > %.1f\n", thp_act, TOOL_WRIST_MAX_LIMIT RAD2DEG);
 		validity[1] = +1;
 		bad = true;
 	}
 	if (g1_act < TOOL_GRASP1_MIN_LIMIT) {
+		printf("past grasp1 min limit %.1f < %.1f\n", g1_act RAD2DEG, TOOL_GRASP1_MIN_LIMIT RAD2DEG);
 		validity[2] = -1;
 		bad = true;
 	}
 	if (g1_act > TOOL_GRASP1_MAX_LIMIT) {
+		printf("past grasp1 max limit %.1f > %.1f\n", g1_act RAD2DEG, TOOL_GRASP1_MAX_LIMIT RAD2DEG);
 		validity[2] = +1;
 		bad = true;
 	}
 	if (g2_act < TOOL_GRASP2_MIN_LIMIT) {
+		printf("past grasp2 min limit %.1f < %.1f\n", g2_act RAD2DEG, TOOL_GRASP2_MIN_LIMIT RAD2DEG);
 		validity[3] = -1;
 		bad = true;
 	}
 	if (g2_act > TOOL_GRASP2_MAX_LIMIT) {
+		printf("past grasp2 max limit %.1f > %.1f\n", g2_act RAD2DEG, TOOL_GRASP2_MAX_LIMIT RAD2DEG);
 		validity[3] = +1;
 		bad = true;
 	}
@@ -120,26 +132,32 @@ bool check_joint_limits2_new(float ths_act, float the_act, float thr_act,float v
 
 	bool bad = false;
 	if (ths_act < SHOULDER_MIN_LIMIT) {
+		printf("past shoulder min limit %.1f < %.1f\n", ths_act RAD2DEG, SHOULDER_MIN_LIMIT RAD2DEG);
 		validity[0] = ths_act - SHOULDER_MIN_LIMIT;
 		bad = true;
 	}
 	if (ths_act > SHOULDER_MAX_LIMIT) {
+		printf("past shoulder max limit %.1f > %.1f\n", ths_act RAD2DEG, SHOULDER_MAX_LIMIT RAD2DEG);
 		validity[0] = ths_act - SHOULDER_MAX_LIMIT;
 		bad = true;
 	}
 	if (the_act < ELBOW_MIN_LIMIT) {
+		printf("past elbow min limit %.1f < %.1f\n", the_act RAD2DEG, ELBOW_MIN_LIMIT RAD2DEG);
 		validity[1] = the_act - ELBOW_MIN_LIMIT;
 		bad = true;
 	}
 	if (the_act > ELBOW_MAX_LIMIT) {
+		printf("past elbow max limit %.1f > %.1f\n", the_act RAD2DEG, ELBOW_MAX_LIMIT RAD2DEG);
 		validity[1] = the_act - ELBOW_MAX_LIMIT;
 		bad = true;
 	}
 	if (thr_act < TOOL_ROLL_MIN_LIMIT) {
+		printf("past tool roll min limit %.1f < %.1f\n", thr_act RAD2DEG, TOOL_ROLL_MIN_LIMIT RAD2DEG);
 		validity[2] = thr_act - TOOL_ROLL_MIN_LIMIT;
 		bad = true;
 	}
 	if (thr_act > TOOL_ROLL_MAX_LIMIT) {
+		printf("past tool roll max limit %.1f > %.1f\n", thr_act RAD2DEG, TOOL_ROLL_MAX_LIMIT RAD2DEG);
 		validity[2] = thr_act - TOOL_ROLL_MAX_LIMIT;
 		bad = true;
 	}
@@ -154,22 +172,22 @@ int set_joints_with_limits1(mechanism* mech, float d_act, float thp_act, float g
 
 	int limits=0;
 
-	if (mech->joint[Z_INS].jpos_d  < Z_INS_MIN_LIMIT) {
-	  printf("hit insertion min limit");
+	if (mech->joint[Z_INS].jpos_d < Z_INS_MIN_LIMIT) {
+		printf("hit insertion min limit %.1f < %.1f\n", mech->joint[Z_INS].jpos_d, Z_INS_MIN_LIMIT);
 		limits++;
 		mech->joint[Z_INS].jpos_d = Z_INS_MIN_LIMIT;
 	} else if (mech->joint[Z_INS].jpos_d  > Z_INS_MAX_LIMIT) {
-	  printf("hit insertion max limit");
+		printf("hit insertion max limit %.1f > %.1f\n", mech->joint[Z_INS].jpos_d, Z_INS_MAX_LIMIT);
 		limits++;
 		mech->joint[Z_INS].jpos_d = Z_INS_MAX_LIMIT;
 	}
 
-	if (mech->joint[WRIST].jpos_d  < TOOL_WRIST_MIN_LIMIT) {
-	  printf("hit tool wrist min limit");
+	if (mech->joint[WRIST].jpos_d < TOOL_WRIST_MIN_LIMIT) {
+		printf("hit tool wrist min limit %.1f < %.1f\n", mech->joint[WRIST].jpos_d RAD2DEG, TOOL_WRIST_MIN_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[WRIST].jpos_d = TOOL_WRIST_MIN_LIMIT;
 	} else if (mech->joint[WRIST].jpos_d  > TOOL_WRIST_MAX_LIMIT) {
-	  printf("hit tool wrist max limit");
+		printf("hit tool wrist max limit %.1f > %.1f\n", mech->joint[WRIST].jpos_d RAD2DEG, TOOL_WRIST_MAX_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[WRIST].jpos_d = TOOL_WRIST_MAX_LIMIT;
 	}
@@ -177,31 +195,31 @@ int set_joints_with_limits1(mechanism* mech, float d_act, float thp_act, float g
 	/*
 	//TODO: limit this elsewhere
 	if (fabs(mech->joint[WRIST].jpos_d - mech->joint[WRIST].jpos) > 10 DEG2RAD) {
-	  printf("hit tool wrist subtraction limit");
+	  printf("hit tool wrist subtraction limit\n");
 		if (mech->joint[WRIST].jpos_d > mech->joint[WRIST].jpos) {
 		  mech->joint[WRIST].jpos_d = mech->joint[WRIST].jpos + 10 DEG2RAD;
 		} else {
 		  	mech->joint[WRIST].jpos_d = mech->joint[WRIST].jpos - 10 DEG2RAD;
 		}
 	}
-	*/
+	 */
 
-	if (mech->joint[GRASP1].jpos_d  < TOOL_GRASP1_MIN_LIMIT) {
-	  printf("hit grasp1 min limit");
+	if (mech->joint[GRASP1].jpos_d < TOOL_GRASP1_MIN_LIMIT) {
+		printf("hit grasp1 min limit %.1f < %.1f\n", mech->joint[GRASP1].jpos_d RAD2DEG, TOOL_GRASP1_MIN_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[GRASP1].jpos_d = TOOL_GRASP1_MIN_LIMIT;
 	} else if (mech->joint[GRASP1].jpos_d  > TOOL_GRASP1_MAX_LIMIT) {
-	  printf("hit grasp1 max limit");
+		printf("hit grasp1 max limit %.1f > %.1f\n", mech->joint[GRASP1].jpos_d RAD2DEG, TOOL_GRASP1_MAX_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[GRASP1].jpos_d = TOOL_GRASP1_MAX_LIMIT;
 	}
 
-	if (mech->joint[GRASP2].jpos_d  < TOOL_GRASP2_MIN_LIMIT) {
-	  printf("hit grasp2 min limit");
+	if (mech->joint[GRASP2].jpos_d < TOOL_GRASP2_MIN_LIMIT) {
+		printf("hit grasp2 min limit %.1f < %.1f\n", mech->joint[GRASP2].jpos_d RAD2DEG, TOOL_GRASP2_MIN_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[GRASP2].jpos_d = TOOL_GRASP2_MIN_LIMIT;
 	} else if (mech->joint[GRASP2].jpos_d  > TOOL_GRASP2_MAX_LIMIT) {
-	  printf("hit grasp2 max limit");
+		printf("hit grasp2 max limit %.1f > %.1f\n", mech->joint[GRASP2].jpos_d RAD2DEG, TOOL_GRASP2_MAX_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[GRASP2].jpos_d = TOOL_GRASP2_MAX_LIMIT;
 	}
@@ -210,7 +228,7 @@ int set_joints_with_limits1(mechanism* mech, float d_act, float thp_act, float g
 	printf("WRIST = %f\n", mech->joint[WRIST].jpos_d RAD2DEG);
 	printf("GRASP1 = %f\n", mech->joint[GRASP1].jpos_d RAD2DEG);
 	printf("GRASP2 = %f\n", mech->joint[GRASP2].jpos_d RAD2DEG);
-	
+
 
 	return limits;
 }
@@ -223,31 +241,31 @@ int set_joints_with_limits2(mechanism* mech, float ths_act, float the_act, float
 
 	int limits = 0;
 	if (mech->joint[SHOULDER].jpos_d < SHOULDER_MIN_LIMIT) {
-	  printf("hit shoulder min limit");
+		printf("hit shoulder min limit %.1f < %.1f\n", mech->joint[SHOULDER].jpos_d RAD2DEG, SHOULDER_MIN_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[SHOULDER].jpos_d = SHOULDER_MIN_LIMIT;
 	} else if (mech->joint[SHOULDER].jpos_d > SHOULDER_MAX_LIMIT) {
-	  printf("hit shoulder max limit");
+		printf("hit shoulder max limit %.1f > %.1f\n", mech->joint[SHOULDER].jpos_d RAD2DEG, SHOULDER_MAX_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[SHOULDER].jpos_d = SHOULDER_MAX_LIMIT;
 	}
 
 	if (mech->joint[ELBOW].jpos_d < ELBOW_MIN_LIMIT) {
-	  printf("hit elbow min limit");
+		printf("hit elbow min limit %.1f < %.1f\n", mech->joint[ELBOW].jpos_d RAD2DEG, ELBOW_MIN_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[ELBOW].jpos_d = ELBOW_MIN_LIMIT;
 	} else if (mech->joint[ELBOW].jpos_d > ELBOW_MAX_LIMIT) {
-	  printf("hit elbow max limit");
+		printf("hit elbow max limit %.1f > %.1f\n", mech->joint[ELBOW].jpos_d RAD2DEG, ELBOW_MAX_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[ELBOW].jpos_d = ELBOW_MAX_LIMIT;
 	}
 
 	if (mech->joint[TOOL_ROT].jpos_d < TOOL_ROLL_MIN_LIMIT) {
-	  printf("hit tool roll min limit");
+		printf("hit tool roll min limit %.1f < %.1f\n", mech->joint[TOOL_ROT].jpos_d RAD2DEG, TOOL_ROLL_MIN_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[TOOL_ROT].jpos_d = TOOL_ROLL_MIN_LIMIT;
 	} else if (mech->joint[TOOL_ROT].jpos_d > TOOL_ROLL_MAX_LIMIT) {
-	  printf("hit tool roll max limit");
+		printf("hit tool roll max limit %.1f > %.1f\n", mech->joint[TOOL_ROT].jpos_d RAD2DEG, TOOL_ROLL_MAX_LIMIT RAD2DEG);
 		limits++;
 		mech->joint[TOOL_ROT].jpos_d = TOOL_ROLL_MAX_LIMIT;
 	}
@@ -262,7 +280,7 @@ int set_joints_with_limits2(mechanism* mech, float ths_act, float the_act, float
 		  	mech->joint[TOOL_ROT].jpos_d = mech->joint[TOOL_ROT].jpos - 10 DEG2RAD;
 		}
 	}
-	*/
+	 */
 
 	printf("SHOULDER = %f\n",mech->joint[SHOULDER].jpos_d RAD2DEG);
 	printf("ELBOW = %f\n",mech->joint[ELBOW].jpos_d RAD2DEG);
@@ -373,7 +391,7 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 					validity1[1],              thp_act RAD2DEG,
 					validity1[2],validity1[3], thy_act RAD2DEG);
 	    std::stringstream ss;
-	    ss << "ik for " << armId << " invalid: ";
+	    ss << "ik for " << (armId==GOLD_ARM_ID?"L":"R") << " invalid: ";
 	    if (validity1[0]) {
 	    	ss << " ins (" << d_act << ")";
 	    }
@@ -388,9 +406,9 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	}
 
 
-	ROS_INFO("d %f",d);
-	ROS_INFO("thp %f",thp);
-	ROS_INFO("thy %f",thy);
+//	ROS_INFO("d %f",d);
+//	ROS_INFO("thp %f",thp);
+//	ROS_INFO("thy %f",thy);
 
 	btVector3 z_roll_in_world = btTransform(Zi(d) * Xip * Zp(thp) * Xpy * Zy(thy) * Tg * Tgripper_to_world).invXform(btVector3(0,0,1));
 	btVector3 x_roll_in_world = btTransform(Zi(d) * Xip * Zp(thp) * Xpy * Zy(thy) * Tg * Tgripper_to_world).invXform(btVector3(1,0,0));
@@ -410,8 +428,8 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	float the_1 = acos(cthe);
 	float the_2 = -acos(cthe);
 
-	ROS_INFO("cthe %f", cthe);
-	ROS_INFO("the_1 %f", the_1);
+//	ROS_INFO("cthe %f", cthe);
+//	ROS_INFO("the_1 %f", the_1);
 
 	float the_opt[2];
 	the_opt[0] = the_1;
@@ -445,21 +463,21 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 		float C6 = kc23*(sthe_tmp * sths_tmp - kc12*cthe*cths_tmp) + cths_tmp*ks12*ks23;
 		float C7 = cthe*sths_tmp + kc12*cths_tmp*sthe_tmp;
 
-		ROS_INFO("C4 %f",C4);
-		ROS_INFO("C5 %f",C5);
-		ROS_INFO("C6 %f",C6);
-		ROS_INFO("C7 %f",C7);
-		ROS_INFO("xx %f",xx);
-		ROS_INFO("xy %f",xy);
+//		ROS_INFO("C4 %f",C4);
+//		ROS_INFO("C5 %f",C5);
+//		ROS_INFO("C6 %f",C6);
+//		ROS_INFO("C7 %f",C7);
+//		ROS_INFO("xx %f",xx);
+//		ROS_INFO("xy %f",xy);
 		
 		thr_opt[i] = atan2(
 				(xx - C7 * xy / C4) / (C6 + C7*C5/C4),
 				(xx + C6 * xy / C5) / (-C6*C4/C5 - C7));
 
 
-		ROS_INFO("ths_opt %f",ths_opt[i]);
-		ROS_INFO("the_opt %f",the_opt[i]);
-		ROS_INFO("thr_opt %f",thr_opt[i]);
+//		ROS_INFO("ths_opt %f",ths_opt[i]);
+//		ROS_INFO("the_opt %f",the_opt[i]);
+//		ROS_INFO("thr_opt %f",thr_opt[i]);
 		
 		ths_act[i] = THS_FROM_IK(armId,ths_opt[i]);
 		the_act[i] = THE_FROM_IK(armId,the_opt[i]);
@@ -477,9 +495,9 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 		}
 		
 
-		ROS_INFO("ths_act %f",ths_act[i]);
-		ROS_INFO("the_act %f",the_act[i]);
-		ROS_INFO("thr_act %f",thr_act[i]);
+//		ROS_INFO("ths_act %f",ths_act[i]);
+//		ROS_INFO("the_act %f",the_act[i]);
+//		ROS_INFO("thr_act %f",thr_act[i]);
 
 	
 		bool valid2 = check_joint_limits2_new(ths_act[i],the_act[i],thr_act[i],validity2[i]);
@@ -515,9 +533,13 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 		if (valid_dist[0] < maxValidDist && valid_dist[0] < valid_dist[1]) {
 		    set_joints_with_limits1(mech,d_act,thp_act,g1_act,g2_act);
 		    set_joints_with_limits2(mech,ths_act[0],the_act[0],thr_act[0]);
+		    ROS_WARN("Capping joints 1");
+		    return 1;
 		} else if (valid_dist[1] < maxValidDist) {
 		    set_joints_with_limits1(mech,d_act,thp_act,g1_act,g2_act);
 		    set_joints_with_limits2(mech,ths_act[1],the_act[1],thr_act[1]);
+		    ROS_WARN("Capping joints 2");
+			return 1;
 		}
 
 
@@ -567,8 +589,10 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
     struct mechanism* mech = new mechanism();
 
     if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GOLD) {
+    	cout << "Arm L" << endl;
 	mech->type = GOLD_ARM;
     } else if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GREEN) {
+    	cout << "Arm R" << endl;
 	mech->type = GREEN_ARM;
     } else {
 	return false;

@@ -5,6 +5,7 @@ import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
 import math
+from math import *
 
 import tf
 import tf.transformations as tft
@@ -38,19 +39,24 @@ def pause_func(myclass):
     raw_input()
 
 class DoNothing(smach.State):
-    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
-        smach.State.__init__(self, outcomes = ['success','failure'])
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame, completer=None):
+        smach.State.__init__(self, outcomes = ['success','failure','complete'])
+        self.armName = ravenArm.name
         self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
         self.stepsPerMeter = stepsPerMeter
         self.transFrame = transFrame
         self.rotFrame = rotFrame
+        self.completer = completer
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
         rospy.loginfo('Doing nothing')
+        
+        if self.completer and self.completer.isComplete():
+            return 'complete'
 
         transBound = .006
         rotBound = float("inf")
@@ -65,19 +71,23 @@ class DoNothing(smach.State):
         return 'success'
 
 class MoveUp(smach.State):
-    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
-        smach.State.__init__(self, outcomes = ['success','failure'])
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame, completer=None):
+        smach.State.__init__(self, outcomes = ['success','failure','complete'])
         self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
         self.stepsPerMeter = stepsPerMeter
         self.transFrame = transFrame
         self.rotFrame = rotFrame
+        self.completer = completer
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
         rospy.loginfo('Moving up')
+
+        if self.completer and self.completer.isComplete():
+            return 'complete'
 
         transBound = .006
         rotBound = float("inf")
@@ -94,13 +104,14 @@ class MoveUp(smach.State):
         return 'success'
 
 class MoveDown(smach.State):
-    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
-        smach.State.__init__(self, outcomes = ['success','failure'])
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame, completer=None):
+        smach.State.__init__(self, outcomes = ['success','failure','complete'])
         self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
         self.stepsPerMeter = stepsPerMeter
         self.transFrame = transFrame
         self.rotFrame = rotFrame
+        self.completer = completer
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
@@ -161,11 +172,12 @@ class FindHome(smach.State):
         return 'success'
 
 class FindObject(smach.State):
-    def __init__(self, foamSegmenter, toolframe, obj_pub):
+    def __init__(self, foamAllocator, toolframe, obj_pub, completer=None):
         smach.State.__init__(self, outcomes = ['success','failure'], input_keys = ['objectHeightOffset'], output_keys = ['rotateBy'], io_keys=['objectPose'])
-        self.foamSegmenter = foamSegmenter
+        self.foamAllocator = foamAllocator
         self.toolframe = toolframe
         self.obj_pub = obj_pub
+        self.completer = completer
     
     def publishObjectPose(self, pose):
         self.obj_pub.publish(pose)
@@ -181,13 +193,16 @@ class FindObject(smach.State):
 
         rospy.loginfo('Searching for object point')
         # find object point and pose
-        if not self.foamSegmenter.hasFoam(new=new):
+        if not self.foamAllocator.hasFoam(new=new):
             rospy.sleep(1)
-        if not self.foamSegmenter.hasFoam(new=new):
+        if not self.foamAllocator.hasFoam(new=new):
             rospy.loginfo('Did not find object')
+            if self.completer:
+                self.completer.complete(self.foamAllocator.armName)
+                print self.foamAllocator.armName, self.completer
             return 'failure'
         # get object w.r.t. toolframe
-        objectPose = self.foamSegmenter.allocateFoam(new=new)
+        objectPose = self.foamAllocator.allocateFoam(new=new)
         objectPose.position.z += userdata.objectHeightOffset
         self.publishObjectPose(objectPose.msg.PoseStamped())
         
@@ -293,18 +308,18 @@ class PlanTrajToObject(smach.State):
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
         poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
         
-        print('objectPose')
-        print(objectPose)
-        print('gripperPose')
-        print(gripperPose)
-        print('calcGripperPose')
-        print(calcGripperPose)
-        print('endPoseForPub')
-        print(endPoseForPub)
-        print('endPose')
-        print(endPose)
-        print('deltaPose')
-        print(deltaPose)
+#         print('objectPose')
+#         print(objectPose)
+#         print('gripperPose')
+#         print(gripperPose)
+#         print('calcGripperPose')
+#         print(calcGripperPose)
+#         print('endPoseForPub')
+#         print(endPoseForPub)
+#         print('endPose')
+#         print(endPose)
+#         print('deltaPose')
+#         print(deltaPose)
         
         # gripperPose + deltaPose = objectPose
 
@@ -478,10 +493,31 @@ class MoveToHome(smach.State):
         
         return 'success'
 
+class Completer(object):
+    def __init__(self, armNames):
+        self.armNames = armNames
+        self._complete = dict([(arm, False) for arm in self.armNames])
+    
+    def isComplete(self):
+        return all(self._complete.values())
+    
+    def complete(self, armName):
+        self._complete[armName] = True
+    
+    def __str__(self):
+        return 'complete: %s' % self._complete
+    
+    __repr__ = __str__
+
 class MasterClass(object):
-    PAUSE_BETWEEN_STATES = True
-    LEFT_ARM_THREAD = None
-    RIGHT_ARM_THREAD = None
+    PAUSE_BETWEEN_STATES = False
+    file_lock = threading.Lock()
+    output_file = open('/tmp/master_output.txt','w')
+    
+    @classmethod
+    def write(cls,*args,**kwargs):
+        with cls.file_lock:
+            cls.output_file.write(*args,**kwargs)
     
     def __init__(self, armName, ravenArm, ravenPlanner, imageDetector, foamAllocator):
         self.armName = armName
@@ -500,6 +536,15 @@ class MasterClass(object):
             self.otherArmName = Constants.Arm.Left
             self.otherGripperName = Constants.Arm.Left
             self.otherToolframe = Constants.Frames.LeftTool
+        
+        other_sm_type = None
+        #other_sm_type = 'nothing'
+        #other_sm_type = 'updown'
+        
+        if other_sm_type is None:
+            self.completer = Completer([self.armName,self.otherArmName])
+        else:
+            self.completer = Completer([self.armName])
 
         self.listener = tf.TransformListener.instance()
 
@@ -551,11 +596,12 @@ class MasterClass(object):
             smach.StateMachine.add(arm('findHome'), FindHome(self.armName, self.imageDetector),
                                    transitions = {'success': arm('moveToReceptacle'),
                                                  'failure': arm('findHome')})
-            smach.StateMachine.add(arm('findObject'), FindObject(self.foamAllocator, self.toolframe, self.obj_pub),
+            smach.StateMachine.add(arm('findObject'), FindObject(self.foamAllocator, self.toolframe, self.obj_pub, completer=self.completer),
                                    transitions = {'success': arm('findGripper'),
-                                                  'failure': 'success'})
-            smach.StateMachine.add(arm('doNothing'),DoNothing(self.armName, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                       transitions = {'success': arm('doNothing')})
+                                                  'failure': arm('doNothing')})
+            smach.StateMachine.add(arm('doNothing'),DoNothing(self.ravenArm, self.ravenPlanner, self.stepsPerMeter, self.transFrame, self.rotFrame, completer=self.completer),
+                                       transitions = {'success': arm('doNothing'),
+                                                      'complete': 'success'})
             smach.StateMachine.add(arm('findGripper'), FindGripper(self.imageDetector, self.gripperName),
                                    transitions = {'success': arm('planTrajToObject'),
                                                   'failure': arm('rotateGripper')})
@@ -584,17 +630,17 @@ class MasterClass(object):
         
         self.other_sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['objectHeightOffset'])
         with self.other_sm:
-            other_sm_type = None
-            #other_sm_type = 'nothing'
-            #other_sm_type = 'updown'
             if other_sm_type == 'nothing':
-                smach.StateMachine.add(otherArm('doNothing'),DoNothing(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                       transitions = {'success': otherArm('doNothing')})
+                smach.StateMachine.add(otherArm('doNothing'),DoNothing(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame, completer=self.completer),
+                                       transitions = {'success': otherArm('doNothing'),
+                                                      'complete': 'success'})
             elif other_sm_type == 'updown':
-                smach.StateMachine.add(otherArm('moveUp'),MoveUp(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                       transitions = {'success': otherArm('moveDown')})
-                smach.StateMachine.add(otherArm('moveDown'),MoveDown(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                       transitions = {'success': otherArm('moveUp')})
+                smach.StateMachine.add(otherArm('moveUp'),MoveUp(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame, completer=self.completer),
+                                       transitions = {'success': otherArm('moveDown'),
+                                                      'complete': 'success'})
+                smach.StateMachine.add(otherArm('moveDown'),MoveDown(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame, completer=self.completer),
+                                       transitions = {'success': otherArm('moveUp'),
+                                                      'complete': 'success'})
             else:
                 smach.StateMachine.add(otherArm('findReceptacle'), FindReceptacle(self.otherArmName, self.imageDetector), 
                                    transitions = {'success': otherArm('findHome'),
@@ -602,9 +648,12 @@ class MasterClass(object):
                 smach.StateMachine.add(otherArm('findHome'), FindHome(self.otherArmName, self.imageDetector),
                                        transitions = {'success': otherArm('moveToReceptacle'),
                                                      'failure': otherArm('findHome')})
-                smach.StateMachine.add(otherArm('findObject'), FindObject(self.otherFoamAllocator, self.otherToolframe, self.obj_pub),
+                smach.StateMachine.add(otherArm('findObject'), FindObject(self.otherFoamAllocator, self.otherToolframe, self.obj_pub, completer=self.completer),
                                        transitions = {'success': otherArm('findGripper'),
-                                                      'failure': 'success'})
+                                                      'failure': otherArm('doNothing')})
+                smach.StateMachine.add(otherArm('doNothing'),DoNothing(self.otherRavenArm, self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame, completer=self.completer),
+                                       transitions = {'success': otherArm('doNothing'),
+                                                      'complete': 'success'})
                 smach.StateMachine.add(otherArm('findGripper'), FindGripper(self.imageDetector, self.otherGripperName),
                                        transitions = {'success': otherArm('planTrajToObject'),
                                                       'failure': otherArm('rotateGripper')})
@@ -655,7 +704,14 @@ class MasterClass(object):
         except Exception, e:
             print e
         
-        rospy.spin()
+        rospy.sleep(2)
+        
+        rate = rospy.Rate(1)
+        while not rospy.is_shutdown():
+            if not self.sm.is_running() and not self.other_sm.is_running():
+                rospy.signal_shutdown('state machines finished')
+                break
+            rate.sleep()
 
         self.ravenArm.stop()
         self.otherRavenArm.stop()
