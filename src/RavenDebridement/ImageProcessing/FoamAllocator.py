@@ -75,8 +75,8 @@ class FoamAllocator(object):
             
             left = set(self.centers.keys()).difference(taken)
             self._printState()
-            print 'taken', taken
-            print 'left', left
+            print 'taken', list(taken)
+            print 'left', list(left)
             return bool(left)
     
     def allocateFoam(self, armName, new=False):
@@ -112,7 +112,7 @@ class FoamAllocator(object):
             if best is None:
                 return None
             
-            self.allocations[armName] = id
+            self.allocations[armName] = best_id
             print 'returning new allocation', armName, best_id
             self._printState()
             tf = tfx.lookupTransform(MyConstants.Frames.Link0, best.frame)
