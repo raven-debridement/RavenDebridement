@@ -64,7 +64,7 @@ class ImageDetector():
         self.tf_br = tf.TransformBroadcaster()
         self.registerObjectPublisher()
         
-        rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
+        #rospy.Subscriber(Constants.Foam.Topic, PointStamped, self.foamCallback)
         
         self.tapeMsg = None
         

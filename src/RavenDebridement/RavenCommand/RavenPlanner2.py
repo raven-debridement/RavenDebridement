@@ -130,7 +130,7 @@ class RavenPlanner:
                               "wrist_joint",
                               "grasper_yaw"]
     
-    defaultJointPositions = [.512, 1.6, -5, .116, .088, 0]
+    defaultJointPositions = [.512, 1.6, -.2, .116, .088, 0]
     defaultJoints = dict([(jointType,jointPos) for jointType, jointPos in zip(rosJointTypes,defaultJointPositions)])
 
     def __init__(self, armNames, thread=True):
@@ -187,6 +187,9 @@ class RavenPlanner:
         
         self.currentState = None
         rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
+        
+        self.start_pose_pubs = dict((armName, rospy.Publisher('planner_%s_start' % armName,PoseStamped)) for armName in self.armNames)
+        self.end_pose_pubs = dict((armName, rospy.Publisher('planner_%s_end' % armName,PoseStamped)) for armName in self.armNames)
         
         self.lock = threading.RLock()
         if thread:
@@ -272,7 +275,7 @@ class RavenPlanner:
                 rospy.sleep(.05)
             print 'got it!'
     
-    def getJointsFromPose(self, armName, pose, grasp):
+    def getJointsFromPose(self, armName, pose, grasp, quiet=False):
         """
         Calls IK server and returns a dictionary of {jointType : jointPos}
         
@@ -293,7 +296,10 @@ class RavenPlanner:
             rospy.loginfo('IK success!')
         except (rospy.ServiceException, rospy.ROSException) as e:
             rospy.loginfo("IK server failure: %s"%e)
-            return
+            if quiet:
+                return
+            else:
+                raise e
 
         return dict((joint.type, joint.position) for joint in resp.joints)
 
@@ -343,6 +349,7 @@ class RavenPlanner:
             jointPositions += [grasp/2, grasp/2]
         else:
             jointPositions += [grasp/2, -grasp/2]
+
 
         self.robot.SetJointValues(jointPositions, raveJointTypes)
 
@@ -430,6 +437,9 @@ class RavenPlanner:
             startJoints = trajStartJoints[armName]
             startJoints = dict([(jointType,jointPos) for jointType, jointPos in startJoints.items() if jointType in self.rosJointTypes])
             
+            print 'start joints %s: %s' % (armName, [startJoints[k] for k in sorted(startJoints.keys())])
+            print 'end joints %s: %s' % (armName, [endJoints[k] for k in sorted(endJoints.keys())])
+            
             for raveJointType in self.manip[armName].GetArmIndices():
                 rosJointType = self.raveJointTypesToRos[armName][raveJointType]
                 endJointPositions.append(endJoints[rosJointType])
@@ -513,26 +523,39 @@ class RavenPlanner:
         self.trajEndJoints[armName] = endJoints
     
     def setStartJointsAndEndPose(self, armName, startJoints, endPose,**kwargs):
-        self.trajStartGrasp[armName] = kwargs.get('startGrasp',kwargs.get('grasp',None))
-        self.trajEndGrasp[armName] = kwargs.get('endGrasp',kwargs.get('grasp',0))
+        startGrasp = kwargs.get('startGrasp',kwargs.get('grasp',0))
+        endGrasp = kwargs.get('endGrasp',kwargs.get('grasp',0))
+        endJoints = self.getJointsFromPose(armName, endPose, grasp=endGrasp)
+        
+        self.trajStartGrasp[armName] = startGrasp
+        self.trajEndGrasp[armName] = endGrasp
         endPose = Util.convertToFrame(tfx.pose(endPose), MyConstants.Frames.Link0)
         self.trajStartJoints[armName] = startJoints
-        self.trajEndJoints[armName] = self.getJointsFromPose(armName, endPose, grasp=self.trajEndGrasp[armName])
+        self.trajEndJoints[armName] = endJoints
     
     def setStartPoseAndEndJoints(self, armName, startPose, endJoints, **kwargs):
-        self.trajStartGrasp[armName] = kwargs.get('startGrasp',kwargs.get('grasp',0))
-        self.trajEndGrasp[armName] = kwargs.get('endGrasp',kwargs.get('grasp',None))
+        startGrasp = kwargs.get('startGrasp',kwargs.get('grasp',0))
+        endGrasp = kwargs.get('endGrasp',kwargs.get('grasp',0))
+        startJoints = self.getJointsFromPose(armName, startPose, grasp=startGrasp)
+        
+        self.trajStartGrasp[armName] = startGrasp
+        self.trajEndGrasp[armName] = endGrasp
         startPose = Util.convertToFrame(tfx.pose(startPose), MyConstants.Frames.Link0)
-        self.trajStartJoints[armName] = self.getJointsFromPose(armName, startPose, grasp=self.trajStartGrasp[armName])
+        self.trajStartJoints[armName] = startJoints
         self.trajEndJoints[armName] = endJoints
     
     def setStartAndEndPose(self, armName, startPose, endPose, **kwargs):
-        self.trajStartGrasp[armName] = kwargs.get('startGrasp',kwargs.get('grasp',0))
-        self.trajEndGrasp[armName] = kwargs.get('endGrasp',kwargs.get('grasp',0))
+        startGrasp = kwargs.get('startGrasp',kwargs.get('grasp',0))
+        endGrasp = kwargs.get('endGrasp',kwargs.get('grasp',0))
+        startJoints = self.getJointsFromPose(armName, startPose, grasp=startGrasp)
+        endJoints = self.getJointsFromPose(armName, endPose, grasp=endGrasp)
+        
+        self.trajStartGrasp[armName] = startGrasp
+        self.trajEndGrasp[armName] = endGrasp
         startPose = Util.convertToFrame(tfx.pose(startPose), MyConstants.Frames.Link0)
         endPose = Util.convertToFrame(tfx.pose(endPose), MyConstants.Frames.Link0)
-        self.trajStartJoints[armName] = self.getJointsFromPose(armName, startPose, grasp=self.trajStartGrasp[armName])
-        self.trajEndJoints[armName] = self.getJointsFromPose(armName, endPose, grasp=self.trajEndGrasp[armName])
+        self.trajStartJoints[armName] = startJoints
+        self.trajEndJoints[armName] = endJoints
     
     def getTrajectoryJointsToPose(self, armName, endPose, startJoints=None, n_steps=50, debug=False, **kwargs):
         self.setStartJointsAndEndPose(armName, startJoints, endPose, **kwargs)
@@ -566,6 +589,9 @@ class RavenPlanner:
         if self.trajEndJoints[armName] is None:
             print armName, startPose, startGrasp, endPose, endGrasp
             raise Exception()
+        
+        self.start_pose_pubs[armName].publish(startPose.msg.PoseStamped())
+        self.end_pose_pubs[armName].publish(endPose.msg.PoseStamped())
         
         if block:
             print 'waiting for traj'

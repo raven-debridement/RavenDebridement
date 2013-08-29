@@ -130,6 +130,8 @@ def convertToFrame(p, frame):
     """
     Takes in a tfx point/pose stamped and returns it in frame
     """
+    p = tfx.pose(p)
+    
     if p.frame != None and p.frame != frame:
         tf_pframe_to_frame = tfx.lookupTransform(frame, p.frame, wait=10)
         p = tf_pframe_to_frame * p

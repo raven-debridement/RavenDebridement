@@ -70,9 +70,11 @@ def showImage(image, name):
     cv.ShowImage(name, image)
     cv.WaitKey(50)
 
-def createMarker(pose, id_):
+def createMarker(pose, id=None, lifetime=None):
+    id = id or 0
+    lifetime = lifetime or 2
     marker = Marker()
-    marker.id = id_
+    marker.id = id
     marker.header.frame_id = pose.header.frame_id
     marker.type = marker.CUBE
     marker.action = marker.ADD
@@ -81,6 +83,7 @@ def createMarker(pose, id_):
     marker.scale.z = 0.002
     marker.color.a = 1.0
     marker.color.r = 255
-    marker.color.g = (id_) * 127
+    marker.color.g = (id) * 127
     marker.pose = pose.pose
+    marker.lifetime = rospy.Duration(lifetime)
     return marker
