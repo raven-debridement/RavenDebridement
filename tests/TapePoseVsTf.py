@@ -10,7 +10,7 @@ from raven_2_msgs.msg import *
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
 from RavenDebridement.RavenCommand.RavenArm import RavenArm
-from RavenDebridement.RavenCommand.RavenPlanner import RavenPlanner, Request
+from RavenDebridement.RavenCommand.RavenPlanner2 import RavenPlanner
 
 import tfx
 
@@ -121,7 +121,7 @@ def testPoseDiff(arm=Constants.Arm.Left):
     rospy.loginfo('Press enter to exit')
     raw_input()
     
-def execAndRecordTraj(arm=Constants.Arm.Left):
+def execAndRecordTraj(arm=Constants.Arm.Right):
     rospy.init_node('execAndRecordTraj',anonymous=True)
     rospy.sleep(1)
     ravenArm = RavenArm(arm)
@@ -137,32 +137,22 @@ def execAndRecordTraj(arm=Constants.Arm.Left):
 
     startPose = tfx.pose(ravenArm.getGripperPose())    
     
-    x = .03
+    x = .01
     y = .06
-    z = .01
+    z = .05
     deltaPoses = []
-    #deltaPoses.append(tfx.pose([x,0, -z],frame=Constants.Frames.Link0))
-    deltaPoses.append(tfx.pose([0,-y, 0],frame=Constants.Frames.Link0))
-    #deltaPoses.append(tfx.pose([-x,0,z],frame=Constants.Frames.Link0))
-    deltaPoses.append(tfx.pose([0,y, 0],frame=Constants.Frames.Link0))
+    deltaPoses.append(tfx.pose([x,0, -z],frame=Constants.Frames.Link0))
+    #deltaPoses.append(tfx.pose([0,-y, 0],frame=Constants.Frames.Link0))
+    deltaPoses.append(tfx.pose([-x,0,z],frame=Constants.Frames.Link0))
+    #deltaPoses.append(tfx.pose([0,y, 0],frame=Constants.Frames.Link0))
 
     #record.startRecording()
     while not rospy.is_shutdown():
         for deltaPose in deltaPoses:
             startPose = tfx.pose(ravenArm.getGripperPose())
             endPose = tfx.pose(Util.endPose(startPose, deltaPose))
-            #ravenArm.goToGripperPose(endPose,speed=.04)
-            poseTraj = ravenPlanner.getTrajectoryFromPose(endPose,n_steps=10)
-            rospy.loginfo('startPose')
-            rospy.loginfo(startPose)
-            rospy.loginfo('endPose')
-            rospy.loginfo(endPose)
-            rospy.loginfo('Used trajopt, now move')
-            raw_input()
-            ravenArm.executePoseTrajectory(poseTraj,speed=.04)
-            #ravenArm.executeJointTrajectory(jointTraj, speed=.5)
-            #endJoints = ravenPlanner.getJointsFromPose(endPose)
-            #ravenArm.goToJoints(endJoints,speed=1.5)
+            ravenArm.goToGripperPose(endPose)
+            rospy.sleep(4)
     record.stopRecording()
             
     rospy.loginfo('Press enter to print and exit')

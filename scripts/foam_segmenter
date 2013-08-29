@@ -53,6 +53,7 @@ class FoamSegmenter():
         rospy.Subscriber(left_camera + "/camera_info", CameraInfo, self.leftInfoCallback)
         rospy.Subscriber(right_camera + "/camera_info", CameraInfo, self.rightInfoCallback)
         rospy.Subscriber(disparity, DisparityImage, self.disparityCallback)
+        rospy.Subscriber(left_camera + "/image_rect_color", Image, self.leftImageCallback, queue_size = 1)
         
 
     def disparityCallback(self, msg):
@@ -64,7 +65,6 @@ class FoamSegmenter():
         if self.info['l']:
             return
         self.info['l'] = msg
-        rospy.Subscriber(left_camera + "/image_rect_color", Image, self.leftImageCallback, queue_size = 1)
 
     def rightInfoCallback(self, msg):
         if self.info['r']:
@@ -72,7 +72,7 @@ class FoamSegmenter():
         self.info['r'] = msg
 
     def leftImageCallback(self, msg):
-        if not self.disparityImg or rospy.is_shutdown():
+        if not self.info['l'] or not self.disparityImg or rospy.is_shutdown():
             return
         
         # Threshold the image
@@ -134,9 +134,6 @@ class FoamSegmenter():
         for i in xrange(len(marker_array.markers)):
             marker_array.markers[i].id = i
         self.markerpub.publish(marker_array)
-        
-        import random
-        random.shuffle(points)
         
         print '-------------------------'
         print 'current state:'

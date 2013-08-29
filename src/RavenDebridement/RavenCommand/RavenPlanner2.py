@@ -191,6 +191,7 @@ class RavenPlanner:
         self.start_pose_pubs = dict((armName, rospy.Publisher('planner_%s_start' % armName,PoseStamped)) for armName in self.armNames)
         self.end_pose_pubs = dict((armName, rospy.Publisher('planner_%s_end' % armName,PoseStamped)) for armName in self.armNames)
         
+        
         self.lock = threading.RLock()
         if thread:
             self.thread = threading.Thread(target=self.optimizeLoop)
@@ -575,7 +576,7 @@ class RavenPlanner:
             print armName, startPose, endPose, kwargs
             raise Exception()
     
-    def getPoseTrajectory(self, armName, endPose, endGrasp = None, n_steps=50, block=True):
+    def getTrajectoryFromPose(self, armName, endPose, endGrasp = None, n_steps=50, block=True):
         self.waitForState()
         joints1 = self.getCurrentJoints(armName)
         startPose = self.getCurrentPose(armName)
@@ -600,7 +601,7 @@ class RavenPlanner:
                 
             return self.poseTraj[armName]
         
-    getTrajectoryFromPose = getPoseTrajectory
+    getPoseTrajectory = getTrajectoryFromPose
     
     def trajReady(self):
         return not any(self.trajRequest.values())

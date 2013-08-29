@@ -82,7 +82,6 @@ class RavenController():
         ravenPauseCmd.arms.append(armCmd)
         ravenPauseCmd.pedal_down = True
         ravenPauseCmd.header = header
-        #ravenPauseCmd.controller = Constants.CONTROLLER_JOINT_POSITION
         ravenPauseCmd.controller = Constants.CONTROLLER_CARTESIAN_SPACE
 
         self.ravenPauseCmd = ravenPauseCmd

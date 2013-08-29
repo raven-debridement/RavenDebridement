@@ -59,7 +59,10 @@ class FoamAllocator(object):
             return
         with self.lock:
             for id, pt in zip(msg.ids,msg.points):
-                self.centers[ord(id)] = tfx.point(pt,header=msg.header)
+                tfx_pt = tfx.point(pt,header=msg.header)
+                tf_msg_to_link0 = tfx.lookupTransform(MyConstants.Frames.Link0, tfx_pt.frame, wait=5)
+                tfx_pt_new = tf_msg_to_link0 * tfx_pt
+                self.centers[ord(id)] = tfx_pt_new
     
     def hasFoam(self, armName, new=False):
         with self.lock:

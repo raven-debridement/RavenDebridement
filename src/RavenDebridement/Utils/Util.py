@@ -67,14 +67,14 @@ def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     currPos, desPos = currPose.position, desPose.position
     currRot, desRot = currPose.orientation, desPose.orientation
 
-    if posFrame != None:
+    if posFrame:
         tf_currPos_to_posFrame = tfx.lookupTransform(posFrame, currPoseFrame, wait=10)
         currPos = tf_currPos_to_posFrame * currPos
 
         tf_desPos_to_posFrame = tfx.lookupTransform(posFrame, desPoseFrame, wait=10)
         desPos = tf_desPos_to_posFrame * desPos
 
-    if rotFrame != None:
+    if rotFrame:
         tf_currRot_to_rotFrame = tfx.lookupTransform(rotFrame, currPoseFrame, wait=10)
         currRot = tf_currRot_to_rotFrame * currRot
 
@@ -95,11 +95,11 @@ def endPose(currPose, deltaPose, frame=None):
     currPose = tfx.pose(currPose)
     deltaPose = tfx.pose(deltaPose)
 
-    if frame != None:
+    if frame:
         currPose = convertToFrame(currPose, frame)
         deltaPose = convertToFrame(deltaPose, frame)
 
-    if currPose.frame != None and deltaPose.frame != None and currPose.frame != deltaPose.frame:
+    if currPose.frame and deltaPose.frame and currPose.frame != deltaPose.frame:
         deltaPose = convertToFrame(deltaPose, currPose.frame)
 
     endPosition = currPose.position + deltaPose.position
@@ -132,8 +132,12 @@ def convertToFrame(p, frame):
     """
     p = tfx.pose(p)
     
-    if p.frame != None and p.frame != frame:
-        tf_pframe_to_frame = tfx.lookupTransform(frame, p.frame, wait=10)
+    if p.frame and p.frame != frame:
+        try:
+            tf_pframe_to_frame = tfx.lookupTransform(frame, p.frame, wait=10)
+        except Exception, e:
+            print frame, p.frame
+            raise e
         p = tf_pframe_to_frame * p
 
     return p
