@@ -595,7 +595,7 @@ class RavenPlanner:
         self.end_pose_pubs[armName].publish(endPose.msg.PoseStamped())
         
         if block:
-            print 'waiting for traj'
+            print 'waiting for arm {} traj'.format(armName)
             while self.trajRequest[armName] and not rospy.is_shutdown():
                 rospy.sleep(0.05)
                 
