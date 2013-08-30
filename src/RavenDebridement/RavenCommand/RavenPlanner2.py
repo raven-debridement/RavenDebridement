@@ -27,7 +27,42 @@ from RavenDebridement.Utils import Constants as MyConstants
 
 import IPython
 
-def jointRequest(n_steps, endJointPositions):
+
+
+def transformRelativePoseForIk(manip, poseMatrix, refLinkName, targLinkName):
+    """
+    Adapted from PR2.py
+
+    Returns transformed poseMatrix that can be used in openrave IK
+    """
+    robot = manip.GetRobot()
+    
+    # world <- ref
+    refLink = robot.GetLink(refLinkName)
+    worldFromRefLink = refLink.GetTransform()
+
+    # world <- targ
+    targLink = robot.GetLink(targLinkName)
+    worldFromTargLink = targLink.GetTransform()
+
+    # targ <- EE
+    worldFromEE = manip.GetEndEffectorTransform()
+    targLinkFromEE = np.dot(np.linalg.inv(worldFromTargLink), worldFromEE)
+    
+    # world <- EE
+    refLinkFromTargLink = poseMatrix
+    newWorldFromEE = np.dot(np.dot(worldFromRefLink, refLinkFromTargLink), targLinkFromEE)
+
+    return newWorldFromEE
+
+def jointRequest(n_steps, endJointPositions, startPoses, endPoses, toolFrames, manips, approachDirs=None, approachDist=0.02):
+    """
+    approachDirs is a list of 3d vectors dictating approach direction
+    w.r.t. 0_link
+    To come from above, approachDir = np.array([0,0,1])
+    """
+    approachDirs = approachDirs or [None for _ in range(len(endPoses))]
+    
     request = {
         "basic_info" : {
             "n_steps" : n_steps,
@@ -68,52 +103,44 @@ def jointRequest(n_steps, endJointPositions):
             "endpoint" : endJointPositions
             }
         }
-
-    return request
-
-def jointTrajRequest(n_steps, jointTraj):
-    request = {
-        "basic_info" : {
-            "n_steps" : n_steps,
-            "manip" : "active",
-            "start_fixed" : True
-            },
-        "costs" : [
-                {
-                    "type" : "joint_vel",
-                    "params": {"coeffs" : [1]}
-                    },
-                {
-                    "type" : "collision",
-                    "params" : {
-                        "coeffs" : [100],
-                        "continuous" : True,
-                        "dist_pen" : [0.001]
-                        }
-                    },
-                {
-                    "type" : "collision",
-                    "params" : {
-                        "coeffs" : [100000],
-                        "continuous" : False,
-                        "dist_pen" : [0.01]
-                        }
-                    },
-                ],
-        "constraints" : [
-            {
-                "type" : "joint", # joint-space target
-                "params" : {"vals" : jointTraj[-1,:].tolist() } # length of vals = # dofs of manip
-                }
+    
+    for startPose, endPose, toolFrame, manip, approachDir in zip(startPoses, endPoses, toolFrames, manips, approachDirs):
+            if approachDir is not None and tfx.point(np.array(endPose.position.list) - np.array(startPose.position.list)).norm > approachDist:
+                #pose = tfx.pose(endPose)
+                endPose = tfx.pose(endPose)
+                approachPosition = endPose.position + approachDir/np.linalg.norm(approachDir)*approachDist
+                pose = tfx.pose(approachPosition, endPose.orientation, frame=endPose.frame, stamp=endPose.stamp)
                 
-            ],
-        "init_info" : {
-            "type" : "given_traj",
-            "endpoint" : jointTraj.tolist()
-            }
-        }
+                print('endPosition: {0}'.format(endPose.position.list))
+                print('approachPosition: {0}'.format(approachPosition.list))
+            
+                convPose = tfx.pose(transformRelativePoseForIk(manip, pose.matrix, pose.frame, toolFrame),frame=toolFrame)
+            
+                desPos = convPose.position.list
+                desQuat = convPose.orientation
+                wxyzQuat = [desQuat.w, desQuat.x, desQuat.y, desQuat.z]
+                
+                frame = toolFrame
+                timestep = int(.75*n_steps)
+                
+                # cost or constraint?
+                request["constraints"].append({
+                            "type": "pose",
+                            "name" : "target_pose",
+                            "params" : {"xyz" : desPos,
+                                        "wxyz" : wxyzQuat,
+                                        "link" : frame,
+                                        "rot_coeffs" : [0,0,0],
+                                        "pos_coeffs" : [100000,100000,100000],
+                                        "timestep" : timestep
+                                        }
+                            })
 
     return request
+
+
+
+
 
 class RavenPlanner:
     rosJointTypes = [Constants.JOINT_TYPE_SHOULDER,
@@ -168,15 +195,18 @@ class RavenPlanner:
         
         self.trajEndJoints = dict()
         self.trajEndGrasp = dict()
+        self.trajEndPose = dict()
         
         self.trajStartJoints = dict()
         self.trajStartGrasp = dict()
+        self.trajStartPose = dict()
         
-        self.trajReqType = None
         self.trajSteps = dict()
         
         self.jointTraj = dict() # for debugging
         self.poseTraj = dict()
+        
+        self.approachDir = dict()
         
         activeDOFs = []
         for armName in self.armNames:
@@ -224,6 +254,8 @@ class RavenPlanner:
         self.updateOpenraveJoints(armName, dict(self.defaultJoints), grasp=0)
 
         self.trajRequest[armName] = False
+        
+
 
 
     def _ravenStateCallback(self, msg):
@@ -275,6 +307,8 @@ class RavenPlanner:
             while self.currentState is None and not rospy.is_shutdown():
                 rospy.sleep(.05)
             print 'got it!'
+            
+
     
     def getJointsFromPose(self, armName, pose, grasp, quiet=False):
         """
@@ -429,6 +463,11 @@ class RavenPlanner:
     def optimize1(self, n_steps, trajStartJoints, trajEndJoints):
         startJointPositions = []
         endJointPositions = []
+        startPoses = []
+        endPoses = []
+        toolFrames = []
+        manips = []
+        approachDirs = []
         for armName in self.armNames:
             endJoints = trajEndJoints[armName]
             if endJoints is None:
@@ -446,9 +485,16 @@ class RavenPlanner:
                 endJointPositions.append(endJoints[rosJointType])
                 startJointPositions.append(startJoints[rosJointType])
             
+            startPoses.append(self.trajStartPose[armName])
+            endPoses.append(self.trajEndPose[armName])
+            toolFrames.append(self.toolFrame[armName])
+            manips.append(self.manip[armName])
+            approachDirs.append(self.approachDir[armName])
+            
             self.updateOpenraveJoints(armName, trajStartJoints[armName])
                 
-        request = jointRequest(n_steps, endJointPositions)
+        #request = jointRequest(n_steps, endJointPositions)
+        request = jointRequest(n_steps, endJointPositions, startPoses, endPoses, toolFrames, manips, approachDirs=approachDirs, approachDist=0.03)
     
         #IPython.embed()
     
@@ -554,7 +600,9 @@ class RavenPlanner:
         self.trajStartGrasp[armName] = startGrasp
         self.trajEndGrasp[armName] = endGrasp
         startPose = Util.convertToFrame(tfx.pose(startPose), MyConstants.Frames.Link0)
+        self.trajStartPose[armName] = startPose
         endPose = Util.convertToFrame(tfx.pose(endPose), MyConstants.Frames.Link0)
+        self.trajEndPose[armName] = endPose
         self.trajStartJoints[armName] = startJoints
         self.trajEndJoints[armName] = endJoints
     
@@ -576,7 +624,7 @@ class RavenPlanner:
             print armName, startPose, endPose, kwargs
             raise Exception()
     
-    def getTrajectoryFromPose(self, armName, endPose, endGrasp = None, n_steps=50, block=True):
+    def getTrajectoryFromPose(self, armName, endPose, endGrasp = None, n_steps=50, block=True, approachDir=None):
         self.waitForState()
         joints1 = self.getCurrentJoints(armName)
         startPose = self.getCurrentPose(armName)
@@ -590,6 +638,8 @@ class RavenPlanner:
         if self.trajEndJoints[armName] is None:
             print armName, startPose, startGrasp, endPose, endGrasp
             raise Exception()
+        
+        self.approachDir[armName] = approachDir
         
         self.start_pose_pubs[armName].publish(startPose.msg.PoseStamped())
         self.end_pose_pubs[armName].publish(endPose.msg.PoseStamped())
@@ -670,6 +720,51 @@ def testSwitchPlaces(show=True):
         raw_input()
     
     #IPython.embed()
+    
+def testFromAbove(show=True):
+    trajoptpy.SetInteractive(True)
+    
+    rospy.init_node('testFromAbove',anonymous=True)
+    rp = RavenPlanner([MyConstants.Arm.Left, MyConstants.Arm.Right], thread=True)
+    
+    leftCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Left]),MyConstants.Frames.Link0)
+    rightCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Right]),MyConstants.Frames.Link0)
+
+    rp.getTrajectoryFromPose(MyConstants.Arm.Left, leftCurrPose-[0,0.05,0], n_steps=50, approachDir=np.array([0,0,1]), block=False)
+    rp.getTrajectoryFromPose(MyConstants.Arm.Right, rightCurrPose-[0,0.05,0], n_steps=50, approachDir=np.array([0,0,1]))
+    
+    #IPython.embed()
+    
+    print 'waiting'
+    rp.waitForTrajReady()
+    print 'woooooooo'
+    
+    if rospy.is_shutdown():
+        return
+    
+    #IPython.embed()
+    
+    if not show:
+        return
+    rp.env.SetViewer('qtcoin')
+    
+    leftPoseTraj = rp.poseTraj[MyConstants.Arm.Left]
+    rightPoseTraj = rp.poseTraj[MyConstants.Arm.Right]
+    
+
+    
+    leftTraj = rp.jointTraj[MyConstants.Arm.Left]
+    rightTraj = rp.jointTraj[MyConstants.Arm.Right]
+    
+    for right in rightTraj:
+        if rospy.is_shutdown():
+            break
+        rp.updateOpenraveJoints('L', left)
+        rp.updateOpenraveJoints('R', right)
+        rospy.loginfo('Press enter to go to next step')
+        raw_input()
+    
+    IPython.embed()
 
 if __name__ == '__main__':
     import argparse
@@ -677,4 +772,5 @@ if __name__ == '__main__':
     parser.add_argument('--show',action='store_true',default=False)
     
     args = parser.parse_args()
-    testSwitchPlaces(**vars(args))
+    #testSwitchPlaces(**vars(args))
+    testFromAbove(**vars(args))

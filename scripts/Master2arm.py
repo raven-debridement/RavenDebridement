@@ -7,6 +7,8 @@ import rospy
 import math
 from math import *
 
+import numpy as np
+
 import tf
 import tf.transformations as tft
 import tfx
@@ -278,11 +280,6 @@ class PlanTrajToObject(smach.State):
         self.endPosePub = rospy.Publisher('traj_end_pose',PoseStamped)
 
     def execute(self, userdata):
-        if MasterClass.PAUSE_BETWEEN_STATES:
-            pause_func(self)
-            
-        rospy.loginfo('Planning trajectory from gripper to object')
-        
         objectPose = tfx.pose(userdata.objectPose)
         gripperPose = tfx.pose(userdata.gripperPose)
         calcGripperPose = tfx.pose(self.ravenArm.getGripperPose())
@@ -291,22 +288,40 @@ class PlanTrajToObject(smach.State):
         
         self.objectPosePub.publish(objectPose.msg.PoseStamped())
         
-        transBound = .006
+        deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, self.transFrame, self.rotFrame))
+        
+        transBound = .008
         rotBound = float("inf")
-        if Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        in_bounds = Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.transFrame, self.rotFrame)
+        
+        not_str = '' if in_bounds else 'not '
+        
+        reached_str = 'arm %s %sat object! deltas: pos %.4f, angle %.5f, pose %s' % (
+                self.ravenArm.armName,
+                not_str, 
+                deltaPose.position.norm,
+                deltaPose.orientation.angle * 180. / pi,
+                deltaPose.tostring())
+        print reached_str
+        MasterClass.write(reached_str + '\n')
+        
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        rospy.loginfo('Planning trajectory from gripper to object')
+        
+        if in_bounds:
             rospy.loginfo('Closing the gripper')
             self.ravenArm.closeGripper(duration=self.gripperOpenCloseDuration)
             userdata.vertAmount = .04
             return 'reachedObject'
 
-        deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, self.transFrame, self.rotFrame))
-        
         endPoseForPub = Util.endPose(gripperPose, deltaPose, frame=Constants.Frames.Link0)
         self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
 
         endPose = Util.endPose(calcGripperPose, deltaPose, frame=Constants.Frames.Link0)
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
-        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
+        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps, approachDir=np.array([0,.1,.9]))
         
 #         print('objectPose')
 #         print(objectPose)
@@ -344,15 +359,26 @@ class MoveTowardsObject(smach.State):
         poseTraj = userdata.poseTraj
 
         # limit distance moved
-        endTrajStep = min(int(self.stepsPerMeter*self.maxServoDistance)+1, len(poseTraj))
-        poseTraj = poseTraj[:endTrajStep]
+        currPose = self.ravenArm.getGripperPose()
+        for index in range(len(poseTraj)):
+            pose = tfx.pose(poseTraj[index])
+            deltaPos = np.array(currPose.position.list) - np.array(pose.position.list)
+            if np.linalg.norm(deltaPos) > self.maxServoDistance:
+                endTrajStep = index
+                break
+        else:
+            endTrajStep = -1
+            
+        #endTrajStep = min(int(self.stepsPerMeter*self.maxServoDistance)+1, len(poseTraj))
+        #poseTraj = poseTraj[:endTrajStep]
+        truncPoseTraj = poseTraj[:endTrajStep]
         
         rospy.loginfo('Total steps')
-        rospy.loginfo(len(poseTraj))
+        rospy.loginfo(len(userdata.poseTraj))
         rospy.loginfo('endTrajStep')
         rospy.loginfo(endTrajStep)
 
-        self.ravenArm.executePoseTrajectory(poseTraj,block=True)
+        self.ravenArm.executePoseTrajectory(truncPoseTraj,block=True)
 
         return 'success'
 
@@ -362,7 +388,7 @@ class MoveVertical(smach.State):
     Move vertical in open-loop
     """
     def __init__(self, ravenArm, ravenPlanner, openLoopSpeed):
-        smach.State.__init__(self, outcomes = ['success'], input_keys=['vertAmount'])
+        smach.State.__init__(self, outcomes = ['success'], io_keys=['vertAmount'])
         self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
         self.openLoopSpeed = openLoopSpeed
@@ -387,9 +413,11 @@ class CheckPickup(smach.State):
     """
     Checks if the grasper picked up a red foam piece
     """
-    def __init__(self, ravenArm, gripperOpenCloseDuration):
-        smach.State.__init__(self, outcomes = ['success','failure'])
+    def __init__(self, ravenArm, imageDetector, gripperOpenCloseDuration):
+        smach.State.__init__(self, outcomes = ['success','failure'], input_keys=['vertAmount'])
+        self.armName = ravenArm.name
         self.ravenArm = ravenArm
+        self.imageDetector = imageDetector
         self.gripperOpenCloseDuration = gripperOpenCloseDuration
     
     def execute(self, userdata):
@@ -397,12 +425,21 @@ class CheckPickup(smach.State):
            pause_func(self)
 
         rospy.loginfo('Check if red foam piece successfully picked up')
-        rospy.sleep(1)
+        
+        gripperPose = self.imageDetector.getGripperPose(self.armName)
+        convGripperPose = tfx.pose(Util.convertToFrame(gripperPose, Constants.Frames.Link0))
+        lastGripperPoint = convGripperPose.position
+        vertErrorMargin=.005
+        lowerBoundGripperPoint = lastGripperPoint + [0,0,userdata.vertAmount-vertErrorMargin]
+
+        serviceName = '{0}_{1}'.format(Constants.Services.isFoamGrasped, self.armName)
+
+        # last tape pose position + vertAmount
 
         try:
-            rospy.wait_for_service(Constants.Services.isFoamGrasped, timeout=5)
-            foamGraspedService = rospy.ServiceProxy(Constants.Services.isFoamGrasped, ThreshRed)
-            isFoamGrasped = foamGraspedService(0).output
+            rospy.wait_for_service(serviceName, timeout=5)
+            foamGraspedService = rospy.ServiceProxy(serviceName, ThreshRed)
+            isFoamGrasped = foamGraspedService(lowerBoundGripperPoint.msg.PointStamped()).output
             
             if isFoamGrasped == 1:
                 rospy.loginfo('Successful pickup!')
@@ -454,8 +491,8 @@ class MoveToReceptacle(smach.State):
 
         rospy.loginfo('Opening the gripper')
         # open gripper (consider not all the way)
-        self.ravenArm.openGripper(duration=self.gripperOpenCloseDuration)
-        #self.ravenArm.setGripper(0.5)
+        #self.ravenArm.openGripper(duration=self.gripperOpenCloseDuration)
+        self.ravenArm.setGripper(0.75)
         
         userdata.objectPose = None
         return 'success'
@@ -569,7 +606,7 @@ class MasterClass(object):
         # in cm/sec, I think
         self.openLoopSpeed = .01
 
-        self.gripperOpenCloseDuration = 5.5
+        self.gripperOpenCloseDuration = 7
 
         # for Trajopt planning, 2 steps/cm
         self.stepsPerMeter = 200
@@ -616,7 +653,7 @@ class MasterClass(object):
                                    transitions = {'success': arm('findGripper')})
             smach.StateMachine.add(arm('objectServoSuccessMoveVertical'),MoveVertical(self.ravenArm, self.ravenPlanner, self.openLoopSpeed),
                                    transitions = {'success': arm('checkPickup')})
-            smach.StateMachine.add(arm('checkPickup'), CheckPickup(self.ravenArm, self.gripperOpenCloseDuration),
+            smach.StateMachine.add(arm('checkPickup'), CheckPickup(self.ravenArm, self.imageDetector, self.gripperOpenCloseDuration),
                                    transitions = {'success': arm('pickupSuccessMoveToHome'),
                                                   'failure': arm('findObject')})
             smach.StateMachine.add(arm('pickupSuccessMoveToHome'), MoveToHome(self.ravenArm, self.ravenPlanner, self.imageDetector, self.openLoopSpeed),
@@ -668,7 +705,7 @@ class MasterClass(object):
                                        transitions = {'success': otherArm('findGripper')})
                 smach.StateMachine.add(otherArm('objectServoSuccessMoveVertical'),MoveVertical(self.otherRavenArm, self.ravenPlanner, self.openLoopSpeed),
                                        transitions = {'success': otherArm('checkPickup')})
-                smach.StateMachine.add(otherArm('checkPickup'), CheckPickup(self.otherRavenArm, self.gripperOpenCloseDuration),
+                smach.StateMachine.add(otherArm('checkPickup'), CheckPickup(self.otherRavenArm, self.imageDetector, self.gripperOpenCloseDuration),
                                        transitions = {'success': otherArm('pickupSuccessMoveToHome'),
                                                       'failure': otherArm('findObject')})
                 smach.StateMachine.add(otherArm('pickupSuccessMoveToHome'), MoveToHome(self.otherRavenArm, self.ravenPlanner, self.imageDetector, self.openLoopSpeed),

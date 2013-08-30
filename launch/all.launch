@@ -29,11 +29,11 @@
     <!-- For AR marker detection -->
     <!--<include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />-->
     
-    <node name="color_gripper_segmenter_R" type="color_gripper_segmenter"  pkg="raven_pose_estimator">
+    <node name="color_gripper_segmenter_R" type="color_gripper_segmenter"  pkg="raven_pose_estimator" output="screen">
         <param name="arm" type="string" value="R" />
     </node>
         
-    <node name="color_gripper_segmenter_L" type="color_gripper_segmenter"  pkg="raven_pose_estimator">
+    <node name="color_gripper_segmenter_L" type="color_gripper_segmenter"  pkg="raven_pose_estimator" output="screen">
         <param name="arm" type="string" value="L" />
     </node>
     

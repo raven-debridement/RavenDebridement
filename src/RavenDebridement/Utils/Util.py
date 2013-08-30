@@ -128,7 +128,7 @@ def angleBetweenQuaternions(quat0, quat1):
 
 def convertToFrame(p, frame):
     """
-    Takes in a tfx point/pose stamped and returns it in frame
+    Takes in a tfx pose stamped and returns it in frame
     """
     p = tfx.pose(p)
     
