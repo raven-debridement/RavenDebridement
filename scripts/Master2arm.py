@@ -24,7 +24,7 @@ from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
 from RavenDebridement.RavenCommand.RavenArm import RavenArm
 from RavenDebridement.RavenCommand.RavenPlanner2 import RavenPlanner
-from RavenDebridement.RavenCommand.RavenBSP import RavenBSP
+from RavenDebridement.RavenCommand.RavenBSP import RavenPlannerBSP
 from RavenDebridement.ImageProcessing.ImageDetection import ImageDetector
 from RavenDebridement.ImageProcessing.FoamAllocator import FoamAllocator,\
     ArmFoamAllocator
@@ -192,6 +192,11 @@ class FindObject(smach.State):
         userdata.rotateBy = -30
         
         new = userdata.objectPose is None
+        rospy.loginfo('{0} arm is searching for new objectPose: {1}'.format(self.foamAllocator.armName,new))
+        if not new:
+            IPython.embed()
+            
+
 
         rospy.loginfo('Searching for object point')
         # find object point and pose
@@ -774,7 +779,8 @@ def mainloop():
     imageDetector = ImageDetector()
     foamAllocator = FoamAllocator()
     ravenArm = RavenArm(armName)
-    ravenPlanner = RavenPlanner(Constants.Arm.Both)
+    #ravenPlanner = RavenPlanner(Constants.Arm.Both)
+    ravenPlanner = RavenPlannerBSP(Constants.Arm.Both,simPlotting=True,stagePlotting=True)
     master = MasterClass(armName, ravenArm, ravenPlanner, imageDetector, foamAllocator)
     master.run()
 

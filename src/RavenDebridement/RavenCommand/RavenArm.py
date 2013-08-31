@@ -18,7 +18,6 @@ import openravepy as rave
 from RavenDebridement.Utils import Constants as MyConstants
 from RavenDebridement.Utils import Util
 from RavenPlanner import Request, RavenPlanner
-from RavenBSP import RavenBSP, InitializationType
 from RavenController import RavenController
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 
