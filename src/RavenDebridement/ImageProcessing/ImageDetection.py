@@ -31,6 +31,8 @@ class ImageDetector():
         # gripper pose. Must both have frame_id of respective tool frame
         self.leftGripperPose = None
         self.rightGripperPose = None
+        self.leftGripperPoseTf = None
+        self.rightGripperPoseTf = None
 
         self.newLeftGripperPose = False
         self.newRightGripperPose = False
@@ -81,12 +83,16 @@ class ImageDetector():
         self.tapeMsg = msg
         self.leftGripperPose = msg
         self.gripperPoseIsEstimate = False
+        
+        self.leftGripperPoseTf = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.LeftTool), MyConstants.Frames.Link0)
 
     def tapeCallbackRight(self, msg):
         self.newRightGripperPose = True
         self.tapeMsg = msg
         self.rightGripperPose = msg
         self.gripperPoseIsEstimate = False
+        
+        self.rightGripperPoseTf = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.RightTool), MyConstants.Frames.Link0)
 
     def foamCallback(self, msg):
         time = self.listener.getLatestCommonTime(Constants.AR.Frames.Base, msg.header.frame_id)
@@ -203,6 +209,21 @@ class ImageDetector():
             self.newRightGripperPose = False
             return self.rightGripperPose
 
+    def getGripperPoseEstimate(self, armName):
+        if not self.hasFoundGripper(armName):
+            return False
+        
+        if armName == Constants.Arm.Left:
+            lastGripperPose = self.leftGripperPose
+            lastTfPose = self.leftGripperPoseTf
+            currTfPose = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.LeftTool), Constants.Frames.Link0)
+        else:
+            lastGripperPose = self.rightGripperPose
+            lastTfPose = self.rightGripperPoseTf
+            currTfPose = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.RightTool), Constants.Frames.Link0)
+            
+        deltaTf = Util.deltaPose(currTfPose, lastTfPose)
+        
 
 
     def getGripperPoint(self, armName):
