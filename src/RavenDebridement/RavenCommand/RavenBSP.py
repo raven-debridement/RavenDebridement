@@ -148,6 +148,10 @@ class RavenPlannerBSP:
         self.bsp.set_sim_plotting(simPlotting)
         self.bsp.set_stage_plotting(stagePlotting)
         
+        camera_pose = tfx.pose(( -0.032,  -0.289,   0.255), tfx.rotation_tb(yaw=-85.0, pitch=0.7, roll=-118.7))
+        
+        self.bsp.set_camera_pose(camera_pose.matrix)
+        
         self.currentState = None
         rospy.Subscriber(MyConstants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
         
@@ -165,6 +169,9 @@ class RavenPlannerBSP:
         #rospy.Subscriber('object_pose', PoseStamped, self._objectPoseCallback)
         
     def _objectPoseCallback(self, msg):
+        """
+        temp callback for creating box in between object and gripper
+        """
         box = rave.RaveCreateKinBody(self.env,'')
         box.SetName('testbox')
         box.InitFromBoxes(np.array([[0,0,0,0.01,0.01,0.05]]),True)
@@ -523,8 +530,8 @@ class RavenPlannerBSP:
         poseMatrix = endPose.matrix
         refFrame = endPose.frame
         targFrame = toolFrames[0]
-        goal_trans = transformRelativePoseForIk(manip, poseMatrix, refFrame, targFrame)
-        self.bsp.set_goal_trans(goal_trans)
+        goal_pose = transformRelativePoseForIk(manip, poseMatrix, refFrame, targFrame)
+        self.bsp.set_goal_pose(goal_pose)
         
         initialControls = self.IKControlInitialization(n_steps, startJointPositions, endJointPositions)
     
@@ -741,53 +748,7 @@ def testSwitchPlaces(show=True):
     
     #IPython.embed()
     
-def testFromAbove(show=True):
-    trajoptpy.SetInteractive(True)
-    
-    rospy.init_node('testFromAbove',anonymous=True)
-    rp = RavenPlanner([MyConstants.Arm.Left, MyConstants.Arm.Right], thread=True)
-    
-    leftCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Left]),MyConstants.Frames.Link0)
-    rightCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Right]),MyConstants.Frames.Link0)
 
-    rp.getTrajectoryFromPose(MyConstants.Arm.Left, leftCurrPose-[0,0.05,0], n_steps=50, approachDir=np.array([0,0,1]), block=False)
-    rp.getTrajectoryFromPose(MyConstants.Arm.Right, rightCurrPose-[0,0.05,0], n_steps=50, approachDir=np.array([0,0,1]))
-    
-    #IPython.embed()
-    
-    print 'waiting'
-    rp.waitForTrajReady()
-    print 'woooooooo'
-    
-    if rospy.is_shutdown():
-        return
-    
-    #IPython.embed()
-    
-    if not show:
-        return
-    rp.env.SetViewer('qtcoin')
-    
-    
-    leftPoseTraj = rp.poseTraj[MyConstants.Arm.Left]
-    rightPoseTraj = rp.poseTraj[MyConstants.Arm.Right]
-    
-
-    
-    leftTraj = rp.jointTraj[MyConstants.Arm.Left]
-    rightTraj = rp.jointTraj[MyConstants.Arm.Right]
-    
-    
-    for right in rightTraj:
-        if rospy.is_shutdown():
-            break
-        rp.updateOpenraveJoints('L', left)
-        rp.updateOpenraveJoints('R', right)
-        rospy.loginfo('Press enter to go to next step')
-        raw_input()
-    
-    IPython.embed()
-    
 def testMoveActiveArm(show=True):
     rospy.init_node('testMoveActiveArm',anonymous=True)
     rp = RavenPlannerBSP([MyConstants.Arm.Left,MyConstants.Arm.Right],thread=True,simPlotting=True,stagePlotting=True)

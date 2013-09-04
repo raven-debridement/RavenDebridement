@@ -21,81 +21,49 @@ import numpy as np
 
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants as MyConstants
-from RavenDebridement.RavenCommand.RavenPlanner import RavenPlanner
+from RavenDebridement.RavenCommand.RavenPlanner2 import RavenPlanner
+from RavenDebridement.RavenCommand.kinematics import *
 
 import IPython
 
 def testFK():
     rospy.init_node('test_IK',anonymous=True)
-    rp = RavenPlanner(MyConstants.Arm.Right)
+    rp = RavenPlanner(MyConstants.Arm.Both)
     rp.env.SetViewer('qtcoin')
     rospy.sleep(2)
 
-    currPose = tfx.pose([0,0,0], frame=rp.toolFrame)
-    tf_tool_to_link0 = tfx.lookupTransform(MyConstants.Frames.Link0, currPose.frame, wait=5)
-    currPose = tf_tool_to_link0 * currPose
+    leftPose = rp.getCurrentPose(MyConstants.Arm.Left)
+    rightPose = rp.getCurrentPose(MyConstants.Arm.Right)
+    
+    leftGrasp = rp.getCurrentGrasp(MyConstants.Arm.Left)
+    rightGrasp = rp.getCurrentGrasp(MyConstants.Arm.Right)
 
-    joints = rp.currentJoints
-    for jointType, jointPos in joints.items():
-        print("jointType = {0}, jointPos = {1}".format(jointType,((180.0/pi)*jointPos)))
+    leftJoints = invArmKin(MyConstants.Arm.Left, leftPose, leftGrasp)
+    rightJoints = invArmKin(MyConstants.Arm.Right, rightPose, rightGrasp)
 
-    rp.updateOpenraveJoints()
-    
-    
-    refLinkName = currPose.frame
-    targLinkName = 'world'
-    
-    # ref -> world
-    refFromWorld = rp.robot.GetLink(refLinkName).GetTransform()
-    
-    # target -> world
-    targFromWorld = rp.robot.GetLink(targLinkName).GetTransform()
-    
-    # target -> ref
-    targFromRef = np.dot(np.linalg.inv(targFromWorld), refFromWorld)
-    
-    newCurrPoseMat = np.dot(targFromRef, np.array(currPose.matrix))
-    currPose = tfx.pose(newCurrPoseMat, frame=targLinkName)
-    """
-    refLinkName = rp.toolFrame
-    targLinkName = MyConstants.Frames.Link0
-    # world <- ref
-    refLink = rp.robot.GetLink(refLinkName)
-    worldFromRefLink = refLink.GetTransform()
 
-    # world <- targ
-    targLink = rp.robot.GetLink(targLinkName)
-    worldFromTargLink = targLink.GetTransform()
-
-    # targ <- EE
-    worldFromEE = rp.manip.GetEndEffectorTransform()
-    targLinkFromEE = np.dot(np.linalg.inv(worldFromTargLink), worldFromEE)
+    rp.updateOpenraveJoints(MyConstants.Arm.Left, joints1=leftJoints, grasp=leftGrasp)
+    rp.updateOpenraveJoints(MyConstants.Arm.Right, joints1=rightJoints, grasp=rightGrasp)
     
-    ravePose = tfx.pose(targLinkFromEE)
-    ravePose.position.z-=.01
-    """
-    ravePose = tfx.pose(rp.robot.GetLink(rp.toolFrame).GetTransform())
+    raveLeftMatrix = Util.openraveTransformFromTo(rp.robot, np.eye(4), MyConstants.Frames.LeftTool, MyConstants.Frames.Link0)
+    raveRightMatrix = Util.openraveTransformFromTo(rp.robot, np.eye(4), MyConstants.Frames.RightTool, MyConstants.Frames.Link0)
     
-
-    print('currPose')
-    print(currPose.position)
-    print(currPose.tb_angles)
+    raveLeftPose = tfx.pose(raveLeftMatrix,frame=leftPose.frame)
+    raveRightPose = tfx.pose(raveRightMatrix,frame=rightPose.frame)
     
-    print('openrave pose')
-    print(ravePose.position)
-    print(ravePose.tb_angles)
-
-    deltaPose = tfx.pose(Util.deltaPose(currPose,ravePose))
-    print('delta pose')
-    print(deltaPose.position)
-    print(deltaPose.tb_angles)
-    
+    deltaLeft = Util.deltaPose(leftPose, raveLeftPose)
+    deltaRight = Util.deltaPose(rightPose, raveRightPose)
     
     g = []
-    g += Util.plot_transform(rp.env, np.array(ravePose.matrix))
+    #g += Util.plot_transform(rp.env, Util.openraveTransformFromTo(rp.robot, np.eye(4), MyConstants.Frames.LeftTool, 'world'))
+    #g += Util.plot_transform(rp.env, Util.openraveTransformFromTo(rp.robot, np.eye(4), MyConstants.Frames.RightTool, 'world'))
+    g += Util.plot_transform(rp.env, Util.openraveTransformFromTo(rp.robot, leftPose.matrix, leftPose.frame[1:], 'world'))
+    g += Util.plot_transform(rp.env, Util.openraveTransformFromTo(rp.robot, rightPose.matrix, rightPose.frame[1:], 'world'))
     
     
     IPython.embed()
+    
+
 
 if __name__ == '__main__':
     testFK()

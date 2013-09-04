@@ -624,10 +624,11 @@ class RavenPlanner:
             print armName, startPose, endPose, kwargs
             raise Exception()
     
-    def getTrajectoryFromPose(self, armName, endPose, endGrasp = None, n_steps=50, block=True, approachDir=None):
+    def getTrajectoryFromPose(self, armName, endPose, startPose=None, endGrasp = None, n_steps=50, block=True, approachDir=None):
         self.waitForState()
         joints1 = self.getCurrentJoints(armName)
-        startPose = self.getCurrentPose(armName)
+        if startPose is None:
+            startPose = self.getCurrentPose(armName)
         startGrasp = self.getCurrentGrasp(armName)
         if endGrasp is None:
             endGrasp = startGrasp
@@ -765,6 +766,70 @@ def testFromAbove(show=True):
         raw_input()
     
     IPython.embed()
+    
+def testRavenCpp():
+    trajoptpy.SetInteractive(True)
+    
+    rospy.init_node('testRavenCpp',anonymous=True)
+    
+    arm = MyConstants.Arm.Right
+    
+    rp = RavenPlanner([arm],thread=True)
+    
+    manip = rp.robot.GetManipulators()[1]
+    
+    #rp.env.SetViewer('qtcoin')
+    
+    #endJoints = [0.5672114866971969, 1.5318772029876708, -0.12326233461499214, -0.18351784765720369, -0.55512279719114299, -0.10556840419769287]
+    #rp.robot.SetActiveDOFValues(endJoints)
+    
+    
+    startJoints = [0.15336623787879944, 1.5377614498138428, -0.11949782818555832, -0.23602290451526642, -0.14983920753002167, -0.10172462463378906]
+    rp.robot.SetActiveDOFValues(startJoints)
+    
+    #print('press enter')
+    #raw_input()
+    
+    startPose = tfx.pose(Util.openraveTransformFromTo(rp.robot, np.eye(4), 'tool_R', '0_link'),frame=MyConstants.Frames.Link0)
+    endPose = tfx.pose(startPose + [0,-.1,0])
+    
+    raveStartEE = manip.GetEndEffectorTransform()
+    raveEndEE = np.array(raveStartEE)
+    raveEndEE[0,3] += .1
+    
+    g = []
+    g += Util.plot_transform(rp.env, raveStartEE)
+    g += Util.plot_transform(rp.env, raveEndEE)
+    
+    box = rave.RaveCreateKinBody(rp.env,'')
+    box.SetName('testbox')
+    box.InitFromBoxes(np.array([[0,0,0,0.01,0.04,0.015]]),True)
+    #code.interact(local=locals())
+    ee = .5*(raveStartEE + raveEndEE)
+    ee[:3,:3] = np.identity(3)
+    box.SetTransform(ee)
+    rp.env.Add(box,True)
+    
+    IPython.embed()
+    
+    rp.getTrajectoryFromPose(arm, endPose, startPose=startPose, n_steps=50)
+    
+    print('waiting...')
+    rp.waitForTrajReady()
+    print('traj ready!')
+
+    
+    rightTraj = rp.jointTraj[MyConstants.Arm.Right]
+    
+    for right in rightTraj:
+        if rospy.is_shutdown():
+            break
+        rp.updateOpenraveJoints('R', right)
+        rospy.loginfo('Press enter to go to next step')
+        raw_input()
+    
+    rospy.spin()
+    
 
 if __name__ == '__main__':
     import argparse
@@ -773,4 +838,5 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     #testSwitchPlaces(**vars(args))
-    testFromAbove(**vars(args))
+    #testFromAbove(**vars(args))
+    testRavenCpp()

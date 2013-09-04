@@ -2,6 +2,9 @@
 #include "ros/console.h"
 #include "ros/exceptions.h"
 #include "RavenDebridement/InvKinSrv.h"
+#include "RavenDebridement/InverseKinematics.h"
+
+#include "tf/transform_listener.h"
 
 #include "raven_2_msgs/Constants.h"
 
@@ -27,6 +30,7 @@
 using namespace std;
 
 static ros::Publisher requested_pose_pub;
+static tf::TransformListener* tf_listener;
 
 // from raven_2_msgs
 #define YAW 8
@@ -51,6 +55,15 @@ float fix_angle(float angle,float center) {
 		cnt++;
 	}
 	return test_angle;
+}
+
+float saturate(float value,float min,float max) {
+	if (value > max) {
+		return max;
+	} else if (value < min) {
+		return min;
+	}
+	return value;
 }
 
 bool check_joint_limits1_new(float d_act, float thp_act, float g1_act, float g2_act,int validity[4]) {
@@ -367,19 +380,26 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	float d = -pz / sin(thp);
 
 	float d_act, thp_act, thy_act, g1_act, g2_act;
-	if (mech->type == GOLD_ARM) {
-		d_act = D_FROM_IK(armId,d);
-		thp_act = -THP_FROM_IK(armId,thp);
-		thy_act = THY_FROM_IK(armId,thy,grasp);
-		g1_act = FINGER2_FROM_IK(armId,thy,grasp);
-		g2_act = FINGER1_FROM_IK(armId,thy,grasp);
-	} else {
-		d_act = D_FROM_IK(armId,d);
-		thp_act = fix_angle(-thp-WRIST_OFFSET_GOLD);//thp_act = THP_FROM_IK(armId,thp);
-		thy_act = THY_FROM_IK(armId,thy,grasp);
-		g1_act = FINGER2_FROM_IK(armId,thy,grasp);//FINGER1_FROM_IK(armId,thy,grasp);
-		g2_act = FINGER1_FROM_IK(armId,thy,grasp);//FINGER2_FROM_IK(armId,thy,grasp);
-	}
+//	if (mech->type == GOLD_ARM) {
+//		d_act = D_FROM_IK(armId,d);
+//		thp_act = -THP_FROM_IK(armId,thp);
+//		thy_act = THY_FROM_IK(armId,thy,grasp);
+//		g1_act = FINGER2_FROM_IK(armId,thy,grasp);
+//		g2_act = FINGER1_FROM_IK(armId,thy,grasp);
+//	} else {
+//		d_act = D_FROM_IK(armId,d);
+//		thp_act = fix_angle(-thp-WRIST_OFFSET_GOLD);//thp_act = THP_FROM_IK(armId,thp);
+//		thy_act = THY_FROM_IK(armId,thy,grasp);
+//		g1_act = FINGER2_FROM_IK(armId,thy,grasp);//FINGER1_FROM_IK(armId,thy,grasp);
+//		g2_act = FINGER1_FROM_IK(armId,thy,grasp);//FINGER2_FROM_IK(armId,thy,grasp);
+//	}
+
+	d_act = D_FROM_IK(armId,d);
+	thp_act = THP_FROM_IK(armId,thp);
+	thy_act = THY_FROM_IK(armId,thy,grasp);
+	g1_act = FINGER1_FROM_IK(armId,thy,grasp);
+	g2_act = FINGER2_FROM_IK(armId,thy,grasp);
+
 	//check angles
 	int validity1[4];
 	bool valid1 = check_joint_limits1_new(d_act,thp_act,g1_act,g2_act,validity1);
@@ -554,37 +574,34 @@ int invMechKinNew(struct mechanism *mech, float x, float y, float z, btMatrix3x3
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
 bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 	     RavenDebridement::InvKinSrv::Response &res)
 {
-	geometry_msgs::PoseStamped pose_req;
-	pose_req.header.frame_id = "/0_link";
-	pose_req.header.stamp = ros::Time::now();
-	pose_req.pose = req.pose;
-	requested_pose_pub.publish(pose_req);
+	geometry_msgs::PoseStamped req_pose;
+	req_pose.header = req.header;
+	req_pose.pose = req.pose;
+
+	geometry_msgs::PoseStamped tool_pose;
+	if (req.header.frame_id.empty()) {
+		tool_pose = req_pose;
+	} else {
+		tf_listener->transformPose("/0_link",req_pose,tool_pose);
+	}
+
+	requested_pose_pub.publish(req_pose);
 
 
-    float x = req.pose.position.x;
-    float y = req.pose.position.y;
-    float z = req.pose.position.z;
+	float x = tool_pose.pose.position.x;
+	float y = tool_pose.pose.position.y;
+	float z = tool_pose.pose.position.z;
 
 
-    btQuaternion quat = btQuaternion(req.pose.orientation.x,
-				     req.pose.orientation.y,
-				     req.pose.orientation.z,
-				     req.pose.orientation.w);
+	btQuaternion quat = btQuaternion(tool_pose.pose.orientation.x,
+					 tool_pose.pose.orientation.y,
+					 tool_pose.pose.orientation.z,
+					 tool_pose.pose.orientation.w);
 
-    btMatrix3x3 mat = btMatrix3x3(quat);
+	btMatrix3x3 mat = btMatrix3x3(quat);
 
     struct mechanism* mech = new mechanism();
 
@@ -616,8 +633,8 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
 			  Z_INS,
 			  TOOL_ROT,
 			  WRIST,
-                          GRASP1,
-                          GRASP2};
+			  GRASP1,
+			  GRASP2};
 
     raven_2_msgs::JointState *joint;
 
@@ -653,15 +670,127 @@ bool inv_kin(RavenDebridement::InvKinSrv::Request &req,
     return true;
 }
 
+bool inv_kin2(RavenDebridement::InverseKinematics::Request &req,
+	     RavenDebridement::InverseKinematics::Response &res)
+{
+	geometry_msgs::PoseStamped req_pose;
+	req_pose.header = req.tool_command.header;
+	req_pose.pose = req.tool_command.command.pose;
+
+	geometry_msgs::PoseStamped tool_pose;
+	tf_listener->transformPose("/0_link",req_pose,tool_pose);
+
+	requested_pose_pub.publish(req_pose);
+
+
+    float x = tool_pose.pose.position.x;
+    float y = tool_pose.pose.position.y;
+    float z = tool_pose.pose.position.z;
+
+
+    btQuaternion quat = btQuaternion(tool_pose.pose.orientation.x,
+				     tool_pose.pose.orientation.y,
+				     tool_pose.pose.orientation.z,
+				     tool_pose.pose.orientation.w);
+
+    btMatrix3x3 mat = btMatrix3x3(quat);
+
+    float grasp = req.tool_command.command.grasp;
+    int grasp_option = req.tool_command.command.grasp_option;
+    const float graspmax = (TOOL_GRASP_COMMAND_MAX);
+	const float graspmin = (TOOL_GRASP_COMMAND_MIN);
+	if (grasp_option == raven_2_msgs::ToolCommand::GRASP_OFF) {
+		grasp = 0;
+	} else if (grasp_option == raven_2_msgs::ToolCommand::GRASP_SET_NORMALIZED) {
+		if (grasp >= 0) {
+			grasp = req.tool_command.command.grasp * graspmax;
+		} else {
+			grasp = req.tool_command.command.grasp * -graspmin;
+		}
+	} else if (grasp_option != raven_2_msgs::ToolCommand::GRASP_SET_ANGLE) {
+		throw ros::Exception("Invalid grasp option!");
+	}
+	grasp = saturate(grasp,graspmin,graspmax);
+
+    struct mechanism* mech = new mechanism();
+
+    if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GOLD) {
+    	cout << "Arm L" << endl;
+	mech->type = GOLD_ARM;
+    } else if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GREEN) {
+    	cout << "Arm R" << endl;
+	mech->type = GREEN_ARM;
+    } else {
+	return false;
+    }
+
+    //mech->ori_d.grasp = req.tool_command.command.grasp;
+
+
+    ROS_INFO("Solve IK for:");
+    ROS_INFO("Position (%f,%f,%f)",x,y,z);
+    ROS_INFO("Quaternion (%f,%f,%f,%f)",tool_pose.pose.orientation.x,tool_pose.pose.orientation.y,tool_pose.pose.orientation.z,tool_pose.pose.orientation.w);
+
+
+    if (!invMechKinNew(mech, x, y, z, mat, grasp)) {
+	ROS_INFO("IK service call failed");
+    	return false;
+    }
+
+    int JOINT_NAMES[7] = {SHOULDER,
+			  ELBOW,
+			  Z_INS,
+			  TOOL_ROT,
+			  WRIST,
+                          GRASP1,
+                          GRASP2};
+
+    raven_2_msgs::JointState *joint;
+
+    for(int i = 0; i < 7; i++) {
+	joint = new raven_2_msgs::JointState();
+	joint->type = JOINT_NAMES[i];
+	joint->state = raven_2_msgs::JointState::STATE_READY;
+	joint->position = mech->joint[JOINT_NAMES[i]].jpos_d;
+	res.joints.push_back(*joint);
+    }
+
+    joint = new raven_2_msgs::JointState();
+    joint->type = YAW;
+    joint->state = raven_2_msgs::JointState::STATE_READY;
+    joint->position = (mech->joint[GRASP1].jpos_d - mech->joint[GRASP2].jpos_d)/2;
+    if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GOLD) {
+    	joint->position = -joint->position;
+    }
+    res.joints.push_back(*joint);
+
+
+    joint = new raven_2_msgs::JointState();
+    joint->type = GRASP;
+    joint->state = raven_2_msgs::JointState::STATE_READY;
+    if (req.arm_type == raven_2_msgs::Constants::ARM_TYPE_GOLD) {
+    	joint->position = fabs(mech->joint[GRASP2].jpos_d) - fabs(mech->joint[GRASP1].jpos_d);
+    } else {
+    	joint->position = fabs(mech->joint[GRASP1].jpos_d) + fabs(mech->joint[GRASP2].jpos_d);
+    }
+    res.joints.push_back(*joint);
+
+
+    return true;
+}
+
 
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "inv_kin_server_node");
     ros::NodeHandle node;
 
+    tf_listener = new tf::TransformListener();
+
     requested_pose_pub = node.advertise<geometry_msgs::PoseStamped>("ik_requested_pose",10);
 
     ros::ServiceServer service = node.advertiseService("inv_kin_server", inv_kin);
+    ros::ServiceServer service2 = node.advertiseService("inverse_kinematics", inv_kin2);
     ROS_INFO("Raven IK server is ready");
     ros::spin();
 
