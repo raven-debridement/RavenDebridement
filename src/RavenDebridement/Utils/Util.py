@@ -153,7 +153,7 @@ def openraveTransformFromTo(robot, poseMatInRef, refLinkName, targLinkName):
     targFromRef = np.dot(np.linalg.inv(targFromWorld), refFromWorld)
 
     poseMatInTarg = np.dot(targFromRef, poseMatInRef)
-    return poseMatInTarg
+    return np.array(poseMatInTarg)
     
 def setWithinLimits(val, lower, upper, increment):
     while val >= upper:

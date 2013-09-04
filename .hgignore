@@ -12,3 +12,6 @@ bin
 lib
 srv_gen
 src/RavenDebridement/srv/
+src/RavenDebridement/msg/
+msg_gen
+*.cmake
