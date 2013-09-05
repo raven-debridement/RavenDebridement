@@ -86,7 +86,7 @@ class Completer(object):
     
 class AllocateFoam(smach.State):
     def __init__(self, armName, foamAllocator, completer=None):
-        smach.State.__init__(self, outcomes = ['success','failure'], input_keys = ['foamHeightOffset'], output_keys = ['goalPose'])
+        smach.State.__init__(self, outcomes = ['foamFound','noFoamFound'], input_keys = ['foamHeightOffset'], output_keys = ['foamPose'])
         self.armName = armName
         self.foamAllocator = foamAllocator
         self.completer = completer
@@ -118,17 +118,17 @@ class AllocateFoam(smach.State):
         
         print foamPose
 
-        userdata.goalPose = objectPose.msg.PoseStamped()
+        userdata.foamPose = foamPose.msg.PoseStamped()
 
         rospy.loginfo('Found foam')
-        return 'success'
+        return 'foamFound'
     
     
-class PlanTraj(smach.State):
+class PlanTrajToFoam(smach.State):
     def __init__(self, ravenArm, gripperPoseEstimator, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
-        smach.State.__init__(self, outcomes = ['reachedGoalPose', 'notReachedGoalPose','failure'],
-                             output_keys = ['poseTraj'],
-                             io_keys = ['goalPose'])
+        smach.State.__init__(self, outcomes = ['success', 'failure'],
+                             output_keys = ['poseTraj','gripperPose'],
+                             io_keys = ['foamPose'])
         self.armName = ravenArm.name
         self.ravenArm = ravenArm
         self.gripperPoseEstimator = gripperPoseEstimator
@@ -137,30 +137,24 @@ class PlanTraj(smach.State):
         self.transFrame = transFrame
         self.rotFrame = rotFrame
         
-        self.endPosePub = rospy.Publisher('traj_end_pose',PoseStamped)
+        self.endPosePub = rospy.Publisher('traj_end_pose_%s'%self.armName,PoseStamped)
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
         
-        goalPose = tfx.pose(userdata.goalPose).copy()
+        foamPose = tfx.pose(userdata.foamPose).copy()
         gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
         calcGripperPose = tfx.pose(self.ravenArm.getGripperPose())
         
+        userdata.gripperPose = tfx.pose(gripperPose).copy()
+        
         #objectPose.orientation = gripperPose.orientation
         
-        deltaPose = Util.deltaPose(gripperPose, goalPose, self.transFrame, self.rotFrame)
-        
-        transBound = .008
-        rotBound = float("inf")
-        in_bounds = Util.withinBounds(gripperPose, goalPose, transBound, rotBound, self.transFrame, self.rotFrame)
-        
-            
+        deltaPose = Util.deltaPose(gripperPose, foamPose, self.transFrame, self.rotFrame)
+             
         rospy.loginfo('Planning trajectory from gripper to object')
         
-        if in_bounds:
-            return 'reachedGoalPose'
-
         endPoseForPub = Util.endPose(gripperPose, deltaPose, frame=Constants.Frames.Link0)
         self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
 
@@ -173,20 +167,31 @@ class PlanTraj(smach.State):
             return 'failure'
 
         userdata.poseTraj = poseTraj
-        return 'notReachedGoalPose'
+        return 'success'
     
     
-class MoveTowards(smach.State):
-    def __init__(self, ravenArm, maxServoDistance):
-        smach.State.__init__(self, outcomes = ['success', 'goalOccupied'], input_keys = ['poseTraj'], io_keys = ['goalPose'])
+class MoveTowardsFoam(smach.State):
+    def __init__(self, ravenArm, maxServoDistance, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['reachedFoam', 'notReachedFoam'], input_keys = ['poseTraj','gripperPose'], io_keys = ['foamPose'])
         self.ravenArm = ravenArm
         self.maxServoDistance = maxServoDistance
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
+            
+        gripperPose = tfx.pose(userdata.gripperPose).copy()
+        foamPose = tfx.pose(userdata.foamPose).copy()
+            
+        transBound = .008
+        rotBound = float("inf")
+        if Util.withinBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
+            rospy.loginfo('Reached foam piece')
+            return 'reachedFoam'
 
-        rospy.loginfo('Moving towards the goal')
+        rospy.loginfo('Moving towards the foam piece')
         poseTraj = userdata.poseTraj
 
         # limit distance moved
@@ -209,34 +214,157 @@ class MoveTowards(smach.State):
 
         self.ravenArm.executePoseTrajectory(truncPoseTraj,block=True)
 
+        return 'notReachedFoam'
+    
+class PlanTrajToReceptacle(smach.State):
+    def __init__(self, receptaclePose, ravenArm, gripperPoseEstimator, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['success', 'failure'],
+                             output_keys = ['poseTraj','gripperPose'])
+        self.receptaclePose = receptaclePose
+        self.armName = ravenArm.name
+        self.ravenArm = ravenArm
+        self.gripperPoseEstimator = gripperPoseEstimator
+        self.ravenPlanner = ravenPlanner
+        self.stepsPerMeter = stepsPerMeter
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
+        
+        self.endPosePub = rospy.Publisher('traj_end_pose_%s'%self.armName,PoseStamped)
+
+    def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+        
+        receptaclePose = tfx.pose(self.receptaclePose).copy()
+        gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
+        calcGripperPose = tfx.pose(self.ravenArm.getGripperPose())
+        
+        userdata.gripperPose = tfx.pose(gripperPose).copy()
+        
+        #objectPose.orientation = gripperPose.orientation
+        
+        deltaPose = Util.deltaPose(gripperPose, receptaclePose, self.transFrame, self.rotFrame)
+             
+        rospy.loginfo('Planning trajectory from gripper to receptacle')
+        
+        endPoseForPub = Util.endPose(gripperPose, deltaPose, frame=Constants.Frames.Link0)
+        self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
+
+        endPose = Util.endPose(calcGripperPose, deltaPose, frame=Constants.Frames.Link0)
+        n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
+        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps)
+
+
+        if poseTraj == None:
+            return 'failure'
+
+        userdata.poseTraj = poseTraj
         return 'success'
+    
+    
+class MoveTowardsReceptacle(smach.State):
+    def __init__(self, ravenArm, maxServoDistance, transFrame, rotFrame, receptaclePose, receptacleLock):
+        smach.State.__init__(self, outcomes = ['notReachedReceptacle', 'receptacleAvailable','receptacleOccupied'], input_keys = ['poseTraj','gripperPose'])
+        self.armName = ravenArm.name
+        self.ravenArm = ravenArm
+        self.maxServoDistance = maxServoDistance
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
+        
+        self.receptaclePose = receptaclePose
+        self.receptacleLock = receptacleLock
+        self.lockDistance = 1.5 * maxServoDistance
+
+    def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        gripperPose = tfx.pose(userdata.gripperPose).copy()
+        receptaclePose = tfx.pose(self.receptaclePose).copy()
+            
+        transBound = self.lockDistance
+        rotBound = float("inf")
+        if Util.withinBounds(gripperPose, receptaclePose, transBound, rotBound, self.transFrame, self.rotFrame):
+            if self.receptacleLock.locked_lock():
+                rospy.loginfo('Other arm at receptacle. Must wait.')
+                return 'receptacleOccupied'
+            else:
+                rospy.loginfo('Near open receptacle. Moving in for drop-off.')
+                self.receptaclLock.acquire()
+                return 'receptacleAvailable'
+
+        rospy.loginfo('Moving towards the receptacle')
+        poseTraj = userdata.poseTraj
+
+        # limit distance moved
+        currPose = self.ravenArm.getGripperPose()
+        for index in range(len(poseTraj)):
+            pose = tfx.pose(poseTraj[index])
+            deltaPos = np.array(currPose.position.list) - np.array(pose.position.list)
+            if np.linalg.norm(deltaPos) > self.maxServoDistance:
+                endTrajStep = index
+                break
+        else:
+            endTrajStep = -1
+            
+        truncPoseTraj = poseTraj[:endTrajStep]
+        
+        rospy.loginfo('Total steps')
+        rospy.loginfo(len(userdata.poseTraj))
+        rospy.loginfo('endTrajStep')
+        rospy.loginfo(endTrajStep)
+
+        self.ravenArm.executePoseTrajectory(truncPoseTraj,block=True)
+
+        return 'notReachedReceptacle'
     
 
-class CloseGripper(smach.State):
-    def __init__(self, ravenArm, gripperOpenCloseDuration, nextGoalPose):
-        smach.State.__init__(self, outcomes = ['success'], output_keys = ['goalPose'])
+class GraspFoam(smach.State):
+    def __init__(self, ravenArm, gripperOpenCloseDuration):
+        smach.State.__init__(self, outcomes = ['graspedFoam'])
         self.ravenArm = ravenArm
         self.duration = gripperOpenCloseDuration
-        self.nextGoalPose = nextGoalPose
     
     def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
         self.ravenArm.closeGripper(duration=self.gripperOpenCloseDuration)
         
-        userdata.goalPose = self.nextGoalPose
-        
-        return 'success'
+        return 'graspedFoam'
     
-class OpenGripper(smach.State):
-    def __init__(self, ravenArm, gripperOpenCloseDuration, receptacleLock):
-        smach.State.__init__(self, outcomes = ['success'])
+class DropFoamInReceptacle(smach.State):
+    def __init__(self, ravenArm, gripperPoseEstimator, gripperOpenCloseDuration, receptaclePose, receptacleLock, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['findNextFoamPiece'])
+        self.armName = ravenArm.name
         self.ravenArm = ravenArm
+        self.gripperPoseEstimator = gripperPoseEstimator
         self.duration = gripperOpenCloseDuration
         self.receptacleLock = receptacleLock
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
     
     def execute(self, userdata):
-        self.receptacleLock.release()
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        receptaclePose = tfx.pose(self.receptaclePose).copy()
+        gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
+        calcGripperPose = startPose = tfx.pose(self.ravenArm.getGripperPose())
+        
+        deltaPose = Util.deltaPose(gripperPose, receptaclePose, self.transFrame, self.rotFrame)
+             
+        rospy.loginfo('Planning trajectory from gripper to receptacle')
+
+        endPose = Util.endPose(calcGripperPose, deltaPose, frame=Constants.Frames.Link0)
+        self.ravenArm.goToGripperPose(endPose)
         
         self.ravenArm.setGripper(0.75)
+        
+        # go back to original position so out of the way
+        self.ravenArm.goToGripperPose(startPose)
+        
+        self.receptacleLock.release()
         
         return 'success'
     
@@ -267,50 +395,29 @@ class ReceptacleLock():
     
     
 class WaitForReceptacle(smach.State):
-    def __init__(self, receptacleLock, maxServoDistance, ravenArm, ravenPlanner):
-        smach.State.__init__(self, outcomes = ['success'], io_keys = ['goalPose'])
+    def __init__(self, armName, receptacleLock, ravenPlanner, ravenArm):
+        smach.State.__init__(self, outcomes = ['receptacleAvailable'])
+        self.armName = armName
         self.receptacleLock = receptacleLock
-        self.lockDistance = 2*maxServoDistance
-        self.isLockedByMe = False
-        self.armName = ravenArm.name
-        self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
+        self.ravenArm = ravenArm
         
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
         
-        currentPose = tfx.pose(self.ravenArm.getGripperPose())    
-        goalPose = tfx.pose(userdata.goalPose)
-        
-        distanceToGoal = currentPose.position.distance(goalPose.position)
-        
-        if distanceToGoal < self.lockDistance:
-            rospy.loginfo('Within receptacle buffer')
-            if not self.receptacleLock.locked_lock():
-                self.receptacleLock.acquire()
-                self.receptacleLock.setArmThatHasLock(self.armName)
-            elif self.receptacleLock.locked_lock() and self.receptacleLock.isLockedByOther(self.armName):
-                rospy.loginfo('Waiting for receptacle lock to be released')
-                endPose = self.ravenArm.getGripperPose()
-                n_steps = 5
-                while not rospy.is_shutdown() and self.receptacleLock.locked_lock():
-                    self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps)
-                    rospy.sleep(.1)
-                    
-                self.receptacleLock.acquire()
-                self.receptacleLock.setArmThatHasLock(self.armName)
+        rospy.loginfo('Waiting for receptacle lock to be released')
+        endPose = self.ravenArm.getGripperPose()
+        n_steps = 5
+        while not rospy.is_shutdown() and self.receptacleLock.locked_lock():
+            self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps)
+            rospy.sleep(.1)
             
-            rospy.loginfo('Acquired receptacle lock')
-        else:
-            rospy.loginfo('Not within receptacle buffer')
-            
-            # just in case moved in and out of buffer
-            if not self.receptacleLock.isLockedByOther(self.armName):
-                self.receptacleLock.release()
+        self.receptacleLock.acquire()
+    
+        rospy.loginfo('Acquired receptacle lock')        
         
-        
-        return 'success'
+        return 'receptacleAvailable'
     
     
 
@@ -404,7 +511,7 @@ class MasterClass(object):
         self.receptaclePose = self.imageDetector.getReceptaclePose(self.armName)
         self.otherReceptaclePose = self.imageDetector.getReceptaclePose(self.otherArmName)
         
-        self.receptacleLock = ReceptacleLock()
+        self.receptacleLock = threading.Lock()
         
         # translation frame
         self.transFrame = Constants.Frames.Link0
@@ -432,43 +539,45 @@ class MasterClass(object):
         self.obj_pub = rospy.Publisher('object_pose', PoseStamped)
         
         def arm(s):
-            return s + self.armName
+            return '{0}_{1}'.format(s, self.armName)
         
         def otherArm(s):
-            return s + self.otherArmName
+            return '{0}_{1}'.format(s, self.otherArmName)
         
-        self.sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamHeightOffset'])
-        
+        self.sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamHeightOffset'])  
 
         
         with self.sm:
             smach.StateMachine.add(arm('allocateFoam'), AllocateFoam(self.armName, self.foamAllocator, completer=self.completer),
-                                   transitions = {'success' : arm('planTrajToFoam'),
+                                   transitions = {'foamFound' : arm('planTrajToFoam'),
                                                   'noFoamFound' : arm('waitForCompletion')})
             smach.StateMachine.add(arm('waitForCompletion'), DoNothing(self.ravenArm, self.ravenPlanner, completer=self.completer),
                                    transitions = {'success' : arm('waitForCompletion'),
                                                   'complete' : 'success',
                                                   'failure' : 'failure'})
-            smach.StateMachine.add(arm('planTrajToFoam'), PlanTraj(self.ravenArm, self.gripperPoseEstimator, self.ravenPlanner,
+            smach.StateMachine.add(arm('planTrajToFoam'), PlanTrajToFoam(self.ravenArm, self.gripperPoseEstimator, self.ravenPlanner,
                                                                    self.stepsPerMeter, self.transFrame, self.rotFrame),
-                                   transitions = {'reachedGoalPose' : arm('graspFoam'),
-                                                  'notReachedGoalPose': arm('moveTowardsFoam'),
+                                   transitions = {'success' : arm('moveTowardsFoam'),
                                                   'failure' : 'failure'})
-            smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowards(self.ravenArm, self.maxServoDistance),
-                                   transitions = {'success' : arm('planTrajToFoam')})
-            smach.StateMachine.add(arm('graspFoam'), CloseGripper(self.ravenArm, self.gripperOpenCloseDuration, self.receptaclePose),
-                                   transitions = {'success' : arm('planTrajToReceptacle')})
-            smach.StateMachine.add(arm('planTrajToReceptacle'), PlanTraj(self.ravenArm, self.gripperPoseEstimator, self.ravenPlanner,
-                                                                         self.stepsPerMeter, self.transFrame, self.rotFrame),
-                                   transitions = {'reachedGoalPose' : arm('releaseFoam'),
-                                                  'notReachedGoalPose' : arm('moveTowardsReceptacle'),
+            smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowardsFoam(self.ravenArm, self.maxServoDistance, self.transFrame, self.rotFrame),
+                                   transitions = {'reachedFoam' : arm('graspFoam'),
+                                                  'notReachedFoam' : arm('planTrajToFoam')})
+            smach.StateMachine.add(arm('graspFoam'), GraspFoam(self.ravenArm, self.gripperOpenCloseDuration),
+                                   transitions = {'graspedFoam' : arm('planTrajToReceptacle')})
+            smach.StateMachine.add(arm('planTrajToReceptacle'), PlanTrajToReceptacle(self.receptaclePose, self.ravenArm, self.gripperPoseEstimator,
+                                                                                     self.ravenPlanner, self.stepsPerMeter, self.transFrame, self.rotFrame),
+                                   transitions = {'success' : arm('moveTowardsReceptacle'),
                                                   'failure' : 'failure'})
-            smach.StateMachine.add(arm('moveTowardsReceptacle'), MoveTowards(self.ravenArm, self.maxServoDistance),
-                                   transitions = {'success' : arm('waitForReceptacle')})
-            smach.StateMachine.add(arm('waitForReceptacle'), WaitForReceptacle(self.receptacleLock, self.maxServoDistance, self.ravenArm, self.ravenPlanner),
-                                   transitions = {'success' : arm('planTrajToReceptacle')})
-            smach.StateMachine.add(arm('releaseFoam'), OpenGripper(self.ravenArm, self.gripperOpenCloseDuration, self.receptacleLock),
-                                   transitions = {'success' : arm('allocateFoam')})
+            smach.StateMachine.add(arm('moveTowardsReceptacle'), MoveTowardsReceptacle(self.ravenArm, self.maxServoDistance,self.transFrame, self.rotFrame,
+                                                                                       self.receptaclePose, self.receptacleLock),
+                                   transitions = {'notReachedReceptacle' : arm('planTrajToReceptacle'),
+                                                  'receptacleAvailable' : arm('dropFoamInReceptacle'),
+                                                  'receptacleOccupied' : arm('waitForReceptacle')})
+            smach.StateMachine.add(arm('waitForReceptacle'), WaitForReceptacle(self.armName, self.receptacleLock, self.ravenPlanner, self.ravenArm),
+                                   transitions = {'receptacleAvailable' : arm('dropFoamInReceptacle')})
+            smach.StateMachine.add(arm('dropFoamInReceptacle'), DropFoamInReceptacle(self.ravenArm, self.gripperPoseEstimator, self.gripperOpenCloseDuration,
+                                                                                     self.receptaclePose, self.receptacleLock, self.transFrame, self.rotFrame),
+                                   transitions = {'findNextFoamPiece' : arm('allocateFoam')})
         
         
         self.otherRavenArm = RavenArm(self.otherArmName)
@@ -492,32 +601,35 @@ class MasterClass(object):
                                                       'failure' : 'failure'})
             else:
                 smach.StateMachine.add(otherArm('allocateFoam'), AllocateFoam(self.otherArmName, self.otherFoamAllocator, completer=self.completer),
-                                       transitions = {'success' : otherArm('planTrajToFoam'),
-                                                      'noFoamFound' : otherArm('waitForCompletion')})
+                                   transitions = {'foamFound' : otherArm('planTrajToFoam'),
+                                                  'noFoamFound' : otherArm('waitForCompletion')})
                 smach.StateMachine.add(otherArm('waitForCompletion'), DoNothing(self.otherRavenArm, self.ravenPlanner, completer=self.completer),
                                        transitions = {'success' : otherArm('waitForCompletion'),
                                                       'complete' : 'success',
                                                       'failure' : 'failure'})
-                smach.StateMachine.add(otherArm('planTrajToFoam'), PlanTraj(self.otherRavenArm, self.gripperPoseEstimator, self.ravenPlanner,
+                smach.StateMachine.add(otherArm('planTrajToFoam'), PlanTrajToFoam(self.otherRavenArm, self.gripperPoseEstimator, self.ravenPlanner,
                                                                        self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                       transitions = {'reachedGoalPose' : otherArm('graspFoam'),
-                                                      'notReachedGoalPose': otherArm('moveTowardsFoam'),
+                                       transitions = {'success' : otherArm('moveTowardsFoam'),
                                                       'failure' : 'failure'})
-                smach.StateMachine.add(otherArm('moveTowardsFoam'), MoveTowards(self.otherRavenArm, self.maxServoDistance),
-                                       transitions = {'success' : otherArm('planTrajToFoam')})
-                smach.StateMachine.add(otherArm('graspFoam'), CloseGripper(self.otherRavenArm, self.gripperOpenCloseDuration, self.otherReceptaclePose),
-                                       transitions = {'success' : otherArm('planTrajToReceptacle')})
-                smach.StateMachine.add(otherArm('planTrajToReceptacle'), PlanTraj(self.otherRavenArm, self.gripperPoseEstimator, self.ravenPlanner,
-                                                                             self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
-                                       transitions = {'reachedGoalPose' : otherArm('releaseFoam'),
-                                                      'notReachedGoalPose' : otherArm('moveTowardsReceptacle'),
+                smach.StateMachine.add(otherArm('moveTowardsFoam'), MoveTowardsFoam(self.otherRavenArm, self.maxServoDistance, self.otherTransFrame, self.otherRotFrame),
+                                       transitions = {'reachedFoam' : otherArm('graspFoam'),
+                                                      'notReachedFoam' : otherArm('planTrajToFoam')})
+                smach.StateMachine.add(otherArm('graspFoam'), GraspFoam(self.otherRavenArm, self.gripperOpenCloseDuration),
+                                       transitions = {'graspedFoam' : otherArm('planTrajToReceptacle')})
+                smach.StateMachine.add(otherArm('planTrajToReceptacle'), PlanTrajToReceptacle(self.otherReceptaclePose, self.otherRavenArm, self.gripperPoseEstimator,
+                                                                                         self.ravenPlanner, self.stepsPerMeter, self.otherTransFrame, self.otherRotFrame),
+                                       transitions = {'success' : otherArm('moveTowardsReceptacle'),
                                                       'failure' : 'failure'})
-                smach.StateMachine.add(otherArm('moveTowardsReceptacle'), MoveTowards(self.otherRavenArm, self.maxServoDistance),
-                                       transitions = {'success' : otherArm('waitForReceptacle')})
-                smach.StateMachine.add(otherArm('waitForReceptacle'), WaitForReceptacle(self.receptacleLock, self.maxServoDistance, self.otherRavenArm, self.ravenPlanner),
-                                       transitions = {'success' : otherArm('planTrajToReceptacle')})
-                smach.StateMachine.add(otherArm('releaseFoam'), OpenGripper(self.otherRavenArm, self.gripperOpenCloseDuration, self.receptacleLock),
-                                       transitions = {'success' : otherArm('allocateFoam')})
+                smach.StateMachine.add(otherArm('moveTowardsReceptacle'), MoveTowardsReceptacle(self.otherRavenArm, self.maxServoDistance,self.otherTransFrame, self.otherRotFrame,
+                                                                                           self.otherReceptaclePose, self.receptacleLock),
+                                       transitions = {'notReachedReceptacle' : otherArm('planTrajToReceptacle'),
+                                                      'receptacleAvailable' : otherArm('dropFoamInReceptacle'),
+                                                      'receptacleOccupied' : otherArm('waitForReceptacle')})
+                smach.StateMachine.add(otherArm('waitForReceptacle'), WaitForReceptacle(self.otherArmName, self.receptacleLock, self.ravenPlanner, self.otherRavenArm),
+                                       transitions = {'receptacleAvailable' : otherArm('dropFoamInReceptacle')})
+                smach.StateMachine.add(otherArm('dropFoamInReceptacle'), DropFoamInReceptacle(self.otherRavenArm, self.gripperPoseEstimator, self.gripperOpenCloseDuration,
+                                                                                         self.otherReceptaclePose, self.receptacleLock, self.otherTransFrame, self.otherRotFrame),
+                                       transitions = {'findNextFoamPiece' : otherArm('allocateFoam')})
         
 
     
