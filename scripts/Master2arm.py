@@ -97,7 +97,7 @@ class PlanTraj(smach.State):
         self.endPosePub = rospy.Publisher('traj_end_pose',PoseStamped)
 
     def execute(self, userdata):
-        objectPose = tfx.pose(userdata.objectPose)
+        goalPose = tfx.pose(userdata.goalPose)
         gripperPose = tfx.pose(userdata.gripperPose)
         calcGripperPose = tfx.pose(self.ravenArm.getGripperPose())
         

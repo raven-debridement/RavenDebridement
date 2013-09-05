@@ -31,7 +31,10 @@ class GripperPoseEstimator():
         self.calcPoseAtTruth = defaultdict()
         self.estimatedPose = defaultdict(lambda: (None,None))
         
-        self.adjustment = dict((arm,tfx.identity_tf()) for arm in self.arms)
+        self.pre_adjustment = dict((arm,tfx.identity_tf()) for arm in self.arms)
+        self.post_adjustment = dict((arm,tfx.identity_tf()) for arm in self.arms)
+        self.adjustment_side = dict((arm,'post') for arm in self.arms)
+        self.switch_adjustment_update = True
         
         # tape callback
         for arm in self.arms:
@@ -40,7 +43,8 @@ class GripperPoseEstimator():
         rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)   
     
     def _truthCallback(self,arm,msg):
-        truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0)
+        #rospy.loginfo("%f",msg.header.stamp.to_sec())
+        truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0, ignore_stamp=True)
         #truthPose = Util.convertToFrame(msg, Constants.Frames.Link0)
         calcPose = self.calcPose.get(arm)
         prevTruthPose = self.truthPose.get(arm)
@@ -49,8 +53,20 @@ class GripperPoseEstimator():
         if prevTruthPose is not None and prevCalcPose is not None:
             deltaTruthPose = prevTruthPose.as_tf().inverse() * truthPose.as_tf()
             deltaCalcPose = prevCalcPose.as_tf().inverse() * calcPose.as_tf()
-            adjustment = deltaTruthPose * deltaCalcPose.inverse()#adjustment = deltaCalcPose.inverse()
-            self.adjustment[arm] = adjustment
+            
+            prev_pre_adjustment = self.pre_adjustment[arm]
+            prev_post_adjustment = self.post_adjustment[arm]
+            
+            if self.adjustment_side[arm] == 'pre':
+                adjustment = deltaTruthPose * (deltaCalcPose * prev_post_adjustment).inverse()
+                self.pre_adjustment[arm] = adjustment
+                if self.switch_adjustment_update:
+                    self.adjustment_side[arm] = 'post'
+            else:
+                adjustment = (prev_pre_adjustment * deltaCalcPose).inverse() * deltaTruthPose
+                self.post_adjustment[arm] = adjustment
+                if self.switch_adjustment_update:
+                    self.adjustment_side[arm] = 'pre'
         
         self.truthPose[arm] = truthPose
         self.calcPoseAtTruth[arm] = calcPose
@@ -72,9 +88,10 @@ class GripperPoseEstimator():
         if prevTruthPose is None:
             return
         prevCalcPose = self.calcPoseAtTruth[arm]
-        adjustment = self.adjustment[arm]
+        pre_adjustment = self.pre_adjustment[arm]
+        post_adjustment = self.post_adjustment[arm]
         
-        deltaPose = adjustment * prevCalcPose.inverse().as_tf() * calcPose.as_tf()
+        deltaPose = pre_adjustment * prevCalcPose.inverse().as_tf() * calcPose.as_tf() * post_adjustment
         estPose = tfx.pose(prevTruthPose.as_tf() * deltaPose,frame=calcPose.frame,stamp=calcPose.stamp)
         self.estimatedPose[arm] = (estPose,True)
     
