@@ -9,6 +9,7 @@ import os
 
 from raven_2_msgs.msg import * 
 from geometry_msgs.msg import *
+from std_msgs.msg import Header
 
 from RavenDebridement.srv import InvKinSrv
 
@@ -322,12 +323,16 @@ class RavenPlanner:
 
         pose = Util.convertToFrame(tfx.pose(pose), self.refFrame)
         
+        header = Header()
+        header.frame_id = pose.frame
+        header.stamp = pose.stamp.ros
+        
         try:
             rospy.loginfo('Waiting for IK server...')
             rospy.wait_for_service('inv_kin_server',timeout=5)
             inv_kin_service = rospy.ServiceProxy('inv_kin_server', InvKinSrv)
             rospy.loginfo('Calling the IK server')
-            resp = inv_kin_service(self.invKinArm[armName], grasp, pose.msg.Pose())
+            resp = inv_kin_service(header, self.invKinArm[armName], grasp, pose.msg.Pose())
             rospy.loginfo('IK success!')
         except (rospy.ServiceException, rospy.ROSException) as e:
             rospy.loginfo("IK server failure: %s"%e)
