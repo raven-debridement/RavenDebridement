@@ -81,14 +81,14 @@ def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
         tf_desRot_to_rotFrame = tfx.lookupTransform(rotFrame, desPoseFrame, wait=10)
         desRot = tf_desRot_to_rotFrame * desRot
 
-    deltaPosition = desPos - currPos
+    deltaPosition = desPos.array - currPos.array
     
     currQuat, desQuat = tfx.tb_angles(currRot).quaternion, tfx.tb_angles(desRot).quaternion
     deltaQuat = tft.quaternion_multiply(tft.quaternion_inverse(currQuat), desQuat)
 
     deltaPose = tfx.pose(deltaPosition, deltaQuat)
 
-    return deltaPose.msg.Pose()
+    return deltaPose
     
 def endPose(currPose, deltaPose, frame=None):
     

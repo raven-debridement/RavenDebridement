@@ -39,6 +39,186 @@ def pause_func(myclass):
         arm = myclass.ravenArm.armName
     rospy.loginfo('In {0} method on arm {1}. Press enter to continue'.format(myclass,arm))
     raw_input()
+    
+class AllocateFoam(smach.State):
+    def __init__(self, foamAllocator, toolframe, foam_pub, completer=None):
+        smach.State.__init__(self, outcomes = ['success','failure'], input_keys = ['foamHeightOffset'], output_keys = ['goalPose'])
+        self.foamAllocator = foamAllocator
+        self.toolframe = toolframe
+        self.foam_pub = foam_pub
+        self.completer = completer
+    
+    def publishFoamPose(self, pose):
+        self.foam_pub.publish(pose)
+    
+    def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+           pause_func(self)
+
+        # TEMP
+        # change foamAllocator so it doesn't restrict based on allocation
+        new = True
+
+        rospy.loginfo('Searching for foam')
+        # find foam point and pose
+        if not self.foamAllocator.hasFoam(new=new):
+            rospy.sleep(1)
+        if not self.foamAllocator.hasFoam(new=new):
+            rospy.loginfo('Did not find foam')
+            if self.completer:
+                self.completer.complete(self.foamAllocator.armName)
+                print self.foamAllocator.armName, self.completer
+            return 'failure'
+        # get foam w.r.t. toolframe
+        foamPose = self.foamAllocator.allocateFoam(new=new)
+        foamPose.position.z += userdata.foamHeightOffset
+        self.publishFoamPose(foamPose.msg.PoseStamped())
+        
+        print foamPose
+
+        userdata.goalPose = objectPose.msg.PoseStamped()
+
+        rospy.loginfo('Found foam')
+        return 'success'
+    
+    
+class PlanTraj(smach.State):
+    def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+        smach.State.__init__(self, outcomes = ['reachedObject', 'notReachedObject','failure'],
+                             input_keys = ['goalPose'],
+                             output_keys = ['poseTraj'],)
+        self.ravenArm = ravenArm
+        self.ravenPlanner = ravenPlanner
+        self.stepsPerMeter = stepsPerMeter
+        self.transFrame = transFrame
+        self.rotFrame = rotFrame
+        
+        self.objectPosePub = rospy.Publisher('traj_obj_pose',PoseStamped)
+        self.endPosePub = rospy.Publisher('traj_end_pose',PoseStamped)
+
+    def execute(self, userdata):
+        objectPose = tfx.pose(userdata.objectPose)
+        gripperPose = tfx.pose(userdata.gripperPose)
+        calcGripperPose = tfx.pose(self.ravenArm.getGripperPose())
+        
+        #objectPose.orientation = gripperPose.orientation
+        
+        self.objectPosePub.publish(objectPose.msg.PoseStamped())
+        
+        deltaPose = tfx.pose(Util.deltaPose(gripperPose, objectPose, self.transFrame, self.rotFrame))
+        
+        transBound = .008
+        rotBound = float("inf")
+        in_bounds = Util.withinBounds(gripperPose, objectPose, transBound, rotBound, self.transFrame, self.rotFrame)
+        
+        not_str = '' if in_bounds else 'not '
+        
+        reached_str = 'arm %s %sat object! deltas: pos %.4f, angle %.5f, pose %s' % (
+                self.ravenArm.armName,
+                not_str, 
+                deltaPose.position.norm,
+                deltaPose.orientation.angle * 180. / pi,
+                deltaPose.tostring())
+        print reached_str
+        MasterClass.write(reached_str + '\n')
+        
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+            
+        rospy.loginfo('Planning trajectory from gripper to object')
+        
+        if in_bounds:
+            return 'reachedObject'
+
+        endPoseForPub = Util.endPose(gripperPose, deltaPose, frame=Constants.Frames.Link0)
+        self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
+
+        endPose = Util.endPose(calcGripperPose, deltaPose, frame=Constants.Frames.Link0)
+        n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
+        poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, endPose, n_steps=n_steps, approachDir=np.array([0,.1,.9]))
+
+
+        if poseTraj == None:
+            return 'failure'
+
+        userdata.poseTraj = poseTraj
+        return 'notReachedObject'
+    
+    
+class MoveTowards(smach.State):
+    def __init__(self, ravenArm, stepsPerMeter, maxServoDistance):
+        smach.State.__init__(self, outcomes = ['success'], input_keys = ['poseTraj'])
+        self.ravenArm = ravenArm
+        self.stepsPerMeter = stepsPerMeter
+        self.maxServoDistance = maxServoDistance
+
+    def execute(self, userdata):
+        if MasterClass.PAUSE_BETWEEN_STATES:
+            pause_func(self)
+
+        rospy.loginfo('Moving towards the goal')
+        poseTraj = userdata.poseTraj
+
+        # limit distance moved
+        currPose = self.ravenArm.getGripperPose()
+        for index in range(len(poseTraj)):
+            pose = tfx.pose(poseTraj[index])
+            deltaPos = np.array(currPose.position.list) - np.array(pose.position.list)
+            if np.linalg.norm(deltaPos) > self.maxServoDistance:
+                endTrajStep = index
+                break
+        else:
+            endTrajStep = -1
+            
+        #endTrajStep = min(int(self.stepsPerMeter*self.maxServoDistance)+1, len(poseTraj))
+        #poseTraj = poseTraj[:endTrajStep]
+        truncPoseTraj = poseTraj[:endTrajStep]
+        
+        rospy.loginfo('Total steps')
+        rospy.loginfo(len(userdata.poseTraj))
+        rospy.loginfo('endTrajStep')
+        rospy.loginfo(endTrajStep)
+
+        self.ravenArm.executePoseTrajectory(truncPoseTraj,block=True)
+
+        return 'success'
+    
+class SetGripper(smach.State):
+    def __init__(self, ravenArm, closeGripper, gripperOpenCloseDuration):
+        smach.State.__init__(self, outcomes = ['success'])
+        self.ravenArm = ravenArm
+        self.closeGripper = closeGripper
+        self.duration = gripperOpenCloseDuration
+    
+    def execute(self, userdata):
+        if self.closeGripper:
+            self.ravenArm.closeGripper(duration=self.gripperOpenCloseDuration)
+        else:
+            self.ravenArm.setGripper(0.75)
+        
+        return 'success'
+    
+class WaitForReceptacle(smach.State):
+    def __init__(self, receptacleLock):
+        smach.State.__init__(self, outcomes = ['success'])
+        self.receptacleLock = receptacleLock
+        
+    def execute(self, userdata):
+        return 'success'
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+########################
+# OLD CLASSES          #
+########################
+    
 
 class DoNothing(smach.State):
     def __init__(self, ravenArm, ravenPlanner, stepsPerMeter, transFrame, rotFrame, completer=None):
