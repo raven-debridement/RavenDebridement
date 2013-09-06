@@ -36,11 +36,15 @@ class GripperPoseEstimator():
         self.adjustment_side = dict((arm,'post') for arm in self.arms)
         self.switch_adjustment_update = True
         
+        self.est_pose_pub = dict()
+        
         # tape callback
         for arm in self.arms:
             rospy.Subscriber(Constants.GripperTape.Topic+'_'+arm, PoseStamped, partial(self._truthCallback,arm))
+            self.est_pose_pub[arm] = rospy.Publisher('estimated_gripper_pose_%s'%arm, PoseStamped)
             
-        rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)   
+        rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
+          
     
     def _truthCallback(self,arm,msg):
         #rospy.loginfo("%f",msg.header.stamp.to_sec())
@@ -94,6 +98,8 @@ class GripperPoseEstimator():
         deltaPose = pre_adjustment * prevCalcPose.inverse().as_tf() * calcPose.as_tf() * post_adjustment
         estPose = tfx.pose(prevTruthPose.as_tf() * deltaPose,frame=calcPose.frame,stamp=calcPose.stamp)
         self.estimatedPose[arm] = (estPose,True)
+        
+        self.est_pose_pub[arm].publish(estPose.msg.PoseStamped(stamp=rospy.Time()))
     
     def getGripperPose(self, armName, full=False):
         """

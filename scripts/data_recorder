@@ -41,7 +41,7 @@ class DataRecorder(object):
             pose = tfx.pose(arm_msg.tool.pose,header=msg.header)
             self.robot_poses[arm].append((pose.stamp.seconds,pose.array))
             joints = tuple(j.position for j in arm_msg.joints)
-            self.robot_joints[arm].append(joints)
+            self.robot_joints[arm].append((pose.stamp.seconds,joints))
     
     def write(self,fp):
         if isinstance(fp,basestring):
