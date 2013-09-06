@@ -84,7 +84,7 @@ class ImageDetector():
         self.leftGripperPose = msg
         self.gripperPoseIsEstimate = False
         
-        self.leftGripperPoseTf = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.LeftTool), MyConstants.Frames.Link0)
+        self.leftGripperPoseTf = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.LeftTool), Constants.Frames.Link0)
 
     def tapeCallbackRight(self, msg):
         self.newRightGripperPose = True
@@ -92,7 +92,7 @@ class ImageDetector():
         self.rightGripperPose = msg
         self.gripperPoseIsEstimate = False
         
-        self.rightGripperPoseTf = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.RightTool), MyConstants.Frames.Link0)
+        self.rightGripperPoseTf = Util.convertToFrame(tfx.pose([0,0,0],frame=Constants.Frames.RightTool), Constants.Frames.Link0)
 
     def foamCallback(self, msg):
         time = self.listener.getLatestCommonTime(Constants.AR.Frames.Base, msg.header.frame_id)
