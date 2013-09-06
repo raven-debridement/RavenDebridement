@@ -107,8 +107,6 @@ class GripperPoseEstimator():
         
         
 def test():
-    from visualization_msgs.msg import Marker
-    
     rospy.init_node('testGripperPoseEstimator',anonymous=True)
     rospy.sleep(2)
     arms = Constants.Arm.Both
