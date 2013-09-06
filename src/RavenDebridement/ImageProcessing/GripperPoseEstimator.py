@@ -36,11 +36,15 @@ class GripperPoseEstimator():
         self.adjustment_side = dict((arm,'post') for arm in self.arms)
         self.switch_adjustment_update = True
         
+        self.est_pose_pub = dict()
+        
         # tape callback
         for arm in self.arms:
             rospy.Subscriber(Constants.GripperTape.Topic+'_'+arm, PoseStamped, partial(self._truthCallback,arm))
+            self.est_pose_pub[arm] = rospy.Publisher('estimated_gripper_pose_%s'%arm, PoseStamped)
             
-        rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)   
+        rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
+          
     
     def _truthCallback(self,arm,msg):
         #rospy.loginfo("%f",msg.header.stamp.to_sec())
@@ -94,6 +98,8 @@ class GripperPoseEstimator():
         deltaPose = pre_adjustment * prevCalcPose.inverse().as_tf() * calcPose.as_tf() * post_adjustment
         estPose = tfx.pose(prevTruthPose.as_tf() * deltaPose,frame=calcPose.frame,stamp=calcPose.stamp)
         self.estimatedPose[arm] = (estPose,True)
+        
+        self.est_pose_pub[arm].publish(estPose.msg.PoseStamped())
     
     def getGripperPose(self, armName, full=False):
         """
@@ -118,7 +124,6 @@ def test():
     prevPoseAndIsEstimate = dict()
     
     for arm in arms:
-        estimatePub[arm] = rospy.Publisher('estimated_gripper_pose_%s'%arm,PoseStamped)
         truthPub[arm] = rospy.Publisher('truth_gripper_pose_%s'%arm,PoseStamped)
         
         
@@ -136,7 +141,6 @@ def test():
             if estimatedPoseisEstimate is not None:
                 estimatedPose, isEstimate = estimatedPoseisEstimate
                 #print 'Publish estimatedPose %s' % arm
-                estimatePub[arm].publish(estimatedPose.msg.PoseStamped())
                 
             if estimatedPoseisEstimate is not None and prevPoseAndIsEstimate.has_key(arm):
                 prevPose, prevIsEstimate = prevPoseAndIsEstimate[arm]
@@ -152,7 +156,12 @@ def test():
                 prevPoseAndIsEstimate[arm] = (estimatedPose, isEstimate)
         
         rospy.sleep(.02)
-        
+
+def standalone_main():
+    rospy.init_node('standaloneGripperPoseEstimator',anonymous=True)
+    gpe = GripperPoseEstimator(Constants.Arm.Both)
+    rospy.spin()
+
 if __name__ == '__main__':
-    test()
+    standalone_main()
       
