@@ -13,6 +13,8 @@ from RavenDebridement.msg import FoamPoints
 
 from RavenDebridement.Utils import Constants as MyConstants
 
+import IPython
+
 class FoamAllocator(object):
     def __init__(self):
         
@@ -47,7 +49,7 @@ class FoamAllocator(object):
                 s.append('no centers!')
             else:
                 s.append('centers:')
-                for ctr in self.centers.iteritems():
+                for ctr in allCenters:
                     s.append('%s' % ctr.tostring())
                 
                 if not self.allocations:
@@ -55,7 +57,7 @@ class FoamAllocator(object):
                 else:
                     s.append('allocations:')
                     for armName, allocCtr in self.allocations.iteritems():
-                        s.append('%s: %d' % (armName, allocCtr.tostring()))
+                        s.append('%s: %s' % (armName, allocCtr.tostring()))
             print '\n'.join(s)
     
     def _printer(self):
@@ -74,7 +76,7 @@ class FoamAllocator(object):
                     del self.centerHistory[t]
             
             t = tfx.stamp(msg.header.stamp)
-            pts = tuple([tfx.convertToFrame(tfx.point(pt,header=msg.header),MyConstants.Frames.Link0) for pt in msg.points])
+            pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
             self.centerHistory[t] = pts
             self.currentCenters = pts
     
@@ -96,20 +98,28 @@ class FoamAllocator(object):
                 self.releaseAllocation(armName)
             centers = []
             for center in self._getAllCenters():
-                for _, allocationCenter in self.allocations:
+                for _, allocationCenter in self.allocations.iteritems():
                     if allocationCenter is not None and allocationCenter.distance(center) >  self.allocationRadius:
                         return True
             return False
     
     def allocateFoam(self, armName, new=False):
         with self.lock:
+            
             startTime = tfx.time.now()
             while not self.currentCenters:
                 rospy.sleep(0.1)
             centers = []
+            allocationCenter = self.allocations.get(armName)
             for center in self.currentCenters:
-                if allocationCenter is not None and allocationCenter.distance(center) >  self.allocationRadius:
+                ok = True
+                for allocArm, allocationCenter in self.allocations.iteritems():
+                    if allocationCenter.distance(center) <  self.allocationRadius and \
+                            not (not new and allocArm == armName):
+                        ok = False
+                if ok:
                     centers.append(center)
+                    
             if not centers:
                 return None
             
@@ -124,6 +134,7 @@ class FoamAllocator(object):
                     best = center
             
             self.allocations[armName] = best
+            
             
             best = tfx.convertToFrame(best,MyConstants.Frames.Link0)
             print 'returning new allocation', armName, best
@@ -147,3 +158,16 @@ class ArmFoamAllocator(object):
     
     def releaseAllocation(self):
         return self.allocator.releaseAllocation(self.armName)
+    
+def test():
+    import IPython
+    rospy.init_node('testFoamAllocator',anonymous=True)
+    armName = MyConstants.Arm.Right
+    afa = ArmFoamAllocator(armName)
+    
+    IPython.embed()
+    
+    
+    
+if __name__ == '__main__':
+    test()

@@ -144,9 +144,9 @@ class AllocateFoam(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
 
-        # TEMP
-        # change foamAllocator so it doesn't restrict based on allocation
+        self.foamAllocator.releaseAllocation()
         new = True
+
 
         rospy.loginfo('Searching for foam')
         # find foam point and pose
@@ -159,8 +159,7 @@ class AllocateFoam(smach.State):
                 print self.foamAllocator.armName, self.completer
             return 'noFoamFound'
         # get foam w.r.t. toolframe
-        foamPose = self.foamAllocator.allocateFoam(new=new)
-        foamPose.position.z += userdata.foamHeightOffset
+        foamPose = tfx.pose(self.foamAllocator.allocateFoam(new=new)) + userdata.foamOffset
         self.foam_pub.publish(foamPose.msg.PoseStamped())
         
         print foamPose
@@ -548,7 +547,7 @@ class MasterClass(object):
         self.otherRotFrame = self.otherToolframe
 
         # height offset for foam
-        self.foamHeightOffset = .004
+        self.foamOffset = [0.,.002,.004]
 
         # in cm/sec, I think
         self.openLoopSpeed = .01
@@ -571,7 +570,7 @@ class MasterClass(object):
         def otherArm(s):
             return '{0}_{1}'.format(s, self.otherArmName)
         
-        self.sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamHeightOffset'])  
+        self.sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamOffset'])  
 
         
         with self.sm:
@@ -580,7 +579,7 @@ class MasterClass(object):
         
         self.otherRavenArm = RavenArm(self.otherArmName, closedGraspValues.get(self.otherArmName,0.))
         
-        self.other_sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamHeightOffset'])
+        self.other_sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamOffset'])
         
         with self.other_sm:
             if other_sm_type == 'nothing':
@@ -642,12 +641,12 @@ class MasterClass(object):
         sis = smach_ros.IntrospectionServer('master_server_%s' % self.armName, self.sm, '/SM_%s' % self.armName)
         sis.start()
         userData = smach.UserData()
-        userData['foamHeightOffset'] = self.foamHeightOffset
+        userData['foamOffset'] = self.foamOffset
         
         otherSis = smach_ros.IntrospectionServer('master_server_%s' % self.otherArmName, self.other_sm, '/SM_%s' % self.otherArmName)
         otherSis.start()
         otherUserData = smach.UserData()
-        otherUserData['foamHeightOffset'] = self.foamHeightOffset
+        otherUserData['foamOffset'] = self.foamOffset
         
         try:
             #outcome = self.sm.execute(userData)

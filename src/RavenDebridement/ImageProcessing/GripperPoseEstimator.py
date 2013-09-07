@@ -87,7 +87,8 @@ class GripperPoseEstimator():
             #self.calcPose[arm] = tfx.pose(arm_msg.tool.pose,header=msg.header)
             
             joints = dict((j.type,j.position) for j in arm_msg.joints)
-            self.calcPose[arm] = (kinematics.fwdArmKin(arm, joints).as_tf() * self.calcPosePostAdjustment[arm]).as_pose(stamp=msg.header.stamp)
+            fwdArmKinPose, grasp = kinematics.fwdArmKin(arm,joints)
+            self.calcPose[arm] = (fwdArmKinPose.as_tf() * self.calcPosePostAdjustment[arm]).as_pose(stamp=msg.header.stamp)
             
             self._updateEstimatedPose(arm)
     
