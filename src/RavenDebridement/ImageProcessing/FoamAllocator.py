@@ -15,15 +15,24 @@ from RavenDebridement.Utils import Constants as MyConstants
 
 class FoamAllocator(object):
     def __init__(self):
-        self.sub = rospy.Subscriber('/foam_points', FoamPoints, self._foam_points_cb)
         
-        self.centers = {}
+        self.currentCenters = []
+        
+        self.centerHistoryLength = tfx.duration(10)
+        self.centerHistory = {}
+        
+        self.centerCombiningThreshold = 0.002
+        
         self.allocations = {}
-        self.prevAllocations = collections.defaultdict(set)
+        self.allocationRadius = 0.02
+        
+        self.waitForFoamDuration = tfx.duration(5)
         
         self.orientation = tfx.rotation_tb(yaw=-90,pitch=90,roll=0)
         
         self.lock = threading.RLock()
+        
+        self.sub = rospy.Subscriber('/foam_points', FoamPoints, self._foam_points_cb)
         
         self._printThread = threading.Thread(target=self._printer)
         self._printThread.daemon = True
@@ -33,19 +42,20 @@ class FoamAllocator(object):
         with self.lock:
             s = []
             s.append('---foam segmenter---')
-            if not self.centers:
+            allCenters = self._getAllCenters()
+            if not allCenters:
                 s.append('no centers!')
             else:
                 s.append('centers:')
-                for id, ctr in self.centers.iteritems():
-                    s.append('%d: %s' % (id, ctr.tostring()))
+                for ctr in self.centers.iteritems():
+                    s.append('%s' % ctr.tostring())
                 
                 if not self.allocations:
                     s.append('no allocations!')
                 else:
                     s.append('allocations:')
-                    for armName, id in self.allocations.iteritems():
-                        s.append('%s: %d' % (armName, id))
+                    for armName, allocCtr in self.allocations.iteritems():
+                        s.append('%s: %d' % (armName, allocCtr.tostring()))
             print '\n'.join(s)
     
     def _printer(self):
@@ -58,43 +68,50 @@ class FoamAllocator(object):
         if rospy.is_shutdown():
             return
         with self.lock:
-            for id, pt in zip(msg.ids,msg.points):
-                tfx_pt = tfx.point(pt,header=msg.header)
-                tf_msg_to_link0 = tfx.lookupTransform(MyConstants.Frames.Link0, tfx_pt.frame, wait=5)
-                tfx_pt_new = tf_msg_to_link0 * tfx_pt
-                self.centers[ord(id)] = tfx_pt_new
+            now = tfx.stamp.now()
+            for t, v in self.centerHistory.items():
+                if (now-t) > self.centerHistoryLength:
+                    del self.centerHistory[t]
+            
+            t = tfx.stamp(msg.header.stamp)
+            pts = tuple([tfx.convertToFrame(tfx.point(pt,header=msg.header),MyConstants.Frames.Link0) for pt in msg.points])
+            self.centerHistory[t] = pts
+            self.currentCenters = pts
+    
+    def _getAllCenters(self):
+        with self.lock:
+            allCenters = []
+            for centers in self.centerHistory.itervalues():
+                for center in centers:
+                    for c in allCenters:
+                        if (center-c).norm < self.centerCombiningThreshold:
+                            break
+                    else:
+                        allCenters.append(center)
+            return allCenters
     
     def hasFoam(self, armName, new=False):
         with self.lock:
-            taken = set()
             if new:
-                taken.update(self.allocations.values())
-            else:
-                taken.update(v for k,v in self.allocations.iteritems() if k != armName)
-            [taken.update(v) for v in self.prevAllocations.itervalues()]
-            
-            left = set(self.centers.keys()).difference(taken)
-            self._printState()
-            print 'taken', list(taken)
-            print 'left', list(left)
-            return bool(left)
+                self.releaseAllocation(armName)
+            centers = []
+            for center in self._getAllCenters():
+                for _, allocationCenter in self.allocations:
+                    if allocationCenter is not None and allocationCenter.distance(center) >  self.allocationRadius:
+                        return True
+            return False
     
     def allocateFoam(self, armName, new=False):
         with self.lock:
-            if not new:
-                if self.allocations.has_key(armName):
-                    print 'returning existing allocation', armName, self.allocations[armName]
-                    self._printState()
-                    return tfx.pose(self.centers[self.allocations[armName]],self.orientation)
-            
-            if self.allocations.has_key(armName):
-                self.prevAllocations[armName].add(self.allocations.pop(armName))
-            
-            taken = set()
-            taken.update(self.allocations.values())
-            [taken.update(v) for v in self.prevAllocations.itervalues()]
-            
-            left = set(self.centers.keys()).difference(taken)
+            startTime = tfx.time.now()
+            while not self.currentCenters:
+                rospy.sleep(0.1)
+            centers = []
+            for center in self.currentCenters:
+                if allocationCenter is not None and allocationCenter.distance(center) >  self.allocationRadius:
+                    centers.append(center)
+            if not centers:
+                return None
             
             if armName == MyConstants.Arm.Left:
                 cmp = op.gt
@@ -102,22 +119,20 @@ class FoamAllocator(object):
                 cmp = op.lt
             
             best = None
-            best_id = None
-            for id in left:
-                center = self.centers[id]
+            for center in centers:
                 if best is None or cmp(center.x,best.x):
                     best = center
-                    best_id = id
             
-            if best is None:
-                return None
+            self.allocations[armName] = best
             
-            self.allocations[armName] = best_id
-            print 'returning new allocation', armName, best_id
+            best = tfx.convertToFrame(best,MyConstants.Frames.Link0)
+            print 'returning new allocation', armName, best
             self._printState()
-            tf = tfx.lookupTransform(MyConstants.Frames.Link0, best.frame)
-            print tfx.pose(tf * best,self.orientation)
-            return tfx.pose(tf * best,self.orientation)
+            return tfx.pose(best,self.orientation)
+    
+    def releaseAllocation(self, armName):
+        with self.lock:
+            self.allocations[armName] = None
 
 class ArmFoamAllocator(object):
     def __init__(self, armName, allocator=None):
@@ -129,3 +144,6 @@ class ArmFoamAllocator(object):
     
     def allocateFoam(self, new=False):
         return self.allocator.allocateFoam(self.armName, new=new)
+    
+    def releaseAllocation(self):
+        return self.allocator.releaseAllocation(self.armName)

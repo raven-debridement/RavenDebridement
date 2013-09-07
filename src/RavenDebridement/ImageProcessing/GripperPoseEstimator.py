@@ -13,6 +13,8 @@ from geometry_msgs.msg import PoseStamped
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
 
+from RavenDebridement.RavenCommand import kinematics
+
 import IPython
 
 from collections import defaultdict
@@ -23,12 +25,12 @@ class GripperPoseEstimator():
     Used to estimate gripper pose by image processing
     """
 
-    def __init__(self, arms = ['L','R']):
+    def __init__(self, arms = ['L','R'], calcPosePostAdjustment=None):
         self.arms = arms
         
-        self.truthPose = defaultdict()
-        self.calcPose = defaultdict()
-        self.calcPoseAtTruth = defaultdict()
+        self.truthPose = {}
+        self.calcPose = {}
+        self.calcPoseAtTruth = {}
         self.estimatedPose = defaultdict(lambda: (None,None))
         
         self.pre_adjustment = dict((arm,tfx.identity_tf()) for arm in self.arms)
@@ -36,9 +38,12 @@ class GripperPoseEstimator():
         self.adjustment_side = dict((arm,'post') for arm in self.arms)
         self.switch_adjustment_update = True
         
-        self.est_pose_pub = dict()
+        self.calcPosePostAdjustment = dict((arm,tfx.identity_tf()) for arm in self.arms)
+        if calcPosePostAdjustment:
+            for k,v in calcPosePostAdjustment:
+                self.calcPosePostAdjustment[k] = tfx.transform(v,copy=True)
         
-        # tape callback
+        self.est_pose_pub = {}
         for arm in self.arms:
             rospy.Subscriber(Constants.GripperTape.Topic+'_'+arm, PoseStamped, partial(self._truthCallback,arm))
             self.est_pose_pub[arm] = rospy.Publisher('estimated_gripper_pose_%s'%arm, PoseStamped)
@@ -78,12 +83,12 @@ class GripperPoseEstimator():
     
     def _ravenStateCallback(self,msg):
         for arm in self.arms:
-            arm_msgs = [msg_arm for msg_arm in msg.arms if msg_arm.name == arm]
-            if len(arm_msgs) > 0:
-                arm_msg = arm_msgs[0]
-            else:
-                return
-            self.calcPose[arm] = tfx.pose(arm_msg.tool.pose,header=msg.header)
+            arm_msg = [msg_arm for msg_arm in msg.arms if msg_arm.name == arm][0]
+            #self.calcPose[arm] = tfx.pose(arm_msg.tool.pose,header=msg.header)
+            
+            joints = dict((j.type,j.position) for j in arm_msg.joints)
+            self.calcPose[arm] = (kinematics.fwdArmKin(arm, joints).as_tf() * self.calcPosePostAdjustment[arm]).as_pose(stamp=msg.header.stamp)
+            
             self._updateEstimatedPose(arm)
     
     def _updateEstimatedPose(self,arm):
