@@ -578,6 +578,11 @@ def invArmKin(armId, pose, grasp, debug=False):
             joints2, limits2 = get_joints_with_limits2(ths_act[i],the_act[i],thr_act[i])
             joints1 = joints1.copy()
             joints1.update(joints2)
+            if armId == 'R':
+                joints1[YAW] = (joints1[GRASP1] - joints1[GRASP2])/2.
+            else:
+                joints1[YAW] = (joints1[GRASP2] - joints1[GRASP1])/2.
+            joints1[GRASP] = grasp
 
     if opts_valid[0]:
         return joints1;

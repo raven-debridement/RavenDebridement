@@ -114,6 +114,22 @@ class RavenArm:
         if block:
             return self.blockUntilPaused()
         return True
+    
+    def executeDeltaPoseTrajectory(self, deltaPoses, startPose=None, block=True, speed=None):
+        """
+        Each deltaPose in deltaPoses is with respect to the startPose
+        
+        Assuming deltaPoses and startPose in same frame (0_link)
+        """
+        if startPose is None:
+            startPose = self.getGripperPose()
+            if startPose is None:
+                return
+        
+        endPoses = [Util.endPose(startPose, deltaPose, self.commandFrame) for deltaPose in deltaPoses]
+        
+        return self.executePoseTrajectory(endPoses, block=block, speed=speed)
+            
 
     def executeStampedDeltaPoseTrajectory(self, stampedDeltaPoses, startPose=None, block=True):
         """

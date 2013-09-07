@@ -12,6 +12,7 @@ from geometry_msgs.msg import *
 from std_msgs.msg import Header
 
 from RavenDebridement.srv import InvKinSrv
+import RavenDebridement.RavenCommand.kinematics as kin
 
 
 import openravepy as rave
@@ -206,6 +207,7 @@ class RavenPlanner:
         
         self.jointTraj = dict() # for debugging
         self.poseTraj = dict()
+        self.deltaPoseTraj = dict()
         
         self.approachDir = dict()
         
@@ -251,6 +253,8 @@ class RavenPlanner:
         
         self.raveGrasperJointNames[armName] = ['grasper_joint_1_{0}'.format(armName[0].upper()), 'grasper_joint_2_{0}'.format(armName[0].upper())]
         self.raveGrasperJointTypes[armName] = [self.robot.GetJointIndex(name) for name in self.raveGrasperJointNames[armName]]
+        
+        self.approachDir[armName] = None
         
         self.updateOpenraveJoints(armName, dict(self.defaultJoints), grasp=0)
 
@@ -323,25 +327,17 @@ class RavenPlanner:
 
         pose = Util.convertToFrame(tfx.pose(pose), self.refFrame)
         
-        header = Header()
-        header.frame_id = pose.frame
-        header.stamp = pose.stamp.ros
+        joints = kin.invArmKin(armName, pose, grasp)
         
-        try:
-            rospy.loginfo('Waiting for IK server...')
-            rospy.wait_for_service('inv_kin_server',timeout=5)
-            inv_kin_service = rospy.ServiceProxy('inv_kin_server', InvKinSrv)
-            rospy.loginfo('Calling the IK server')
-            resp = inv_kin_service(header, self.invKinArm[armName], grasp, pose.msg.Pose())
-            rospy.loginfo('IK success!')
-        except (rospy.ServiceException, rospy.ROSException) as e:
-            rospy.loginfo("IK server failure: %s"%e)
+        if joints is None:
+            rospy.loginfo('IK failed!')
             if quiet:
-                return
+                return None
             else:
-                raise e
-
-        return dict((joint.type, joint.position) for joint in resp.joints)
+                raise RuntimeError("IK failed!")
+        
+        return joints
+        
 
     def updateOpenraveJoints(self, armName, joints1=None, grasp=None):
         """
@@ -437,33 +433,23 @@ class RavenPlanner:
         Converts a list of joint trajectory dicts
         to a list of poses using openrave FK
         """
-        currentDOFValues = self.robot.GetDOFValues()
-        
         poseList = []
         for jointDict in jointTrajDicts:
-            self.updateOpenraveJoints(armName, jointDict)
-            
-            poseMatInRef = np.eye(4)
-            refLinkName = self.toolFrame[armName]
-            targLinkName = MyConstants.Frames.Link0
-            
-            # ref -> world
-            refFromWorld = self.robot.GetLink(refLinkName).GetTransform()
-    
-            # target -> world
-            targFromWorld = self.robot.GetLink(targLinkName).GetTransform()
-    
-            # target -> ref
-            targFromRef = np.dot(np.linalg.inv(targFromWorld), refFromWorld)
-    
-            poseMatInTarg = np.dot(targFromRef, poseMatInRef)
-            pose = tfx.pose(poseMatInTarg, frame=targLinkName)
-            
+            pose, grasp = kin.fwdArmKin(armName, jointDict)
             poseList.append(pose)
-            
-        self.robot.SetDOFValues(currentDOFValues)
-            
+        
         return poseList
+    
+    def posesToDeltaPoses(self, poseList):
+        deltaPoseList = []
+        prevPose = poseList[0]
+        for pose in poseList[1:]:
+            deltaPose = Util.deltaPose(prevPose, pose)
+            deltaPoseList.append(deltaPose)
+            prevPose = pose
+            
+        return deltaPoseList
+            
     
     def optimize1(self, n_steps, trajStartJoints, trajEndJoints):
         startJointPositions = []
@@ -522,6 +508,7 @@ class RavenPlanner:
             rospy.loginfo('Trajopt trajectory is not safe. Trajopt failed!')
             for armName in self.armNames:
                 self.poseTraj[armName] = None
+                self.deltaPoseTraj[armName] = None
         else:
             startIndex = 0
             for armName in self.armNames:
@@ -538,6 +525,8 @@ class RavenPlanner:
                 self.jointTraj[armName] = jointTrajDicts # for debugging
                 poseTraj = self.jointDictsToPoses(armName, jointTrajDicts)
                 self.poseTraj[armName] = poseTraj
+                deltaPoseTraj = self.posesToDeltaPoses(poseTraj)
+                self.deltaPoseTraj[armName] = deltaPoseTraj
                 
                 startIndex = endIndex
     
@@ -654,8 +643,9 @@ class RavenPlanner:
             print 'waiting for arm {} traj'.format(armName)
             while self.trajRequest[armName] and not rospy.is_shutdown():
                 rospy.sleep(0.05)
-                
-            return self.poseTraj[armName]
+             
+            return self.deltaPoseTraj[armName]   
+            #return self.poseTraj[armName]
         
     getPoseTrajectory = getTrajectoryFromPose
     
@@ -670,23 +660,24 @@ def testSwitchPlaces(show=True):
     #trajoptpy.SetInteractive(True)
     
     rospy.init_node('testSwitchPlaces',anonymous=True)
-    rp = RavenPlanner([MyConstants.Arm.Left,MyConstants.Arm.Right], thread=True)
+    rp = RavenPlanner(MyConstants.Arm.Both, thread=True)
     
     #rightCurrPose = tfx.pose([-0.068,-0.061,-0.129],tfx.tb_angles(-139.6,88.5,111.8),frame=MyConstants.Frames.Link0)
     #leftCurrPose = tfx.pose([-.072,-.015,-.153],tfx.tb_angles(43.9,78.6,100.9),frame=MyConstants.Frames.Link0)
     
+    
     leftCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Left]),MyConstants.Frames.Link0)
     rightCurrPose = Util.convertToFrame(tfx.pose([0,0,0],frame=rp.toolFrame[MyConstants.Arm.Right]),MyConstants.Frames.Link0)
 
-    #rp.getTrajectoryPoseToPose(MyConstants.Arm.Left, leftCurrPose, rightCurrPose, n_steps=50)
-    #rp.getTrajectoryPoseToPose(MyConstants.Arm.Right, rightCurrPose, leftCurrPose, n_steps=50)
+
+    rp.getTrajectoryPoseToPose(MyConstants.Arm.Left, leftCurrPose, rightCurrPose, n_steps=50)
+    rp.getTrajectoryPoseToPose(MyConstants.Arm.Right, rightCurrPose, leftCurrPose, n_steps=50)
     
     #rp.getPoseTrajectory(MyConstants.Arm.Left, rightCurrPose, n_steps=50)
     #rp.getPoseTrajectory(MyConstants.Arm.Right, leftCurrPose, n_steps=50)
-    rp.getPoseTrajectory(MyConstants.Arm.Left, leftCurrPose+[0.01,0,0], n_steps=50)
-    rp.getPoseTrajectory(MyConstants.Arm.Right, rightCurrPose-[0.01,0,0], n_steps=50)
-    
-    #IPython.embed()
+    #rp.getPoseTrajectory(MyConstants.Arm.Left, leftCurrPose+[0.01,0,0], n_steps=50)
+    #rp.getPoseTrajectory(MyConstants.Arm.Right, rightCurrPose-[0.01,0,0], n_steps=50)
+
     
     print 'waiting'
     rp.waitForTrajReady()
@@ -842,6 +833,6 @@ if __name__ == '__main__':
     parser.add_argument('--show',action='store_true',default=False)
     
     args = parser.parse_args()
-    #testSwitchPlaces(**vars(args))
+    testSwitchPlaces(**vars(args))
     #testFromAbove(**vars(args))
-    testRavenCpp()
+    #testRavenCpp()
