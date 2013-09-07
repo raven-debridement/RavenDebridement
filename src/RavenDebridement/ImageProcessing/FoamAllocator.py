@@ -110,11 +110,11 @@ class FoamAllocator(object):
             while not self.currentCenters:
                 rospy.sleep(0.1)
             centers = []
-            allocationCenter = self.allocations.get(armName)
+            #allocationCenter = self.allocations.get(armName)
             for center in self.currentCenters:
                 ok = True
                 for allocArm, allocationCenter in self.allocations.iteritems():
-                    if allocationCenter.distance(center) <  self.allocationRadius and \
+                    if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
                             not (not new and allocArm == armName):
                         ok = False
                 if ok:

@@ -133,7 +133,7 @@ class WaitForCompletion(smach.State):
     
 class AllocateFoam(smach.State):
     def __init__(self, armName, foamAllocator, completer=None):
-        smach.State.__init__(self, outcomes = ['foamFound','noFoamFound'], input_keys = ['foamHeightOffset'], output_keys = ['foamPose'])
+        smach.State.__init__(self, outcomes = ['foamFound','noFoamFound'], input_keys = ['foamOffset'], output_keys = ['foamPose'])
         self.armName = armName
         self.foamAllocator = foamAllocator
         self.completer = completer
@@ -144,11 +144,21 @@ class AllocateFoam(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
 
-        self.foamAllocator.releaseAllocation()
-        new = True
-
+        new=False
+        
+        foamPose = self.foamAllocator.allocateFoam(new=True)
 
         rospy.loginfo('Searching for foam')
+        if foamPose is None:
+            rospy.loginfo('Did not find foam')
+            if self.completer:
+                self.completer.complete(self.foamAllocator.armName)
+                print self.foamAllocator.armName, self.completer
+            return 'noFoamFound'
+        
+        foamPose = tfx.pose(foamPose) + userdata.foamOffset
+        
+        """
         # find foam point and pose
         if not self.foamAllocator.hasFoam(new=new):
             rospy.sleep(1)
@@ -160,10 +170,9 @@ class AllocateFoam(smach.State):
             return 'noFoamFound'
         # get foam w.r.t. toolframe
         foamPose = tfx.pose(self.foamAllocator.allocateFoam(new=new)) + userdata.foamOffset
+        """
         self.foam_pub.publish(foamPose.msg.PoseStamped())
         
-        print foamPose
-
         userdata.foamPose = foamPose.msg.PoseStamped()
 
         rospy.loginfo('Found foam')
