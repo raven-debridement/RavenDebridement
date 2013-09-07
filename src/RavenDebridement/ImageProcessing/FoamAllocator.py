@@ -9,6 +9,9 @@ import operator as op
 
 import threading
 
+from visualization_msgs.msg import Marker, MarkerArray
+from geometry_msgs.msg import PolygonStamped
+
 from RavenDebridement.msg import FoamPoints
 
 from RavenDebridement.Utils import Constants as MyConstants
@@ -39,6 +42,13 @@ class FoamAllocator(object):
         self._printThread = threading.Thread(target=self._printer)
         self._printThread.daemon = True
         #self._printThread.start()
+        
+        self.marker_pub = rospy.Publisher('/foam_allocator_markers', MarkerArray)
+        #self.allocation_pub = {arm : rospy.Publisher('/foam_allocation_%s' % arm, PolygonStamped) for arm in 'LR'}
+        
+        self._publishThread = threading.Thread(target=self._publisher)
+        self._publishThread.daemon = True
+        self._publishThread.start()
     
     def _printState(self):
         with self.lock:
@@ -64,6 +74,78 @@ class FoamAllocator(object):
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             self._printState()
+            rate.sleep()
+    
+    def _publish_state(self):
+        with self.lock:
+            ma = MarkerArray()
+            
+            all_centers_marker = Marker()
+            all_centers_marker.ns = 'all_centers'
+            all_centers_marker.id = 0
+            all_centers_marker.type = Marker.POINTS
+            all_centers_marker.action = Marker.ADD
+            all_centers_marker.pose = tfx.identity_tf().msg.Pose()
+            all_centers_marker.scale.x = 0.002
+            all_centers_marker.scale.y = 0.002
+            
+            all_centers_marker.color.r = 1
+            all_centers_marker.color.g = 1
+            all_centers_marker.color.b = 0
+            all_centers_marker.color.a = 1
+            for center in self._getAllCenters():
+                all_centers_marker.header = center.msg.Header()
+                all_centers_marker.points.append(center.msg.Point())
+                
+            ma.markers.append(all_centers_marker)
+            
+            curr_centers_marker = Marker()
+            curr_centers_marker.ns = 'current_centers'
+            curr_centers_marker.id = 0
+            curr_centers_marker.type = Marker.POINTS
+            curr_centers_marker.action = Marker.ADD
+            curr_centers_marker.pose = tfx.identity_tf().msg.Pose()
+            curr_centers_marker.scale.x = 0.005
+            curr_centers_marker.scale.y = 0.005
+            
+            curr_centers_marker.color.r = 0
+            curr_centers_marker.color.g = 0
+            curr_centers_marker.color.b = 1
+            curr_centers_marker.color.a = 1
+            for center in self.currentCenters:
+                curr_centers_marker.header = center.msg.Header()
+                curr_centers_marker.points.append(center.msg.Point())
+                
+            for id, arm in enumerate('LR'):
+                if self.allocations.get(arm) is None:
+                    continue
+                alloc = self.allocations[arm]
+                alloc_marker = Marker()
+                alloc_marker.ns = 'alloc'
+                alloc_marker.id = id
+                alloc_marker.type = Marker.CYLINDER
+                alloc_marker.action = Marker.ADD
+                alloc_marker.header = alloc.msg.Header()
+                alloc_marker.pose = tfx.pose(alloc).msg.Pose()
+                alloc_marker.scale.x = self.allocationRadius
+                alloc_marker.scale.y = self.allocationRadius
+                alloc_marker.scale.z = 0.01
+                
+                alloc_marker.color.r = 0
+                alloc_marker.color.g = 1
+                alloc_marker.color.b = 1
+                alloc_marker.color.a = 0.5
+                
+                ma.markers.append(alloc_marker)
+                
+            
+            self.marker_pub.publish(ma)
+                
+    
+    def _publisher(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            self._publish()
             rate.sleep()
     
     def _foam_points_cb(self,msg):
