@@ -38,7 +38,7 @@ class Stage(object):
         return stageBreaks
 
 class RavenController():
-    def __init__(self, arm):
+    def __init__(self, arm, closedGraspValue=0.):
         self.arm = arm
 
         self.stopRunning = threading.Event()
@@ -55,7 +55,9 @@ class RavenController():
         self.header.frame_id = '/0_link'
         
         self.thread = None
-
+        
+        # actual grasp value when gripper is closed (in )
+        self.closedGraspValue = closedGraspValue*(pi/180.)
 
         #################
         # PAUSE COMMAND #
@@ -261,9 +263,9 @@ class RavenController():
                 # no stages
                 #cmd = self.ravenPauseCmd
                 # if last command was gripper, then ignore
-                if cmd.arms[0].tool_command.grasp_option != ToolCommand.GRASP_OFF:
-                    cmd = self.ravenPauseCmd
-                
+                #if cmd.arms[0].tool_command.grasp_option != ToolCommand.GRASP_OFF:
+                #    cmd = self.ravenPauseCmd
+                pass
 
             self.header.stamp = now
             cmd.header = self.header
@@ -374,18 +376,26 @@ class RavenController():
     ###############################
 
     def openGripper(self,duration=2):
+        """
+        DEPRECATED
+        """
         def fn(cmd,t):
             RavenController.addArmGraspCmd(cmd, self.arm, grasp=1, graspOption=ToolCommand.GRASP_INCREMENT_SIGN)
         self.addStage('Open gripper',duration,fn)
 	
     def closeGripper(self,duration=2):
+        """
+        DEPRECATED
+        """
         def fn(cmd,t):
             RavenController.addArmGraspCmd(cmd, self.arm, grasp=-1, graspOption=ToolCommand.GRASP_INCREMENT_SIGN)
         self.addStage('Close gripper',duration,fn)
 
-    def setGripper(self,value,duration=2):
+    def setGripper(self,grasp,closedValue=None,duration=2):
+        startGrasp = self.currentGrasp
         def fn(cmd,t):
-            RavenController.addArmGraspCmd(cmd, self.arm, grasp=value, graspOption=ToolCommand.GRASP_SET_NORMALIZED)
+            cmdGraspValue = (startGrasp) + (grasp - (startGrasp - self.closedGraspValue))*t
+            RavenController.addArmGraspCmd(cmd, self.arm, grasp=cmdGraspValue, graspOption=ToolCommand.GRASP_SET_NORMALIZED)
         self.addStage('Set gripper',duration,fn)
 
 

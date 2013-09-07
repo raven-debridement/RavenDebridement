@@ -190,10 +190,10 @@ class PlanTrajToFoam(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
         
-        foamPose = tfx.pose(userdata.foamPose).copy()
+        foamPose = tfx.pose(userdata.foamPose)
         gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
         
-        userdata.gripperPose = tfx.pose(gripperPose).copy()
+        userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
         
         #objectPose.orientation = gripperPose.orientation
         
@@ -218,17 +218,20 @@ class PlanTrajToFoam(smach.State):
 class MoveTowardsFoam(smach.State):
     def __init__(self, ravenArm, maxServoDistance, transFrame, rotFrame):
         smach.State.__init__(self, outcomes = ['reachedFoam', 'notReachedFoam'], input_keys = ['deltaPoseTraj','gripperPose'], io_keys = ['foamPose'])
+        self.armName = ravenArm.name
         self.ravenArm = ravenArm
         self.maxServoDistance = maxServoDistance
         self.transFrame = transFrame
         self.rotFrame = rotFrame
+        
+        self.midPosePub = rospy.Publisher('traj_mid_pose_%s'%self.armName,PoseStamped)
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
-        gripperPose = tfx.pose(userdata.gripperPose).copy()
-        foamPose = tfx.pose(userdata.foamPose).copy()
+        gripperPose = tfx.pose(userdata.gripperPose)
+        foamPose = tfx.pose(userdata.foamPose)
             
         transBound = .008
         rotBound = float("inf")
@@ -247,6 +250,8 @@ class MoveTowardsFoam(smach.State):
                 break
         else:
             endTrajStep = -1
+            
+        self.midPosePub.publish((Util.endPose(gripperPose,deltaPoseTraj[endTrajStep]).msg.PoseStamped()))
             
         truncDeltaPoseTraj = deltaPoseTraj[:endTrajStep]
         
@@ -278,10 +283,10 @@ class PlanTrajToReceptacle(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
         
-        receptaclePose = tfx.pose(self.receptaclePose).copy()
+        receptaclePose = tfx.pose(self.receptaclePose)
         gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
         
-        userdata.gripperPose = tfx.pose(gripperPose).copy()
+        userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
         
         #objectPose.orientation = gripperPose.orientation
         
@@ -326,13 +331,13 @@ class MoveTowardsReceptacle(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
-        gripperPose = tfx.pose(userdata.gripperPose).copy()
-        receptaclePose = tfx.pose(self.receptaclePose).copy()
+        gripperPose = tfx.pose(userdata.gripperPose)
+        receptaclePose = tfx.pose(self.receptaclePose)
             
         transBound = self.lockDistance
         rotBound = float("inf")
         if Util.withinBounds(gripperPose, receptaclePose, transBound, rotBound, self.transFrame, self.rotFrame):
-            if self.receptacleLock.requestToken():
+            if self.receptacleLock.requestToken(self.armName):
                 rospy.loginfo('Near open receptacle. Moving in for drop-off.')
                 return 'receptacleAvailable'
             else:
@@ -379,7 +384,8 @@ class GraspFoam(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
-        self.ravenArm.closeGripper(duration=self.gripperOpenCloseDuration)
+        self.ravenArm.openGripper(duration=1)
+        self.ravenArm.closeGripper(duration=3)
         
         return 'graspedFoam'
     
@@ -390,6 +396,7 @@ class DropFoamInReceptacle(smach.State):
         self.ravenArm = ravenArm
         self.gripperPoseEstimator = gripperPoseEstimator
         self.duration = gripperOpenCloseDuration
+        self.receptaclePose = receptaclePose
         self.receptacleLock = receptacleLock
         self.transFrame = transFrame
         self.rotFrame = rotFrame
@@ -398,7 +405,7 @@ class DropFoamInReceptacle(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
-        receptaclePose = tfx.pose(self.receptaclePose).copy()
+        receptaclePose = tfx.pose(self.receptaclePose)
         gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
         calcGripperPose = startPose = tfx.pose(self.ravenArm.getGripperPose())
         
@@ -409,7 +416,7 @@ class DropFoamInReceptacle(smach.State):
         endPose = Util.endPose(calcGripperPose, deltaPose, frame=Constants.Frames.Link0)
         self.ravenArm.goToGripperPose(endPose)
         
-        self.ravenArm.setGripper(0.75)
+        self.ravenArm.openGripper()
         
         # go back to original position so out of the way
         self.ravenArm.goToGripperPose(startPose)
@@ -495,7 +502,7 @@ class MasterClass(object):
         with cls.file_lock:
             cls.output_file.write(*args,**kwargs)
     
-    def __init__(self, armName, ravenArm, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, otherReceptaclePose=None):
+    def __init__(self, armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePoses, closedGraspValues=dict()):
         self.armName = armName
         
         if armName == Constants.Arm.Left:
@@ -511,8 +518,8 @@ class MasterClass(object):
             self.otherGripperName = Constants.Arm.Left
             self.otherToolframe = Constants.Frames.LeftTool
         
-        other_sm_type = None
-        #other_sm_type = 'nothing'
+        #other_sm_type = None
+        other_sm_type = 'nothing'
         #other_sm_type = 'updown'
         
         if other_sm_type is None:
@@ -522,15 +529,15 @@ class MasterClass(object):
 
         self.listener = tf.TransformListener.instance()
 
-        self.ravenArm = ravenArm
+        self.ravenArm = RavenArm(self.armName, closedGraspValues.get(self.armName,0.))
         self.ravenPlanner = ravenPlanner
         self.gripperPoseEstimator = gripperPoseEstimator
         
         self.foamAllocator = ArmFoamAllocator(self.armName,foamAllocator)
         self.otherFoamAllocator = ArmFoamAllocator(self.otherArmName,foamAllocator)
         
-        self.receptaclePose = receptaclePose   
-        self.otherReceptaclePose = otherReceptaclePose if otherReceptaclePose is not None else receptaclePose     
+        self.receptaclePose = receptaclePoses[self.armName]  
+        self.otherReceptaclePose = receptaclePoses[self.otherArmName] if receptaclePoses.has_key(self.otherArmName) else self.receptaclePose     
         self.receptacleLock = ReceptacleToken()
         
         # translation frame
@@ -552,7 +559,7 @@ class MasterClass(object):
         self.stepsPerMeter = 200
 
         # move no more than 5cm per servo
-        self.maxServoDistance = .05
+        self.maxServoDistance = .025
 
         # debugging outputs
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
@@ -571,7 +578,7 @@ class MasterClass(object):
             self.setup_sm(self.armName, self.ravenArm, self.transFrame, self.rotFrame, self.receptaclePose)
         
         
-        self.otherRavenArm = RavenArm(self.otherArmName)
+        self.otherRavenArm = RavenArm(self.otherArmName, closedGraspValues.get(self.otherArmName,0.))
         
         self.other_sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamHeightOffset'])
         
@@ -674,17 +681,23 @@ def mainloop():
     parser = argparse.ArgumentParser()
     parser.add_argument('--pause',action='store_true')
     parser.add_argument('--smooth',action='store_false', dest='pause')
+    parser.add_argument('--interactive',action='store_true')
     args = parser.parse_args(rospy.myargv()[1:])
     
-    if args.pause is not None:
+    if args.pause is not False:
         MasterClass.PAUSE_BETWEEN_STATES = args.pause
+        
+    import trajoptpy
+    if args.interactive is not False:
+        print('Interactive trajopt')
+        trajoptpy.SetInteractive(True)
     
     foamAllocator = FoamAllocator()
     gripperPoseEstimator = GripperPoseEstimator(Constants.Arm.Both)
-    ravenArm = RavenArm(armName)
     ravenPlanner = RavenPlanner(Constants.Arm.Both)
-    receptaclePose = tfx.pose([-.07, .015, -.147], tfx.tb_angles(-90,90,0),frame=Constants.Frames.Link0)
-    master = MasterClass(armName, ravenArm, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose)
+    receptaclePoses = {armName : tfx.pose([-.07, .015, -.125], tfx.tb_angles(-90,90,0),frame=Constants.Frames.Link0)}
+    closedGraspValues = {Constants.Arm.Left : 0., Constants.Arm.Right : -30.}
+    master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePoses)
     master.run()
 
 

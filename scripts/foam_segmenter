@@ -20,6 +20,8 @@ import operator
 
 import tfx
 
+import threading
+
 RED_LOWER_HSV = cv.Scalar(0, 120, 50)
 RED_UPPER_HSV = cv.Scalar(6, 255, 255)
 LOWERHSV = RED_LOWER_HSV
@@ -56,6 +58,7 @@ class FoamSegmenter():
         rospy.Subscriber(right_camera + "/camera_info", CameraInfo, self.rightInfoCallback)
         rospy.Subscriber(disparity, DisparityImage, self.disparityCallback)
         rospy.Subscriber(left_camera + "/image_rect_color", Image, self.leftImageCallback, queue_size = 1)
+        #rospy.Subscriber(right_camera + "/image_rect_color", Image, self.rightImageCallback, queue_size = 1)
         
 
     def disparityCallback(self, msg):
@@ -72,6 +75,9 @@ class FoamSegmenter():
         if self.info['r']:
             return
         self.info['r'] = msg
+        
+    #def rightImageCallback(self, msg):
+    #    self.image['r'] = self.process(msg, 'r')
 
     def leftImageCallback(self, msg):
         if not self.info['l'] or not self.disparityImg or rospy.is_shutdown():

@@ -63,6 +63,7 @@ def jointRequest(n_steps, endJointPositions, startPoses, endPoses, toolFrames, m
     w.r.t. 0_link
     To come from above, approachDir = np.array([0,0,1])
     """
+    n_steps = n_steps if n_steps > 5 else 5
     approachDirs = approachDirs or [None for _ in range(len(endPoses))]
     
     request = {
@@ -123,7 +124,7 @@ def jointRequest(n_steps, endJointPositions, startPoses, endPoses, toolFrames, m
                 wxyzQuat = [desQuat.w, desQuat.x, desQuat.y, desQuat.z]
                 
                 frame = toolFrame
-                timestep = int(.75*n_steps)
+                timestep = int(.75*n_steps) if int(.75*n_steps) < n_steps-2 else n_steps-3
                 
                 # cost or constraint?
                 request["constraints"].append({
@@ -177,7 +178,6 @@ class RavenPlanner:
         self.env.Load(ravenFile)
         rospy.loginfo('After loading model')
 
-        #trajoptpy.SetInteractive(True)
 
         self.robot = self.env.GetRobots()[0]
         
@@ -441,14 +441,13 @@ class RavenPlanner:
         return poseList
     
     def posesToDeltaPoses(self, poseList):
-        deltaPoseList = []
-        prevPose = poseList[0]
-        for pose in poseList[1:]:
-            deltaPose = Util.deltaPose(prevPose, pose)
-            deltaPoseList.append(deltaPose)
-            prevPose = pose
-            
-        return deltaPoseList
+        """
+        p0 -> p1 -> p2 -> ....
+        to
+        delta(p0->p1) -> delta(p0->p2) -> delta(p0->p3)...
+        """
+        startPose = poseList[0]
+        return [Util.deltaPose(startPose, pose) for pose in poseList[1:]]
             
     
     def optimize1(self, n_steps, trajStartJoints, trajEndJoints):

@@ -28,12 +28,12 @@ class RavenArm:
     Class for controlling the end effectors of the Raven
     """
 
-    def __init__ (self, armName):
+    def __init__ (self, armName, closedGraspValue=0.):
         self.armName = armName
 
         self.commandFrame = MyConstants.Frames.Link0
         
-        self.ravenController = RavenController(self.armName)
+        self.ravenController = RavenController(self.armName, closedGraspValue=closedGraspValue)
 
  
     #############################
@@ -290,24 +290,15 @@ class RavenArm:
         return True
             
     def closeGripper(self,duration=2.5, block=True):
-        self.ravenController.clearStages()
-        self.ravenController.closeGripper(duration=duration)
-        
-        if block:
-            rospy.sleep(duration)
+        self.setGripper(0.,duration=duration,block=block)
 
                 
     def openGripper(self,duration=2.5, block=True):
-        self.ravenController.clearStages()
-        self.ravenController.openGripper(duration=duration)
-        
-        if block:
-            rospy.sleep(duration)
+        self.setGripper(1., duration=duration, block=block)
 
-
-    def setGripper(self, value, duration=2.5, block=True):
+    def setGripper(self, grasp,duration=2.5, block=True):
         self.ravenController.clearStages()
-        self.ravenController.setGripper(value,duration=duration)
+        self.ravenController.setGripper(grasp,duration=duration)
         
         if block:
             rospy.sleep(duration)
