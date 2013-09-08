@@ -225,7 +225,7 @@ class PlanTrajToFoam(smach.State):
         self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
 
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
-        deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, foamPose, startPose=gripperPose, n_steps=n_steps, approachDir=np.array([0,0,1]))
+        deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, foamPose, startPose=gripperPose, n_steps=n_steps, approachDir=np.array([0,.1,.9]))
 
 
         if deltaPoseTraj == None:
@@ -329,10 +329,11 @@ class PlanTrajToReceptacle(smach.State):
     
     
 class MoveTowardsReceptacle(smach.State):
-    def __init__(self, ravenArm, maxServoDistance, transFrame, rotFrame, holdingPose, receptacleLock):
+    def __init__(self, ravenArm, gripperPoseEstimator, maxServoDistance, transFrame, rotFrame, holdingPose, receptacleLock):
         smach.State.__init__(self, outcomes = ['notReachedReceptacle', 'receptacleAvailable','receptacleOccupied','foamNotInGripper'], input_keys = ['deltaPoseTraj','gripperPose'])
         self.armName = ravenArm.name
         self.ravenArm = ravenArm
+        self.gripperPoseEstimator = gripperPoseEstimator
         self.maxServoDistance = maxServoDistance
         self.transFrame = transFrame
         self.rotFrame = rotFrame
@@ -390,6 +391,10 @@ class MoveTowardsReceptacle(smach.State):
         self.ravenArm.executeDeltaPoseTrajectory(truncDeltaPoseTraj,block=False)
         while not self.ravenArm.isPaused() and not rospy.is_shutdown():
             if not self.foamInGripper:
+                rospy.loginfo('Foam not in gripper!')
+                self.ravenArm.pause()
+                self.ravenArm.openGripper()
+                self.gripperPoseEstimator.enableImageEstimation(self.armName)
                 return 'foamNotInGripper'
             rospy.sleep(.5)
 
@@ -412,6 +417,9 @@ class GraspFoam(smach.State):
             
         #self.ravenArm.openGripper(duration=1)
         self.ravenArm.setGripper(-.2, duration=3)
+        
+        # try out because if foam dropped, will get better thresholding with this on
+        #self.gripperPoseEstimator.enableImageEstimation(self.armName)
         
         return 'graspedFoam'
     
@@ -654,7 +662,7 @@ class MasterClass(object):
                                                                                  self.ravenPlanner, self.stepsPerMeter, transFrame, rotFrame),
                                transitions = {'success' : arm('moveTowardsReceptacle'),
                                               'failure' : 'failure'})
-        smach.StateMachine.add(arm('moveTowardsReceptacle'), MoveTowardsReceptacle(ravenArm, self.maxServoDistance,transFrame, rotFrame,
+        smach.StateMachine.add(arm('moveTowardsReceptacle'), MoveTowardsReceptacle(ravenArm, self.gripperPoseEstimator, self.maxServoDistance,transFrame, rotFrame,
                                                                                    holdingPose, self.receptacleLock),
                                transitions = {'notReachedReceptacle' : arm('planTrajToReceptacle'),
                                               'receptacleAvailable' : arm('dropFoamInReceptacle'),

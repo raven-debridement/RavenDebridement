@@ -24,10 +24,10 @@ class FoamAllocator(object):
         
         self.currentCenters = []
         
-        self.centerHistoryLength = tfx.duration(10)
+        self.centerHistoryLength = tfx.duration(2)
         self.centerHistory = {}
         
-        self.centerCombiningThreshold = 0.002
+        self.centerCombiningThreshold = 0.007
         
         self.allocations = {}
         self.allocationRadius = 0.02
@@ -39,7 +39,7 @@ class FoamAllocator(object):
         self.lock = threading.RLock()
         
         self.estPoseExclusionRadius = 0.03
-        self.estPose = {arm : None for arm in 'LR'}
+        self.estPose = { arm : None for arm in 'LR' }
         self.estPoseSubs = { arm : rospy.Subscriber('/estimated_gripper_pose_%s' % arm, PoseStamped,functools.partial(self._estPoseCallback,arm)) for arm in 'LR'}
         
         self.sub = rospy.Subscriber('/foam_points', FoamPoints, self._foam_points_cb)
@@ -75,7 +75,10 @@ class FoamAllocator(object):
                 else:
                     s.append('allocations:')
                     for armName, allocCtr in self.allocations.iteritems():
-                        s.append('%s: %s' % (armName, allocCtr.tostring()))
+                        if allocCtr is not None:
+                            s.append('%s: %s' % (armName, allocCtr.tostring()))
+                        else:
+                            s.append('%s: None' % (armName))
             print '\n'.join(s)
     
     def _printer(self):
@@ -161,14 +164,18 @@ class FoamAllocator(object):
             self._publish_state()
             rate.sleep()
     
+    def _filterCenterHistory(self):
+        now = tfx.stamp.now()
+        for t, v in self.centerHistory.items():
+            if (now-t) > self.centerHistoryLength:
+                #rospy.loginfo('deleting from history: {0}'.format(self.centerHistory[t]))
+                del self.centerHistory[t]
+    
     def _foam_points_cb(self,msg):
         if rospy.is_shutdown():
             return
         with self.lock:
-            now = tfx.stamp.now()
-            for t, v in self.centerHistory.items():
-                if (now-t) > self.centerHistoryLength:
-                    del self.centerHistory[t]
+            self._filterCenterHistory()
             
             t = tfx.stamp(msg.header.stamp)
             all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
@@ -186,6 +193,7 @@ class FoamAllocator(object):
     
     def _getAllCenters(self):
         with self.lock:
+            self._filterCenterHistory()
             allCenters = []
             for centers in self.centerHistory.itervalues():
                 for center in centers:
@@ -202,9 +210,13 @@ class FoamAllocator(object):
         for center in centers:
             ok = True
             for allocArm, allocationCenter in self.allocations.iteritems():
-                if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
-                        not (not new and allocArm == armName):
-                    ok = False
+                if allocationCenter is not None:
+                    if allocationCenter.distance(center) < self.allocationRadius:
+                        if not new:
+                            ok = False
+                #if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
+                #        not (not new and allocArm == armName):
+                #    ok = False
             if ok:
                 unallocCenters.append(center)
         return unallocCenters
@@ -213,7 +225,7 @@ class FoamAllocator(object):
         with self.lock:
             if new:
                 self.releaseAllocation(armName)
-            centers = self._getUnallocatedCenters(armName, self._getAllCenters(), new=new)
+            centers = self._getUnallocatedCenters(armName, self.currentCenters, new=new) #self._getAllCenters()
             return bool(centers)
     
     def allocateFoam(self, armName, new=False):
@@ -266,11 +278,12 @@ class ArmFoamAllocator(object):
 def test():
     import IPython
     rospy.init_node('testFoamAllocator',anonymous=True)
-    armName = MyConstants.Arm.Right
-    afa = ArmFoamAllocator(armName)
+    a = FoamAllocator()
+    ar = ArmFoamAllocator('R', allocator=a)
+    al = ArmFoamAllocator('L', allocator=a)
     
     IPython.embed()
-    
+    rospy.spin()
     
     
 if __name__ == '__main__':

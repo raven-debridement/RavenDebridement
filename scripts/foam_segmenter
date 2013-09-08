@@ -96,8 +96,7 @@ class FoamSegmenter():
         image = self.image['l']
         if self.show_image:
             # Uncomment to show the thresholded image
-            # Util.showImage(image, "threshed")
-            pass
+            Util.showImage(image, "threshed")
 
         # find contours
         storage = cv.CreateMemStorage(0)
@@ -303,8 +302,11 @@ class FoamSegmenter():
                 return (x, y, d)
 
     def getDisparity(self, x, y, image, dispImg):
-        if image[y, x] > 0:
-            return cv.GetReal2D(dispImg, y, x)
+        if 0 <= y < image.height and 0 <= x < image.width:
+            if image[y, x] > 0:
+                return cv.GetReal2D(dispImg, y, x)
+            
+        return -float("inf")
 
     def process(self, msg, arm):
         """
