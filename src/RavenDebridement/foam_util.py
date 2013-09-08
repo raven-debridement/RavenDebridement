@@ -19,6 +19,7 @@ def convertStereo(u, v, disparity, info):
     cameraPoint.point = Point(x,y,z)
     return cameraPoint
 
+    
 def determineROI(info):
     width = 250
     height = 250

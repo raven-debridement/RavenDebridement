@@ -132,12 +132,6 @@ class RavenArm:
                 return
         
         endPoses = [Util.endPose(startPose, deltaPose, self.commandFrame) for deltaPose in deltaPoses]
-        
-        print 'startPose'
-        print startPose
-        print 'endPoses'
-        for endPose in endPoses:
-            print endPose
             
         return self.executePoseTrajectory(endPoses, block=block, speed=speed)
             

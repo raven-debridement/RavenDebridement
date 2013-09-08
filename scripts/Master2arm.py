@@ -51,17 +51,18 @@ class DoNothing(smach.State):
         self.completer = completer
 
     def execute(self, userdata):
-        if MasterClass.PAUSE_BETWEEN_STATES:
-            pause_func(self)
+        rospy.sleep(.5)
+        #if MasterClass.PAUSE_BETWEEN_STATES:
+        #    pause_func(self)
             
-        rospy.loginfo('Doing nothing')
+        #rospy.loginfo('Doing nothing')
         
         if self.completer and self.completer.isComplete():
             return 'complete'
 
         endPose = self.ravenArm.getGripperPose()
         n_steps = 5
-        print 'requesting trajectory for otherarm', self.armName
+        #print 'requesting trajectory for otherarm', self.armName
         poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps)
         
         if poseTraj == None:
@@ -227,10 +228,6 @@ class PlanTrajToFoam(smach.State):
         deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, foamPose, startPose=gripperPose, n_steps=n_steps, approachDir=np.array([0,0,1]))
 
 
-        print 'deltaPoseTraj'
-        for deltaPose in deltaPoseTraj:
-            print deltaPose
-
         if deltaPoseTraj == None:
             return 'failure'
 
@@ -346,12 +343,15 @@ class MoveTowardsReceptacle(smach.State):
         self.foamInGripper = True
         rospy.Subscriber('found_red_%s' % self.armName, Bool, self._foamTrackerCallback)
         
+        
     def _foamTrackerCallback(self, msg):
         self.foamInGripper = msg.data
+        
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
+            
             
         gripperPose = tfx.pose(userdata.gripperPose)
         holdingPose = tfx.pose(self.holdingPose)
@@ -397,14 +397,18 @@ class MoveTowardsReceptacle(smach.State):
     
 
 class GraspFoam(smach.State):
-    def __init__(self, ravenArm, gripperOpenCloseDuration):
+    def __init__(self, ravenArm, gripperPoseEstimator, gripperOpenCloseDuration):
         smach.State.__init__(self, outcomes = ['graspedFoam'])
+        self.armName = ravenArm.name
         self.ravenArm = ravenArm
+        self.gripperPoseEstimator = gripperPoseEstimator
         self.duration = gripperOpenCloseDuration
     
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
+            
+        self.gripperPoseEstimator.suppressImageEstimation(self.armName)
             
         #self.ravenArm.openGripper(duration=1)
         self.ravenArm.setGripper(-.2, duration=3)
@@ -440,12 +444,14 @@ class DropFoamInReceptacle(smach.State):
         
         self.ravenArm.openGripper()
         
+        self.gripperPoseEstimator.enableImageEstimation(self.armName)
+        
         # go back to original position so out of the way
         self.ravenArm.goToGripperPose(startPose)
         
         self.receptacleLock.releaseToken(self.armName)
         
-        return 'success'
+        return 'findNextFoamPiece'
     
 class WaitForReceptacle(smach.State):
     def __init__(self, armName, receptacleLock, ravenPlanner, ravenArm):
@@ -581,7 +587,7 @@ class MasterClass(object):
         self.gripperOpenCloseDuration = 7
 
         # for Trajopt planning, 2 steps/cm
-        self.stepsPerMeter = 1000
+        self.stepsPerMeter = 600
 
         # move no more than 5cm per servo
         self.maxServoDistance = .025
@@ -642,7 +648,7 @@ class MasterClass(object):
         smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowardsFoam(ravenArm, self.maxServoDistance, transFrame, rotFrame),
                                transitions = {'reachedFoam' : arm('graspFoam'),
                                               'notReachedFoam' : arm('planTrajToFoam')})
-        smach.StateMachine.add(arm('graspFoam'), GraspFoam(ravenArm, self.gripperOpenCloseDuration),
+        smach.StateMachine.add(arm('graspFoam'), GraspFoam(ravenArm, self.gripperPoseEstimator, self.gripperOpenCloseDuration),
                                transitions = {'graspedFoam' : arm('planTrajToReceptacle')})
         smach.StateMachine.add(arm('planTrajToReceptacle'), PlanTrajToReceptacle(holdingPose, ravenArm, self.gripperPoseEstimator,
                                                                                  self.ravenPlanner, self.stepsPerMeter, transFrame, rotFrame),

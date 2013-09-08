@@ -305,5 +305,5 @@ if __name__ == '__main__':
     args = parser.parse_args(rospy.myargv()[1:])
     left_camera = 'left'
     right_camera = 'right'
-    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', '/foam_points_test', **vars(args))
+    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', '/foam_points', **vars(args))
     rospy.spin()

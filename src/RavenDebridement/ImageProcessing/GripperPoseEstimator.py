@@ -38,6 +38,8 @@ class GripperPoseEstimator():
         self.adjustment_side = dict((arm,'post') for arm in self.arms)
         self.switch_adjustment_update = True
         
+        self.estimateFromImage = dict()
+        
         self.calcPosePostAdjustment = dict((arm,tfx.identity_tf()) for arm in self.arms)
         if calcPosePostAdjustment:
             for k,v in calcPosePostAdjustment:
@@ -52,6 +54,9 @@ class GripperPoseEstimator():
           
     
     def _truthCallback(self,arm,msg):
+        if not self.estimateFromImage.get(arm, True):
+            return
+        
         #rospy.loginfo("%f",msg.header.stamp.to_sec())
         truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0, ignore_stamp=True)
         #truthPose = Util.convertToFrame(msg, Constants.Frames.Link0)
@@ -82,6 +87,10 @@ class GripperPoseEstimator():
         self.estimatedPose[arm] = (truthPose,False)
     
     def _ravenStateCallback(self,msg):
+        if self.calcPose:
+            prevTime = self.calcPose.values()[0].stamp
+            if tfx.stamp(msg.header.stamp) - prevTime < 0.1:
+                return
         for arm in self.arms:
             arm_msg = [msg_arm for msg_arm in msg.arms if msg_arm.name == arm][0]
             #self.calcPose[arm] = tfx.pose(arm_msg.tool.pose,header=msg.header)
@@ -117,6 +126,11 @@ class GripperPoseEstimator():
         else:
             return pose
         
+    def suppressImageEstimation(self, armName):
+        self.estimateFromImage[armName] = False
+        
+    def enableImageEstimation(self, armName):
+        self.estimateFromImage[armName] = True
         
 def test():
     rospy.init_node('testGripperPoseEstimator',anonymous=True)
@@ -162,12 +176,32 @@ def test():
                 prevPoseAndIsEstimate[arm] = (estimatedPose, isEstimate)
         
         rospy.sleep(.02)
+        
+def testTimeStamps():
+    rospy.init_node('testTimeStampes',anonymous=True)
+    rospy.sleep(1)
+    arms = Constants.Arm.Both
+    gpe = GripperPoseEstimator(arms)
+    rospy.sleep(2)
+    
+    def _estimatePoseCallback(msg):
+        rospy.loginfo('Received estimated gripper pose in MoveTowardsReceptacle')
+        print 'pose'
+        print tfx.pose(msg)
+        print 'time'
+        print tfx.pose(msg).stamp.seconds
+        print 'now - msg time'
+        print rospy.Time.now().to_sec() - tfx.pose(msg).stamp.seconds
+    
+    rospy.Subscriber('estimated_gripper_pose_R',PoseStamped,_estimatePoseCallback)
+    rospy.spin()
 
 def standalone_main():
     rospy.init_node('standaloneGripperPoseEstimator',anonymous=True)
-    gpe = GripperPoseEstimator(Constants.Arm.Both)
+    gpe = GripperPoseEstimator(Constants.Arm.Right)
     rospy.spin()
 
 if __name__ == '__main__':
-    standalone_main()
+    #standalone_main()
+    testTimeStamps()
       
