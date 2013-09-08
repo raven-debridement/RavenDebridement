@@ -31,6 +31,11 @@ class RavenArm:
     def __init__ (self, armName, closedGraspValue=0.):
         self.armName = armName
 
+        if armName == MyConstants.Arm.Left:
+            self.toolFrame = MyConstants.Frames.LeftTool
+        else:
+            self.toolFrame = MyConstants.Frames.RightTool
+            
         self.commandFrame = MyConstants.Frames.Link0
         
         self.ravenController = RavenController(self.armName, closedGraspValue=closedGraspValue)
@@ -128,6 +133,12 @@ class RavenArm:
         
         endPoses = [Util.endPose(startPose, deltaPose, self.commandFrame) for deltaPose in deltaPoses]
         
+        print 'startPose'
+        print startPose
+        print 'endPoses'
+        for endPose in endPoses:
+            print endPose
+            
         return self.executePoseTrajectory(endPoses, block=block, speed=speed)
             
 
@@ -314,6 +325,9 @@ class RavenArm:
 
         geometry_msgs.msg.Pose
         """
+        pose = tfx.pose([0,0,0],frame=self.toolFrame)
+        return tfx.convertToFrame(pose, self.commandFrame, pose.frame, wait=10)
+        
         gripperPose = self.ravenController.currentPose
 
         if gripperPose != None:

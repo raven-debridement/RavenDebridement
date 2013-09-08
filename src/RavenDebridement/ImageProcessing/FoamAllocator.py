@@ -88,11 +88,12 @@ class FoamAllocator(object):
             all_centers_marker.pose = tfx.identity_tf().msg.Pose()
             all_centers_marker.scale.x = 0.002
             all_centers_marker.scale.y = 0.002
+            all_centers_marker.lifetime = rospy.Duration(1)
             
             all_centers_marker.color.r = 1
             all_centers_marker.color.g = 1
             all_centers_marker.color.b = 0
-            all_centers_marker.color.a = 1
+            all_centers_marker.color.a = 0.5
             for center in self._getAllCenters():
                 all_centers_marker.header = center.msg.Header()
                 all_centers_marker.points.append(center.msg.Point())
@@ -105,8 +106,9 @@ class FoamAllocator(object):
             curr_centers_marker.type = Marker.POINTS
             curr_centers_marker.action = Marker.ADD
             curr_centers_marker.pose = tfx.identity_tf().msg.Pose()
-            curr_centers_marker.scale.x = 0.005
-            curr_centers_marker.scale.y = 0.005
+            curr_centers_marker.scale.x = 0.001
+            curr_centers_marker.scale.y = 0.001
+            curr_centers_marker.lifetime = rospy.Duration(1)
             
             curr_centers_marker.color.r = 0
             curr_centers_marker.color.g = 0
@@ -115,6 +117,8 @@ class FoamAllocator(object):
             for center in self.currentCenters:
                 curr_centers_marker.header = center.msg.Header()
                 curr_centers_marker.points.append(center.msg.Point())
+            
+            ma.markers.append(curr_centers_marker)
                 
             for id, arm in enumerate('LR'):
                 if self.allocations.get(arm) is None:
@@ -130,11 +134,12 @@ class FoamAllocator(object):
                 alloc_marker.scale.x = self.allocationRadius
                 alloc_marker.scale.y = self.allocationRadius
                 alloc_marker.scale.z = 0.01
+                alloc_marker.lifetime = rospy.Duration(1)
                 
                 alloc_marker.color.r = 0
                 alloc_marker.color.g = 1
                 alloc_marker.color.b = 1
-                alloc_marker.color.a = 0.5
+                alloc_marker.color.a = 0.25
                 
                 ma.markers.append(alloc_marker)
                 
@@ -145,7 +150,7 @@ class FoamAllocator(object):
     def _publisher(self):
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
-            self._publish()
+            self._publish_state()
             rate.sleep()
     
     def _foam_points_cb(self,msg):
@@ -174,16 +179,24 @@ class FoamAllocator(object):
                         allCenters.append(center)
             return allCenters
     
+    def _getUnallocatedCenters(self, armName, centers, new=False):
+        unallocCenters = []
+        for center in centers:
+            ok = True
+            for allocArm, allocationCenter in self.allocations.iteritems():
+                if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
+                        not (not new and allocArm == armName):
+                    ok = False
+            if ok:
+                unallocCenters.append(center)
+        return unallocCenters
+    
     def hasFoam(self, armName, new=False):
         with self.lock:
             if new:
                 self.releaseAllocation(armName)
-            centers = []
-            for center in self._getAllCenters():
-                for _, allocationCenter in self.allocations.iteritems():
-                    if allocationCenter is not None and allocationCenter.distance(center) >  self.allocationRadius:
-                        return True
-            return False
+            centers = self._getUnallocatedCenters(armName, self._getAllCenters(), new=new)
+            return bool(centers)
     
     def allocateFoam(self, armName, new=False):
         with self.lock:
@@ -191,16 +204,7 @@ class FoamAllocator(object):
             startTime = tfx.time.now()
             while not self.currentCenters:
                 rospy.sleep(0.1)
-            centers = []
-            #allocationCenter = self.allocations.get(armName)
-            for center in self.currentCenters:
-                ok = True
-                for allocArm, allocationCenter in self.allocations.iteritems():
-                    if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
-                            not (not new and allocArm == armName):
-                        ok = False
-                if ok:
-                    centers.append(center)
+            centers = self._getUnallocatedCenters(armName, self.currentCenters, new=new)
                     
             if not centers:
                 return None
