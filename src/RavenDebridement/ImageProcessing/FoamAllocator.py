@@ -39,7 +39,7 @@ class FoamAllocator(object):
         self.lock = threading.RLock()
         
         self.estPoseExclusionRadius = 0.03
-        self.estPose = {arm: None for arm in 'LR'}
+        self.estPose = {arm : None for arm in 'LR'}
         self.estPoseSubs = { arm : rospy.Subscriber('/estimated_gripper_pose_%s' % arm, PoseStamped,functools.partial(self._estPoseCallback,arm)) for arm in 'LR'}
         
         self.sub = rospy.Subscriber('/foam_points', FoamPoints, self._foam_points_cb)
@@ -173,10 +173,12 @@ class FoamAllocator(object):
             t = tfx.stamp(msg.header.stamp)
             all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
             pts = []
-            for pt in pts:
+            for pt in all_pts:
                 for _, estPose in self.estPose.iteritems():
-                    if estPose is not None and estPose.position.distance(pt) < self.estPoseExclusionRadius:
-                        break
+                    if estPose is not None:
+                        tfxPoint = tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),estPose.frame)
+                        if estPose.position.distance(tfxPoint) < self.estPoseExclusionRadius:
+                            break
                 else:
                     pts.append(pt)
             self.centerHistory[t] = pts
@@ -188,11 +190,12 @@ class FoamAllocator(object):
             for centers in self.centerHistory.itervalues():
                 for center in centers:
                     for c in allCenters:
+                        center, c = tfx.point(center), tfx.point(c)
                         if (center-c).norm < self.centerCombiningThreshold:
                             break
                     else:
                         allCenters.append(center)
-            return allCenters
+            return [tfx.point(center) for center in allCenters]
     
     def _getUnallocatedCenters(self, armName, centers, new=False):
         unallocCenters = []

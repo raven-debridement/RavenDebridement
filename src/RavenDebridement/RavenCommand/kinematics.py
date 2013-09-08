@@ -600,11 +600,11 @@ def invArmKin(armId, pose, grasp, debug=False):
 
         print 'both check_joint_limits2 failed'
         if valid_dist[0] < maxValidDist and valid_dist[0] < valid_dist[1]:
-            get_joints_with_limits1(mech,d_act,thp_act,g1_act,g2_act);
-            get_joints_with_limits2(mech,ths_act[0],the_act[0],thr_act[0]);
+            get_joints_with_limits1(d_act,thp_act,g1_act,g2_act);
+            get_joints_with_limits2(ths_act[0],the_act[0],thr_act[0]);
         elif valid_dist[1] < maxValidDist:
-            get_joints_with_limits1(mech,d_act,thp_act,g1_act,g2_act);
-            get_joints_with_limits2(mech,ths_act[1],the_act[1],thr_act[1]);
+            get_joints_with_limits1(d_act,thp_act,g1_act,g2_act);
+            get_joints_with_limits2(ths_act[1],the_act[1],thr_act[1]);
 
         return None;
 
