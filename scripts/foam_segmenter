@@ -30,12 +30,14 @@ LOWERHSV2 = cv.Scalar(170, 120, 50)
 UPPERHSV2 = cv.Scalar(180, 255, 255)
 
 class FoamSegmenter():
-    def __init__(self, left_camera, right_camera, disparity, topic, num_objects=None, show_image=False):
+    def __init__(self, left_camera, right_camera, disparity, topic, num_objects=None, show_image=False, track=False):
         self.image = {'l': None, 'r': None}
         self.info = {'l': None, 'r': None}
         self.bridge = cv_bridge.CvBridge()
         self.calculating = False
         self.foundCentroidInLeft = False
+        
+        self.track = track
         
         self.num_objects = num_objects
         self.object_centers = [None] * num_objects
@@ -120,7 +122,7 @@ class FoamSegmenter():
         imgmsg = self.bridge.cv_to_imgmsg(image)
         self.imagepub.publish(imgmsg)
         #cv.DrawContours(image, contours, color, holeColor, maxLevel, thickness)
-
+        
         points = []
         marker_array = MarkerArray()
         for xClose,yClose in xys:
@@ -130,7 +132,7 @@ class FoamSegmenter():
                 x, y, disparity = self.getBoxDisparity((xClose,yClose), radius, image)
                 if disparity > self.minDisparity:
                     break
-    
+            
             # Use disparity value to find 3d location of point
             if disparity <= self.minDisparity:
                 continue
@@ -143,6 +145,31 @@ class FoamSegmenter():
         for i in xrange(len(marker_array.markers)):
             marker_array.markers[i].id = i
         self.markerpub.publish(marker_array)
+        
+        if not self.track:
+            unique_pts = {}
+            for pt in points:
+                for id, pt_list in unique_pts.iteritems():
+                    if pt_list[0].distance(pt) < self.center_threshold:
+                        pt_list.append(pt)
+                        break
+                else:
+                    unique_pts[len(unique_pts)] = [pt]
+            for k in unique_pts.iterkeys():
+                unique_pts[k] = reduce(operator.add, unique_pts[k])/len(unique_pts[k])
+            self.object_centers = unique_pts.values()
+            
+            msg = FoamPoints()
+            msg.header.frame_id = self.info['l'].header.frame_id
+            msg.header.stamp = rospy.Time.now()
+            
+            for center in self.object_centers:
+                if center is None:
+                    continue
+                msg.points.append(center.msg.Point())
+            self.pointpub.publish(msg)
+            return
+                
         
         print '-------------------------'
         print 'current state:'
@@ -270,7 +297,7 @@ class FoamSegmenter():
             return threshImg
 
 if __name__ == '__main__':
-    rospy.init_node('foam_segmenter')
+    rospy.init_node('foam_segmenter_test')
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--num-objects','-n',type=int,default=1)
@@ -278,5 +305,5 @@ if __name__ == '__main__':
     args = parser.parse_args(rospy.myargv()[1:])
     left_camera = 'left'
     right_camera = 'right'
-    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', '/foam_points', **vars(args))
+    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', '/foam_points_test', **vars(args))
     rospy.spin()
