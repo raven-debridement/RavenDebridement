@@ -22,6 +22,8 @@ import tfx
 
 import threading
 
+import IPython
+
 RED_LOWER_HSV = cv.Scalar(0, 120, 50)
 RED_UPPER_HSV = cv.Scalar(6, 255, 255)
 LOWERHSV = RED_LOWER_HSV
@@ -49,6 +51,10 @@ class FoamSegmenter():
         self.threshImg2 = cv.CreateImage((1280, 960), 8, 1)
         
         self.object_size = 0.01
+        
+        self.boxBottomLeft = tfx.point([0,0,0],frame='/world')
+        self.boxTopRight = tfx.convertToFrame(tfx.point([0,0,0]), '/world', '/frame_top_R', wait=10)
+        self.boxTopRight.x = 2.*self.boxTopRight.x
 
         self.pointpub = rospy.Publisher(topic, FoamPoints)
         self.markerpub = rospy.Publisher(topic+'_marker_array', MarkerArray)
@@ -138,6 +144,10 @@ class FoamSegmenter():
                 continue
             
             point = Util.convertStereo(x, y , disparity, self.info)
+            
+            if not self.isValidPoint(point):
+                continue
+            
             point.point.z += self.object_size/2
             points.append(tfx.point(point))
             marker = Util.createMarker(tfx.pose(point).msg.PoseStamped(),id=1,lifetime=2)
@@ -158,6 +168,9 @@ class FoamSegmenter():
             for k in unique_pts.iterkeys():
                 unique_pts[k] = reduce(operator.add, unique_pts[k])/len(unique_pts[k])
             self.object_centers = unique_pts.values()
+            
+            # filter out object_centers not in box
+            self.object_centers = [object_center for object_center in self.object_centers if self.isValidPoint(object_center)]
             
             msg = FoamPoints()
             msg.header.frame_id = self.info['l'].header.frame_id
@@ -227,6 +240,17 @@ class FoamSegmenter():
             msg.points = points
             self.pointpub.publish(msg)
 
+    def isValidPoint(self, point):
+        pt = tfx.point(point)
+        pt = tfx.convertToFrame(pt, self.boxBottomLeft.frame, pt.frame, ignore_stamp=True, wait=10)
+        
+        if (not self.boxBottomLeft.x < pt.x < self.boxTopRight.x) or \
+            (not self.boxTopRight.y < pt.y < self.boxBottomLeft.y) or \
+            (not self.boxBottomLeft.z < pt.z < self.boxTopRight.z):
+            return False
+        
+        return True
+        
     def getCenterOfMass(self, image):
         """
         Gets the center of mass of an image or contour.
