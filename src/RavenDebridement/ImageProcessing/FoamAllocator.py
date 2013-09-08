@@ -6,11 +6,12 @@ import tfx
 import collections
 
 import operator as op
+import functools
 
 import threading
 
 from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import PolygonStamped
+from geometry_msgs.msg import PolygonStamped, PoseStamped
 
 from RavenDebridement.msg import FoamPoints
 
@@ -37,6 +38,10 @@ class FoamAllocator(object):
         
         self.lock = threading.RLock()
         
+        self.estPoseExclusionRadius = 0.03
+        self.estPose = {arm: None for arm in 'LR'}
+        self.estPoseSubs = { arm : rospy.Subscriber('/estimated_gripper_pose_%s' % arm, PoseStamped,functools.partial(self._estPoseCallback,arm)) for arm in 'LR'}
+        
         self.sub = rospy.Subscriber('/foam_points', FoamPoints, self._foam_points_cb)
         
         self._printThread = threading.Thread(target=self._printer)
@@ -49,6 +54,9 @@ class FoamAllocator(object):
         self._publishThread = threading.Thread(target=self._publisher)
         self._publishThread.daemon = True
         self._publishThread.start()
+    
+    def _estPoseCallback(self, arm, msg):
+        self.estPose[arm] = tfx.pose(msg)
     
     def _printState(self):
         with self.lock:
@@ -163,7 +171,14 @@ class FoamAllocator(object):
                     del self.centerHistory[t]
             
             t = tfx.stamp(msg.header.stamp)
-            pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
+            all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
+            pts = []
+            for pt in pts:
+                for _, estPose in self.estPose.iteritems():
+                    if estPose is not None and estPose.position.distance(pt) < self.estPoseExclusionRadius:
+                        break
+                else:
+                    pts.append(pt)
             self.centerHistory[t] = pts
             self.currentCenters = pts
     
