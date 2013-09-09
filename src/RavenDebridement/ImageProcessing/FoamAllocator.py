@@ -13,7 +13,7 @@ import threading
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PolygonStamped, PoseStamped
 
-from RavenDebridement.msg import FoamPoints
+from RavenDebridement.msg import FoamPoints, FoamAllocation
 
 from RavenDebridement.Utils import Constants as MyConstants
 
@@ -42,6 +42,8 @@ class FoamAllocator(object):
         self.estPose = {arm : None for arm in 'LR'}
         self.estPoseSubs = { arm : rospy.Subscriber('/estimated_gripper_pose_%s' % arm, PoseStamped,functools.partial(self._estPoseCallback,arm)) for arm in 'LR'}
         
+        self.allocation_pub = rospy.Publisher('/foam_allocation',FoamAllocation)
+        
         self.sub = rospy.Subscriber('/foam_points', FoamPoints, self._foam_points_cb)
         
         self._printThread = threading.Thread(target=self._printer)
@@ -49,7 +51,6 @@ class FoamAllocator(object):
         #self._printThread.start()
         
         self.marker_pub = rospy.Publisher('/foam_allocator_markers', MarkerArray)
-        #self.allocation_pub = {arm : rospy.Publisher('/foam_allocation_%s' % arm, PolygonStamped) for arm in 'LR'}
         
         self._publishThread = threading.Thread(target=self._publisher)
         self._publishThread.daemon = True
@@ -214,7 +215,12 @@ class FoamAllocator(object):
             if new:
                 self.releaseAllocation(armName)
             centers = self._getUnallocatedCenters(armName, self._getAllCenters(), new=new)
-            return bool(centers)
+            foam_found = bool(centers)
+            if not foam_found:
+                msg = FoamAllocation()
+                msg.header.stamp = rospy.Time.now()
+                msg.arm = 'HAS_FOAM_FALSE'
+                self.allocation_pub.publish(msg)
     
     def allocateFoam(self, armName, new=False):
         with self.lock:
@@ -225,6 +231,10 @@ class FoamAllocator(object):
             centers = self._getUnallocatedCenters(armName, self.currentCenters, new=new)
                     
             if not centers:
+                msg = FoamAllocation()
+                msg.header.stamp = rospy.Time.now()
+                msg.arm = 'ALLOCATE_FOAM_NONE'
+                self.allocation_pub.publish(msg)
                 return None
             
             if armName == MyConstants.Arm.Left:
@@ -243,7 +253,16 @@ class FoamAllocator(object):
             best = tfx.convertToFrame(best,MyConstants.Frames.Link0)
             print 'returning new allocation', armName, best
             self._printState()
-            return tfx.pose(best,self.orientation)
+            
+            foamPose = tfx.pose(best,self.orientation)
+            
+            msg = FoamAllocation()
+            msg.header.stamp = rospy.Time.now()
+            msg.arm = armName
+            msg.pose = foamPose.msg.Pose()
+            msg.new = new
+            self.allocation_pub.publish(msg)
+            return foamPose
     
     def releaseAllocation(self, armName):
         with self.lock:
