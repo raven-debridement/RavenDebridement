@@ -73,11 +73,13 @@ class GripperPoseEstimator():
             
             if self.adjustment_side[arm] == 'pre':
                 adjustment = deltaTruthPose * (deltaCalcPose * prev_post_adjustment).inverse()
+                adjustment.translation = [0,0,0]
                 self.pre_adjustment[arm] = adjustment
                 if self.switch_adjustment_update:
                     self.adjustment_side[arm] = 'post'
             else:
                 adjustment = (prev_pre_adjustment * deltaCalcPose).inverse() * deltaTruthPose
+                adjustment.translation = [0,0,0]
                 self.post_adjustment[arm] = adjustment
                 if self.switch_adjustment_update:
                     self.adjustment_side[arm] = 'pre'
@@ -110,7 +112,8 @@ class GripperPoseEstimator():
         pre_adjustment = self.pre_adjustment[arm]
         post_adjustment = self.post_adjustment[arm]
         
-        deltaPose = pre_adjustment * prevCalcPose.inverse().as_tf() * calcPose.as_tf() * post_adjustment
+        deltaCalcPose = prevCalcPose.inverse().as_tf() * calcPose.as_tf()
+        deltaPose = pre_adjustment * deltaCalcPose * post_adjustment
         estPose = tfx.pose(prevTruthPose.as_tf() * deltaPose,frame=calcPose.frame,stamp=calcPose.stamp)
         self.estimatedPose[arm] = (estPose,True)
         
