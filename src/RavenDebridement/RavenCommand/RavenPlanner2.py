@@ -13,7 +13,7 @@ from std_msgs.msg import Header
 
 from RavenDebridement.srv import InvKinSrv
 import RavenDebridement.RavenCommand.kinematics as kin
-
+from RavenDebridement.msg import TrajoptCall
 
 import openravepy as rave
 import trajoptpy
@@ -223,6 +223,8 @@ class RavenPlanner:
         
         self.start_pose_pubs = dict((armName, rospy.Publisher('planner_%s_start' % armName,PoseStamped)) for armName in self.armNames)
         self.end_pose_pubs = dict((armName, rospy.Publisher('planner_%s_end' % armName,PoseStamped)) for armName in self.armNames)
+        
+        self.trajopt_pub = rospy.Publisher('trajopt',TrajoptCall)
         
         
         self.lock = threading.RLock()
@@ -451,6 +453,10 @@ class RavenPlanner:
             
     
     def optimize1(self, n_steps, trajStartJoints, trajEndJoints):
+        msg = TrajoptCall()
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = '/0_link'
+        
         startJointPositions = []
         endJointPositions = []
         startPoses = []
@@ -482,6 +488,13 @@ class RavenPlanner:
             approachDirs.append(self.approachDir[armName])
             
             self.updateOpenraveJoints(armName, trajStartJoints[armName])
+            
+            if armName == 'L':
+                msg.start_L = self.trajStartPose[armName]
+                msg.end_L = self.trajEndPose[armName]
+            else:
+                msg.start_R = self.trajStartPose[armName]
+                msg.end_R = self.trajEndPose[armName]
                 
         #request = jointRequest(n_steps, endJointPositions)
         request = jointRequest(n_steps, endJointPositions, startPoses, endPoses, toolFrames, manips, approachDirs=approachDirs, approachDist=0.03)
@@ -528,6 +541,13 @@ class RavenPlanner:
                 self.deltaPoseTraj[armName] = deltaPoseTraj
                 
                 startIndex = endIndex
+                
+                if armName == 'L':
+                    msg.traj_L = [p.msg.Pose() for p in self.poseTraj[armName]]
+                else:
+                    msg.traj_R = [p.msg.Pose() for p in self.poseTraj[armName]]
+        
+        self.trajopt_pub.publish(msg)
     
     def optimize2(self, n_steps):
         return self.optimize1(n_steps, self.trajStartJoints, self.trajEndJoints)
