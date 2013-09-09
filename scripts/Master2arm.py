@@ -412,6 +412,11 @@ class GraspFoam(smach.State):
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
+        
+        #request traj to allow planning
+        endPose = self.ravenArm.getGripperPose()
+        n_steps = 5
+        self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps, block=False)
             
         self.gripperPoseEstimator.suppressImageEstimation(self.armName)
             
@@ -438,7 +443,12 @@ class DropFoamInReceptacle(smach.State):
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
-            
+        
+        #request traj to allow planning
+        endPose = self.ravenArm.getGripperPose()
+        n_steps = 5
+        self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps, block=False)
+        
         receptaclePose = tfx.pose(self.receptaclePose).copy()
         gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
         calcGripperPose = startPose = tfx.pose(self.ravenArm.getGripperPose())
