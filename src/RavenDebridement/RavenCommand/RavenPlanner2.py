@@ -82,7 +82,7 @@ def jointRequest(n_steps, endJointPositions, startPoses, endPoses, toolFrames, m
                     "params" : {
                         "coeffs" : [100],
                         "continuous" : True,
-                        "dist_pen" : [0.01]
+                        "dist_pen" : [0.001]
                         }
                     },
                {
@@ -90,7 +90,7 @@ def jointRequest(n_steps, endJointPositions, startPoses, endPoses, toolFrames, m
                 "params" : {
                     "coeffs" : [100],
                     "continuous" : False,
-                    "dist_pen" : [0.01]
+                    "dist_pen" : [0.001]
                     }
                 },
                 ],
@@ -163,7 +163,7 @@ class RavenPlanner:
     defaultJointPositions = [.512, 1.6, -.2, .116, .088, 0]
     defaultJoints = dict([(jointType,jointPos) for jointType, jointPos in zip(rosJointTypes,defaultJointPositions)])
 
-    def __init__(self, armNames, thread=True):
+    def __init__(self, armNames, thread=True, withWorkspace=False):
         if isinstance(armNames,basestring):
             armNames = [armNames]
         self.armNames = sorted(armNames)
@@ -173,7 +173,10 @@ class RavenPlanner:
         self.env = rave.Environment()
 
         rospy.loginfo('Before loading model')
-        ravenFile = os.path.join(roslib.packages.get_pkg_subdir('RavenDebridement','models'),'myRaven.xml')
+        if withWorkspace:
+            ravenFile = os.path.join(roslib.packages.get_pkg_subdir('RavenDebridement','models'),'raven_with_workspace.zae')
+        else:
+            ravenFile = os.path.join(roslib.packages.get_pkg_subdir('RavenDebridement','models'),'myRaven.xml')
         #ravenFile = '/home/gkahn/ros_workspace/RavenDebridement/models/myRaven.xml'
         self.env.Load(ravenFile)
         rospy.loginfo('After loading model')
@@ -359,11 +362,10 @@ class RavenPlanner:
             rosJoints = self.getCurrentJoints(armName)
             if rosJoints is None:
                 return
-            if grasp is None:
-                grasp = self.getCurrentGrasp(armName)
         if grasp is None:
-            grasp = 0.
-
+            grasp = pi/2.
+            #grasp = self.getCurrentGrasp(armName)
+        
         raveJointTypes = []
         jointPositions = []
         for rosJointType, jointPos in rosJoints.items():
@@ -510,7 +512,6 @@ class RavenPlanner:
         prob = trajoptpy.ConstructProblem(s, self.env)
         # do optimization
         result = trajoptpy.OptimizeProblem(prob)
-        
         
     
         # check trajectory safety

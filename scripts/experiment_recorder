@@ -116,6 +116,8 @@ def main():
 			if os.path.exists(orig_filename):
 				ret = run(bag_remove_cmd)
 
+import pandas as pd
+
 class Experiment(object):
 	def __init__(self, file):
 		self.raven_trajectory = None
@@ -186,7 +188,9 @@ class Experiment(object):
 				Pose start_R
 				Pose end_R
 				Pose[] traj_R"""
-				pass
+				self.trajopt.append((stamp(t),[tfx.pose(msg.start_L),tfx.pose(msg.end_L),[tfx.pose(p) for p in msg.traj_L],tfx.pose(msg.start_R),tfx.pose(msg.end_R),[tfx.pose(p) for p in msg.traj_R]]))
+		
+		self.foam_points = pd.DataFrame.from_items(self.foam_points,orient='index',columns=['p1','p2','p3','p4'])
 
 if __name__ == '__main__':
 	main()

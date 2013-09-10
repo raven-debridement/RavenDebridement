@@ -59,7 +59,11 @@ class GripperPoseEstimator():
         
         #rospy.loginfo("%f",msg.header.stamp.to_sec())
         try:
-            truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0, ignore_stamp=True)
+            #rospy.loginfo('looking up transform')
+            tf_msg_to_link0 = tfx.lookupTransform(Constants.Frames.Link0, msg.header.frame_id, wait=5)
+            truthPose = tf_msg_to_link0 * tfx.pose(msg)
+            #rospy.loginfo('found transform')
+            #truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0, ignore_stamp=True)
         except Exception, e:
             print e
             raise e
@@ -95,7 +99,7 @@ class GripperPoseEstimator():
     def _ravenStateCallback(self,msg):
         if self.calcPose:
             prevTime = self.calcPose.values()[0].stamp
-            if tfx.stamp(msg.header.stamp) - prevTime < 0.1:
+            if tfx.stamp(msg.header.stamp).seconds - prevTime.seconds < 0.1:
                 return
         for arm in self.arms:
             arm_msg = [msg_arm for msg_arm in msg.arms if msg_arm.name == arm][0]
@@ -205,10 +209,10 @@ def testTimeStamps():
 
 def standalone_main():
     rospy.init_node('standaloneGripperPoseEstimator',anonymous=True)
-    gpe = GripperPoseEstimator(Constants.Arm.Right)
+    gpe = GripperPoseEstimator()
     rospy.spin()
 
 if __name__ == '__main__':
-    #standalone_main()
-    testTimeStamps()
+    standalone_main()
+    #testTimeStamps()
       

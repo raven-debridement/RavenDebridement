@@ -67,14 +67,14 @@ def deltaPose(currPose, desPose, posFrame=None, rotFrame=None):
     currPos, desPos = currPose.position, desPose.position
     currRot, desRot = currPose.orientation, desPose.orientation
 
-    if posFrame:
+    if posFrame is not None and currPoseFrame is not None:
         tf_currPos_to_posFrame = tfx.lookupTransform(posFrame, currPoseFrame, wait=10)
         currPos = tf_currPos_to_posFrame * currPos
 
         tf_desPos_to_posFrame = tfx.lookupTransform(posFrame, desPoseFrame, wait=10)
         desPos = tf_desPos_to_posFrame * desPos
 
-    if rotFrame:
+    if rotFrame is not None and currPoseFrame is not None:
         tf_currRot_to_rotFrame = tfx.lookupTransform(rotFrame, currPoseFrame, wait=10)
         currRot = tf_currRot_to_rotFrame * currRot
 

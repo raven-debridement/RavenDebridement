@@ -25,7 +25,7 @@ class FoamAllocator(object):
         
         self.currentCenters = []
         
-        self.centerHistoryLength = tfx.duration(2)
+        self.centerHistoryLength = tfx.duration(1)
         self.centerHistory = {}
         
         self.centerCombiningThreshold = 0.007
