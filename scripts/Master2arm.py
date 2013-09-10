@@ -9,6 +9,8 @@ from math import *
 
 import numpy as np
 
+from collections import defaultdict
+
 import tf
 import tf.transformations as tft
 import tfx
@@ -17,7 +19,7 @@ import smach
 import smach_ros
 smach.set_shutdown_check(rospy.is_shutdown)
 
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion
 from raven_pose_estimator.srv import ThreshRed
 
@@ -152,15 +154,15 @@ class AllocateFoam(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
 
-        new=False
+        #new=False
         
         rospy.loginfo('Allocating foam %s' % self.armName)
         
-        if not self.foamAllocator.hasFoam(new=False):
+        if not self.foamAllocator.hasFoam(new=True):
             rospy.loginfo('has foam returning false')
             return self.didNotFindFoam()
         
-        foamPose = self.foamAllocator.allocateFoam(new=False)
+        foamPose = self.foamAllocator.allocateFoam(new=True)
 
         if foamPose is None:
             return self.didNotFindFoam()
@@ -402,10 +404,11 @@ class MoveTowardsReceptacle(smach.State):
     
 
 class GraspFoam(smach.State):
-    def __init__(self, ravenArm, gripperPoseEstimator, gripperOpenCloseDuration):
+    def __init__(self, ravenArm, ravenPlanner, gripperPoseEstimator, gripperOpenCloseDuration):
         smach.State.__init__(self, outcomes = ['graspedFoam'])
         self.armName = ravenArm.name
         self.ravenArm = ravenArm
+        self.ravenPlanner = ravenPlanner
         self.gripperPoseEstimator = gripperPoseEstimator
         self.duration = gripperOpenCloseDuration
     
@@ -429,10 +432,11 @@ class GraspFoam(smach.State):
         return 'graspedFoam'
     
 class DropFoamInReceptacle(smach.State):
-    def __init__(self, ravenArm, gripperPoseEstimator, gripperOpenCloseDuration, receptaclePose, receptacleLock, transFrame, rotFrame):
+    def __init__(self, ravenArm, ravenPlanner, gripperPoseEstimator, gripperOpenCloseDuration, receptaclePose, receptacleLock, transFrame, rotFrame):
         smach.State.__init__(self, outcomes = ['findNextFoamPiece'])
         self.armName = ravenArm.name
         self.ravenArm = ravenArm
+        self.ravenPlanner = ravenPlanner
         self.gripperPoseEstimator = gripperPoseEstimator
         self.duration = gripperOpenCloseDuration
         self.receptaclePose = receptaclePose
@@ -535,11 +539,24 @@ class Move(smach.State):
     
 
 
-
+class TransitionPublisher(object):
+    def __init__(self):
+        self.pub = rospy.Publisher('/state_machine_transitions',String)
+        
+        self.states = defaultdict(set)
+    
+    def callback(self, userdata, active_states, arm):
+        prev_states = self.states[arm]
+        curr_states = set(active_states)
+        new_states = curr_states - prev_states
+        for state in new_states:
+            msg = String(state)
+            self.pub.publish(msg)
 
 
 class MasterClass(object):
     PAUSE_BETWEEN_STATES = False
+    START_IN_HOLD_POSE = False
     file_lock = threading.Lock()
     output_file = open('/tmp/master_output.txt','w')
     
@@ -649,6 +666,14 @@ class MasterClass(object):
             else:
                 self.setup_sm(self.otherArmName, self.otherRavenArm, self.otherFoamAllocator, self.otherTransFrame, self.otherRotFrame, self.otherHoldingPose)
         
+        self.transitionPublisher = TransitionPublisher()
+        
+        self.sm.register_start_cb(self.transitionPublisher.callback, self.armName)
+        self.other_sm.register_start_cb(self.transitionPublisher.callback, self.armName)
+        
+        self.sm.register_transition_cb(self.transitionPublisher.callback, self.armName)
+        self.other_sm.register_transition_cb(self.transitionPublisher.callback, self.otherArmName)
+        
     def setup_sm(self, armName, ravenArm, foamArmAllocator, transFrame, rotFrame, holdingPose):
         def arm(s):
             return '{0}_{1}'.format(s, armName)
@@ -666,7 +691,7 @@ class MasterClass(object):
         smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowardsFoam(ravenArm, self.maxServoDistance, transFrame, rotFrame),
                                transitions = {'reachedFoam' : arm('graspFoam'),
                                               'notReachedFoam' : arm('planTrajToFoam')})
-        smach.StateMachine.add(arm('graspFoam'), GraspFoam(ravenArm, self.gripperPoseEstimator, self.gripperOpenCloseDuration),
+        smach.StateMachine.add(arm('graspFoam'), GraspFoam(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, self.gripperOpenCloseDuration),
                                transitions = {'graspedFoam' : arm('planTrajToReceptacle')})
         smach.StateMachine.add(arm('planTrajToReceptacle'), PlanTrajToReceptacle(holdingPose, ravenArm, self.gripperPoseEstimator,
                                                                                  self.ravenPlanner, self.stepsPerMeter, transFrame, rotFrame),
@@ -680,7 +705,7 @@ class MasterClass(object):
                                               'foamNotInGripper' : arm('allocateFoam')})
         smach.StateMachine.add(arm('waitForReceptacle'), WaitForReceptacle(armName, self.receptacleLock, self.ravenPlanner, ravenArm),
                                transitions = {'receptacleAvailable' : arm('dropFoamInReceptacle')})
-        smach.StateMachine.add(arm('dropFoamInReceptacle'), DropFoamInReceptacle(ravenArm, self.gripperPoseEstimator, self.gripperOpenCloseDuration,
+        smach.StateMachine.add(arm('dropFoamInReceptacle'), DropFoamInReceptacle(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, self.gripperOpenCloseDuration,
                                                                                  self.receptaclePose, self.receptacleLock, transFrame, rotFrame),
                                transitions = {'findNextFoamPiece' : arm('allocateFoam')})
     
@@ -688,6 +713,13 @@ class MasterClass(object):
         self.ravenArm.start()
         self.otherRavenArm.start()
         
+        if MasterClass.START_IN_HOLD_POSE:
+            rospy.loginfo('Raven arm {0} going to holding pose'.format(self.ravenArm.name))
+            self.ravenArm.goToGripperPose(self.holdingPose)
+            
+            rospy.loginfo('Raven arm {0} going to holding pose'.format(self.otherRavenArm.name))
+            self.otherRavenArm.goToGripperPose(self.otherHoldingPose)
+            
         sis = smach_ros.IntrospectionServer('master_server_%s' % self.armName, self.sm, '/SM_%s' % self.armName)
         sis.start()
         userData = smach.UserData()
@@ -731,6 +763,7 @@ def mainloop():
     parser.add_argument('--pause',action='store_true')
     parser.add_argument('--smooth',action='store_false', dest='pause')
     parser.add_argument('--interactive',action='store_true')
+    parser.add_argument('--start-in-hold-pose',action='store_true')
     args = parser.parse_args(rospy.myargv()[1:])
     
     if args.pause is not False:
@@ -740,6 +773,9 @@ def mainloop():
     if args.interactive is not False:
         print('Interactive trajopt')
         trajoptpy.SetInteractive(True)
+        
+    if args.start_in_hold_pose:
+        MasterClass.START_IN_HOLD_POSE = True
     
     foamAllocator = FoamAllocator()
     gripperPoseEstimator = GripperPoseEstimator(Constants.Arm.Both)

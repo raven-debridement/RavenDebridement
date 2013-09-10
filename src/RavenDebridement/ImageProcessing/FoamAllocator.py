@@ -21,6 +21,7 @@ import IPython
 
 class FoamAllocator(object):
     def __init__(self):
+        self.ignore = False
         
         self.currentCenters = []
         
@@ -57,6 +58,7 @@ class FoamAllocator(object):
         self._publishThread.start()
     
     def _estPoseCallback(self, arm, msg):
+        if self.ignore: return
         self.estPose[arm] = tfx.pose(msg)
     
     def _printState(self):
@@ -76,7 +78,7 @@ class FoamAllocator(object):
                 else:
                     s.append('allocations:')
                     for armName, allocCtr in self.allocations.iteritems():
-                        s.append('%s: %s' % (armName, allocCtr.tostring()))
+                        s.append('%s: %s' % (armName, str(allocCtr)))
             print '\n'.join(s)
     
     def _printer(self):
@@ -170,6 +172,7 @@ class FoamAllocator(object):
                 del self.centerHistory[t]
     
     def _foam_points_cb(self,msg):
+        if self.ignore: return
         if rospy.is_shutdown():
             return
         with self.lock:
@@ -208,10 +211,8 @@ class FoamAllocator(object):
         for center in centers:
             ok = True
             for allocArm, allocationCenter in self.allocations.iteritems():
-                if allocationCenter is not None:
-                    if allocationCenter.distance(center) < self.allocationRadius:
-                        if not new:
-                            ok = False
+                if allocationCenter is not None and allocationCenter.distance(center) < self.allocationRadius:
+                    ok = ok and (allocArm == armName and new)
                 #if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
                 #        not (not new and allocArm == armName):
                 #    ok = False

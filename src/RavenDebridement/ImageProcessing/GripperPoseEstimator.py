@@ -58,7 +58,11 @@ class GripperPoseEstimator():
             return
         
         #rospy.loginfo("%f",msg.header.stamp.to_sec())
-        truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0, ignore_stamp=True)
+        try:
+            truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0, ignore_stamp=True)
+        except Exception, e:
+            print e
+            raise e
         #truthPose = Util.convertToFrame(msg, Constants.Frames.Link0)
         calcPose = self.calcPose.get(arm)
         prevTruthPose = self.truthPose.get(arm)

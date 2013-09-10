@@ -17,7 +17,7 @@ import openravepy as rave
 # rename so no conflict with raven_2_msgs.msg.Constants
 from RavenDebridement.Utils import Constants as MyConstants
 from RavenDebridement.Utils import Util
-from RavenPlanner import Request, RavenPlanner
+#from RavenPlanner import Request, RavenPlanner
 from RavenController import RavenController
 from RavenDebridement.ImageProcessing.ARImageDetection import ARImageDetector
 

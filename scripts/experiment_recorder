@@ -1,13 +1,29 @@
 #!/usr/bin/env python
 
 import roslib
-roslib.load_manifest('raven_2_trajectory')
+roslib.load_manifest('RavenDebridement')
 import rospy
 
 import sys
 import os, subprocess, signal
 from argparse import ArgumentParser
 import time
+from collections import defaultdict
+
+from raven_2_trajectory.trajectory import Trajectory
+import raven_2_trajectory.trajectory_io as tjio
+
+import tfx
+
+import datetime
+
+def stamp(msg):
+	return tfx.stamp(msg).datetime
+	#datetime.datetime.fromtimestamp(msg.header.stamp.to_sec())
+
+def is_topic(topic_to_check,topic_name):
+	topic_name = topic_name % args
+	return topic_to_check.startswith(topic_name) or topic_to_check.startswith('/' + topic_name)
 
 def run(*args,**kwargs):
 	proc = subprocess.Popen(*args,**kwargs)
@@ -28,7 +44,7 @@ def main():
 	parser.add_argument('--node',action='store_true',default=False,help='Run as ROS node')
 	
 	parser.add_argument('-d','--dir',help='Subdirectory to save to')
-	parser.add_argument('-p','--save-in-package',help='Save to RavenDebridement/data', \
+	parser.add_argument('-p','--save-in-package',help='Save to RavenDebridement/experiments', \
 						action='store_true',default=False)
 	
 	parser.add_argument('--tf',action='store_true',default=False,help='Record tf')
@@ -43,7 +59,7 @@ def main():
 	if args.dir or args.save_in_package:
 		dir = '.'
 		if args.save_in_package:
-			dir = roslib.packages.get_pkg_subdir('RavenDebridement','data')
+			dir = roslib.packages.get_pkg_subdir('RavenDebridement','experiments')
 		if args.dir:
 			dir = os.path.join(dir,args.dir)
 		if not os.path.exists(dir):
@@ -73,9 +89,13 @@ def main():
 	bag_cmd.append('foam_points')
 	bag_cmd.append('foam_allocation')
 	
+	bag_cmd.append('trajopt')
+	
+	bag_cmd.append('state_machine_transitions')
+	
 	for arm in args.arm:
 		bag_cmd.append('tape_pose_%s' % arm)
-		bad_cmd.append('polygon_%s' % arm)
+		bag_cmd.append('polygon_%s' % arm)
 		bag_cmd.append('estimated_gripper_pose_%s' % arm)
 		bag_cmd.append('found_red_%s' % arm)
 		bag_cmd.append('/master_server_%s/smach/container_status' % arm)
@@ -95,6 +115,78 @@ def main():
 			bag_remove_cmd = ['rm',orig_filename]
 			if os.path.exists(orig_filename):
 				ret = run(bag_remove_cmd)
+
+class Experiment(object):
+	def __init__(self, file):
+		self.raven_trajectory = None
+		
+		self.calc_pose = defaultdict(list)
+		self.detected_pose = defaultdict(list)
+		self.estimated_pose = defaultdict(list)
+		
+		self.gripper_points = defaultdict(list)
+		self.foam_points = []
+		self.found_red = defaultdict(list)
+		self.foam_allocation = defaultdict(list)
+				
+		self.trajopt = []
+		
+		self.state_transitions = defaultdict(list)
+		
+		self._load(file)
+	
+	def _load(self, file):
+		bag = Bag(file)
+		
+		for topic, msg, t in bag.read_messages():
+			if is_topic(topic,'raven_state'):
+				pass
+			elif is_topic(topic,'raven_command'):
+				pass
+			elif is_topic('foam_points'):
+				"""Header header
+				uint8[] ids
+				Point[] points"""
+				self.foam_points.append((stamp(msg),[tfx.point(p,header=msg.header) for p in msg.points]))
+			elif is_topic('foam_allocation'):
+				"""Header header
+				string arm
+				Pose pose
+				bool new"""
+				self.foam_allocation[msg.arm].append((stamp(msg),[tfx.pose(msg.pose,header=msg.header),msg.new]))
+			elif is_topic('tape_pose_'):
+				arm = topic[-1]
+				self.detected_pose[arm].append((stamp(msg),[tfx.pose(msg)]))
+			elif is_topic('polygon_'):
+				arm = topic[-1]
+				"""Header header
+				Polygon polygon
+				  geometry_msgs/Point32[] points
+				    float32 x
+				    float32 y
+				    float32 z"""
+				self.gripper_points[arm].append((stamp(msg),[tfx.point(p,header=msg.header) for p in msg.points]))
+			elif is_topic('estimated_gripper_pose_'):
+				arm = topic[-1]
+				self.estimated_pose[arm].append((stamp(msg),[tfx.pose(msg)]))
+			elif is_topic('found_red_'):
+				arm = topic[-1]
+				self.found_red[arm].append((stamp(t),[msg.data]))
+			elif is_topic('state_machine_transitions'):
+				state = msg.data
+				arm = state[-1]
+				self.state_transitions[arm].append((stamp(t),[state]))
+			elif is_topic('trajopt'):
+				"""Header header
+
+				Pose start_L
+				Pose end_L
+				Pose[] traj_L
+				
+				Pose start_R
+				Pose end_R
+				Pose[] traj_R"""
+				pass
 
 if __name__ == '__main__':
 	main()
