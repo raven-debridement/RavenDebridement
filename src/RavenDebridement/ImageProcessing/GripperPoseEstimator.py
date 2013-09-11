@@ -46,9 +46,11 @@ class GripperPoseEstimator():
                 self.calcPosePostAdjustment[k] = tfx.transform(v,copy=True)
         
         self.est_pose_pub = {}
+        self.pose_error_pub = {}
         for arm in self.arms:
             rospy.Subscriber(Constants.GripperTape.Topic+'_'+arm, PoseStamped, partial(self._truthCallback,arm))
             self.est_pose_pub[arm] = rospy.Publisher('estimated_gripper_pose_%s'%arm, PoseStamped)
+            self.pose_error_pub[arm] = rospy.Publisher('estimated_gripper_pose_error_%s'%arm, PoseStamped)
             
         rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
           
@@ -69,10 +71,15 @@ class GripperPoseEstimator():
             raise e
         #truthPose = Util.convertToFrame(msg, Constants.Frames.Link0)
         calcPose = self.calcPose.get(arm)
+        
         prevTruthPose = self.truthPose.get(arm)
         prevCalcPose = self.calcPoseAtTruth.get(arm)
         
         if prevTruthPose is not None and prevCalcPose is not None:
+            currEstPose = self.estimatedPose[arm][0]
+            poseErr = (truthPose.as_tf().inverse() * currEstPose).copy(stamp=truthPose.stamp)
+            self.pose_error_pub[arm].publish(poseError.msg.PoseStamped())
+        
             deltaTruthPose = prevTruthPose.as_tf().inverse() * truthPose.as_tf()
             deltaCalcPose = prevCalcPose.as_tf().inverse() * calcPose.as_tf()
             
