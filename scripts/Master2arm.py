@@ -97,16 +97,20 @@ class ReceptacleToken(object):
     def requestToken(self, armName):
         with self.lock:
             if self.tokenHolder is None or self.tokenHolder == armName:
+                print 'New tokenHolder is %s'%armName
                 self.tokenHolder = armName
                 return True
             else:
+                print 'Rejecting request %s'%armName
                 return False
     
     def releaseToken(self, armName):
         with self.lock:
             if self.tokenHolder and self.tokenHolder != armName:
                 raise RuntimeError("Arm %s is trying to release token held by %s!" % (armName, self.tokenHolder))
+            print '%s is releasing the token'%armName
             self.tokenHolder = None
+            
     
 class WaitForCompletion(smach.State):
     def __init__(self, ravenArm, ravenPlanner, completer):
@@ -125,12 +129,11 @@ class WaitForCompletion(smach.State):
         while not self.completer.isComplete():
             endPose = self.ravenArm.getGripperPose()
             n_steps = 5
-            print 'requesting trajectory for arm', self.armName
-            poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps)
+            poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps, block=False)
             rospy.sleep(0.5)
             
             if poseTraj is None:
-                return 'failure'
+                rospy.loginfo('Warning: trajopt returned None in WaitForCompletion')
         
         return 'success'
     
@@ -154,7 +157,6 @@ class AllocateFoam(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
 
-        #new=False
         
         rospy.loginfo('Allocating foam %s' % self.armName)
         rospy.sleep(1)
@@ -170,19 +172,6 @@ class AllocateFoam(smach.State):
         
         foamPose = tfx.pose(foamPose) + userdata.foamOffset
         
-        """
-        # find foam point and pose
-        if not self.foamAllocator.hasFoam(new=new):
-            rospy.sleep(1)
-        if not self.foamAllocator.hasFoam(new=new):
-            rospy.loginfo('Did not find foam')
-            if self.completer:
-                self.completer.complete(self.foamAllocator.armName)
-                print self.foamAllocator.armName, self.completer
-            return 'noFoamFound'
-        # get foam w.r.t. toolframe
-        foamPose = tfx.pose(self.foamAllocator.allocateFoam(new=new)) + userdata.foamOffset
-        """
         self.foam_pub.publish(foamPose.msg.PoseStamped())
         
         userdata.foamPose = foamPose.msg.PoseStamped()
@@ -214,18 +203,13 @@ class PlanTrajToFoam(smach.State):
             pause_func(self)
         
         foamPose = tfx.pose(userdata.foamPose).copy()
-        gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName)).copy()
         
-        # temp
+        self.gripperPoseEstimator.enableImageEstimation(self.armName)
+        rospy.sleep(2) # since some lag
+        gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName)).copy()
         
         
         userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
-        
-        
-        #g = []
-        #g += Util.plot_transform(self.ravenPlanner.env, np.array(Util.openraveTransformFromTo(self.ravenPlanner.robot, foamPose.matrix, foamPose.frame, 'world')))
-        
-        #objectPose.orientation = gripperPose.orientation
         
         
         deltaPose = Util.deltaPose(gripperPose, foamPose, self.transFrame, self.rotFrame)
@@ -319,11 +303,8 @@ class GraspFoam(smach.State):
             
         self.gripperPoseEstimator.suppressImageEstimation(self.armName)
             
-        #self.ravenArm.openGripper(duration=1)
-        self.ravenArm.setGripper(-.2, duration=3)
+        self.ravenArm.closeGripper()
         
-        # try out because if foam dropped, will get better thresholding with this on
-        #self.gripperPoseEstimator.enableImageEstimation(self.armName)
         
         return 'graspedFoam'
     
@@ -364,6 +345,7 @@ class CheckPickup(smach.State):
         rospy.sleep(.5)
         
         if not self.foamInGripper:
+            self.ravenArm.openGripper()
             return 'foamNotInGripper'
         
         return 'foamInGripper'
@@ -612,16 +594,16 @@ class MasterClass(object):
         if armName == Constants.Arm.Left:
             self.gripperName = Constants.Arm.Left
             self.toolframe = Constants.Frames.LeftTool
-            self.holdingPose = receptaclePose + [.03, -.03, .02]
-            self.otherHoldingPose = receptaclePose + [-.03, -.03, .02]
+            self.holdingPose = receptaclePose + [.04, -.03, .02]
+            self.otherHoldingPose = receptaclePose + [-.04, -.03, .02]
             self.otherArmName = Constants.Arm.Right
             self.otherGripperName = Constants.Arm.Right
             self.otherToolframe = Constants.Frames.RightTool
         elif armName == Constants.Arm.Right:
             self.gripperName = Constants.Arm.Right
             self.toolframe = Constants.Frames.RightTool
-            self.holdingPose = receptaclePose + [-.03, -.03, .02]
-            self.otherHoldingPose = receptaclePose + [.03, -.03, .02]
+            self.holdingPose = receptaclePose + [-.04, -.03, .02]
+            self.otherHoldingPose = receptaclePose + [.04, -.03, .02]
             self.otherArmName = Constants.Arm.Left
             self.otherGripperName = Constants.Arm.Left
             self.otherToolframe = Constants.Frames.LeftTool
@@ -656,8 +638,8 @@ class MasterClass(object):
 
         # height offset for foam
         self.foamOffset = dict()
-        self.foamOffset['L'] = [0.,.003,.011] #.004
-        self.foamOffset['R'] = [0.,.003,.013]
+        self.foamOffset['L'] = [0.,.003,.008] #.004
+        self.foamOffset['R'] = [0.,.003,.008]
 
         # in cm/sec, I think
         self.openLoopSpeed = .01
@@ -838,8 +820,8 @@ def mainloop():
         ravenPlanner.env.SetViewer('qtcoin')
     
     receptaclePose = tfx.pose([-.066, .006, -.139], tfx.tb_angles(-90,90,0),frame='0_link')
-    closedGraspValues = {Constants.Arm.Left : 0., Constants.Arm.Right : -30.}
-    master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose)
+    closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -25.}
+    master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues)
     master.run()
 
 

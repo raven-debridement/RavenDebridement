@@ -99,7 +99,7 @@ class GripperPoseEstimator():
     def _ravenStateCallback(self,msg):
         if self.calcPose:
             prevTime = self.calcPose.values()[0].stamp
-            if tfx.stamp(msg.header.stamp).seconds - prevTime.seconds < 0.1:
+            if tfx.stamp(msg.header.stamp).seconds - prevTime.seconds < 0.2:
                 return
         for arm in self.arms:
             arm_msg = [msg_arm for msg_arm in msg.arms if msg_arm.name == arm][0]

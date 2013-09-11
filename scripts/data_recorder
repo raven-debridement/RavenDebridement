@@ -23,12 +23,17 @@ class DataRecorder(object):
         self.robot_poses = defaultdict(list)
         self.robot_joints = defaultdict(list)
         
+        self.is_recording = True
+        
         for arm in self.arms:
             rospy.Subscriber(Constants.GripperTape.Topic+'_'+arm, PoseStamped, functools.partial(self._tape_pose_cb,arm))
         
         rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._raven_state_cb)
     
     def _tape_pose_cb(self, arm, msg):
+        if not self.is_recording:
+            return
+        
         if self.camera_to_robot_tf is None:
             self.camera_to_robot_tf = tfx.lookupTransform('/0_link', msg.header.frame_id).array
         
@@ -36,6 +41,9 @@ class DataRecorder(object):
         self.camera_poses[arm].append((pose.stamp.seconds,pose.array))
     
     def _raven_state_cb(self, msg):
+        if not self.is_recording:
+            return
+        
         for arm in self.arms:
             arm_msg = [arm_ for arm_ in msg.arms if arm_.name == arm][0]
             pose = tfx.pose(arm_msg.tool.pose,header=msg.header)
@@ -52,17 +60,33 @@ class DataRecorder(object):
             d[key] = getattr(self,key)
         
         pickle.dump(d, fp)
-
+        
+    def stop_recording(self):
+        self.is_recording = False
+        
+    def start_recording(self):
+        self.is_recording = True
 
 def main():
     rospy.init_node('data_recorder',anonymous=True)
     parser = argparse.ArgumentParser()
     
     parser.add_argument('file_name',nargs='?',default='data.pkl')
+    parser.add_argument('--pause',action='store_true')
     
     args = parser.parse_args()
     
     recorder = DataRecorder()
+    
+    if args.pause:
+        recorder.stop_recording()
+        while not rospy.is_shutdown():
+            rospy.loginfo('Press enter to record')
+            raw_input()
+            recorder.start_recording()
+            rospy.loginfo('Press enter to stop recording')
+            raw_input()
+            recorder.stop_recording()
     
     print 'Gathering data...'
     
