@@ -97,12 +97,18 @@ def main():
 	
 	bag_cmd.append('state_machine_transitions')
 	
+	bag_cmd.append('receptacle_pose')
+	
+	bag_cmd.append('/events')
+	
 	for arm in args.arm:
 		bag_cmd.append('tape_pose_%s' % arm)
 		bag_cmd.append('polygon_%s' % arm)
 		bag_cmd.append('estimated_gripper_pose_%s' % arm)
 		bag_cmd.append('found_red_%s' % arm)
 		bag_cmd.append('/master_server_%s/smach/container_status' % arm)
+		bag_cmd.append('/holding_pose_%s' % arm)
+		bag_cmd.append('/foam_offset_%s' % arm)
 		
 	
 	ret = run(bag_cmd)
@@ -127,6 +133,12 @@ class Experiment(object):
 		self.tfs = {}
 		
 		self.raven_trajectory = None
+		
+		self.receptacle_pose = None
+		self.holding_pose = {}
+		self.foam_offset = {}
+		
+		self.events = {}
 		
 		self.calc_pose = defaultdict(list)
 		self.detected_pose = defaultdict(list)
@@ -201,6 +213,16 @@ class Experiment(object):
 				Pose end_R
 				Pose[] traj_R"""
 				self.trajopt.append((stamp(t),[tfx.pose(msg.start_L),tfx.pose(msg.end_L),[tfx.pose(p) for p in msg.traj_L],tfx.pose(msg.start_R),tfx.pose(msg.end_R),[tfx.pose(p) for p in msg.traj_R]]))
+			elif is_topic('receptacle_pose'):
+				self.receptacle_pose = tfx.pose(msg)
+			elif is_topic('holding_pose_'):
+				arm = topic[-1]
+				self.holding_pose[arm] = tfx.pose(msg)
+			elif is_topic('foam_offset_'):
+				arm = topic[-1]
+				self.foam_offset[arm] = tfx.vector(msg)
+			elif is_topic('events'):
+				self.events[stamp(msg)] = msg.data
 		
 		def merge(data,cols=None):
 			def getCols(arm):
@@ -225,6 +247,8 @@ class Experiment(object):
 		trajopt_cols = [(arm,field) for arm in 'LR' for field in ['start','end','traj']]
 		trajopt_cols = pd.MultiIndex.from_tuples(trajopt_cols, names=['arm','field'])
 		self.trajopt = pd.DataFrame.from_items(self.trajopt,orient='index',columns=trajopt_cols)
+		
+		self.events = pd.Series(self.events)
 
 if __name__ == '__main__':
 	main()

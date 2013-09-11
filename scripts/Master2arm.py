@@ -20,7 +20,7 @@ import smach_ros
 smach.set_shutdown_check(rospy.is_shutdown)
 
 from std_msgs.msg import Bool, String
-from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion
+from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion, TransformStamped, Vector3
 from raven_pose_estimator.srv import ThreshRed
 
 from RavenDebridement.Utils import Util
@@ -95,21 +95,26 @@ class ReceptacleToken(object):
         self.tokenHolder = None
     
     def requestToken(self, armName):
+        MasterClass.publish_event('ReceptacleToken_request',armName)
         with self.lock:
             if self.tokenHolder is None or self.tokenHolder == armName:
                 print 'New tokenHolder is %s'%armName
                 self.tokenHolder = armName
+                MasterClass.publish_event('ReceptacleToken_granted',armName)
                 return True
             else:
                 print 'Rejecting request %s'%armName
+                MasterClass.publish_event('ReceptacleToken_rejected',armName)
                 return False
     
     def releaseToken(self, armName):
+        MasterClass.publish_event('ReceptacleToken_release_request',armName)
         with self.lock:
             if self.tokenHolder and self.tokenHolder != armName:
                 raise RuntimeError("Arm %s is trying to release token held by %s!" % (armName, self.tokenHolder))
             print '%s is releasing the token'%armName
             self.tokenHolder = None
+            MasterClass.publish_event('ReceptacleToken_release',armName)
             
     
 class WaitForCompletion(smach.State):
@@ -133,6 +138,7 @@ class WaitForCompletion(smach.State):
             rospy.sleep(0.5)
             
             if poseTraj is None:
+                MasterClass.publish_event('Warning', 'trajopt returned None in WaitForCompletion %s' % self.armName)
                 rospy.loginfo('Warning: trajopt returned None in WaitForCompletion')
         
         return 'success'
@@ -582,6 +588,18 @@ class MasterClass(object):
     START_IN_HOLD_POSE = False
     file_lock = threading.Lock()
     output_file = open('/tmp/master_output.txt','w')
+    event_publisher = None
+    
+    @classmethod
+    def publish_event(cls, *args):
+        if len(args) == 1:
+            s = str(args[0])
+        elif len(args) == 2:
+            s = str(args[0]) + ': ' + str(args[1])
+        else:
+            s = str(args)
+        cls.event_publisher.publish(s)
+        
     
     @classmethod
     def write(cls,*args,**kwargs):
@@ -607,6 +625,9 @@ class MasterClass(object):
             self.otherArmName = Constants.Arm.Left
             self.otherGripperName = Constants.Arm.Left
             self.otherToolframe = Constants.Frames.LeftTool
+        
+        rospy.Publisher('/holding_pose_' % self.armName,PoseStamped).publish(self.holdingPose.msg.PoseStamped())
+        rospy.Publisher('/holding_pose_' % self.otherArmName,PoseStamped).publish(self.otherHoldingPose.msg.PoseStamped())
         
         other_sm_type = None
         #other_sm_type = 'nothing'
@@ -640,20 +661,28 @@ class MasterClass(object):
         self.foamOffset = dict()
         self.foamOffset['L'] = [0.,.003,.008] #.004
         self.foamOffset['R'] = [0.,.003,.008]
+        
+        for k,v in self.foamOffset.iteritems():
+            rospy.Publisher('/foam_offset_%s' % k,Vector3).publish(tfx.vector(v).msg.Vector3())
 
         # in cm/sec, I think
         self.openLoopSpeed = .01
+        MasterClass.publish_event('openLoopSpeed',self.openLoopSpeed)
 
         self.gripperOpenCloseDuration = 7
+        MasterClass.publish_event('gripperOpenCloseDuration',self.gripperOpenCloseDuration)
 
         # for Trajopt planning, 2 steps/cm
         self.stepsPerMeter = 600
+        MasterClass.publish_event('stepsPerMeter',self.stepsPerMeter)
 
         # move no more than 5cm per servo
         self.maxServoDistance = .025
+        MasterClass.publish_event('maxServoDistance',self.maxServoDistance)
         
         # amount moved during CheckPickup
         self.vertAmount = .04
+        MasterClass.publish_event('vertAmount',self.vertAmount)
 
         # debugging outputs
         self.des_pose_pub = rospy.Publisher('desired_pose', PoseStamped)
@@ -820,7 +849,26 @@ def mainloop():
         ravenPlanner.env.SetViewer('qtcoin')
     
     receptaclePose = tfx.pose([-.066, .006, -.139], tfx.tb_angles(-90,90,0),frame='0_link')
+    
+    rospy.Publisher('/receptacle_pose',PoseStamped).publish(receptaclePose.msg.PoseStamped())
+    
+    tf_pub = rospy.Publisher('/tf_save',TransformStamped)
+    
+    basic_frames = ['/tool_base_L','/tool_base_R','/world']
+    camera_frames = ['/left_BC','/right_BC']
+    kinect_frames = ['/camera_link','/camera_rgb_frame','/camera_rgb_optical_frame','/camera_depth','/right_BC']
+    
+    for frame in basic_frames + camera_frames:
+        T = tfx.lookupTransform(frame, '/0_link', wait=20)
+        tf_pub.publish(T.msg.TransformStamped())
+    
+    MasterClass.event_publisher = rospy.Publisher('/events',String)
+    
     closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -25.}
+    
+    MasterClass.publish_event('closed_grasp_L', closedGraspValues[Constants.Arm.Left])
+    MasterClass.publish_event('closed_grasp_R', closedGraspValues[Constants.Arm.Right])
+    
     master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues)
     master.run()
 

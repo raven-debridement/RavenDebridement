@@ -194,7 +194,7 @@ def actual_world_to_ik_world(armId):
     if armId == GOLD_ARM_ID:
         return tfx.transform([[0,1,0],[ -1,0,0],[ 0,0,1]])
     else:
-        return tfx.transform([[0,-1,0],[1,0,0], [0,0,1]],(-0.14858,0.002,0))
+        return tfx.transform([[0,-1,0],[1,0,0], [0,0,1]],(-0.149,0.005,-0.006))
 
 def ik_world_to_actual_world(armId):
     return actual_world_to_ik_world(armId).inverse()
