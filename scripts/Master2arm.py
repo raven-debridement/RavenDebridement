@@ -871,7 +871,9 @@ def mainloop():
     MasterClass.publish_event('closed_grasp_R', closedGraspValues[Constants.Arm.Right])
     
     master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues)
+    MasterClass.publish_event('experiment_start')
     master.run()
+    MasterClass.publish_event('experiment_complete')
 
 
 if __name__ == '__main__':

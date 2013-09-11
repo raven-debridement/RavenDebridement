@@ -105,6 +105,7 @@ def main():
 		bag_cmd.append('tape_pose_%s' % arm)
 		bag_cmd.append('polygon_%s' % arm)
 		bag_cmd.append('estimated_gripper_pose_%s' % arm)
+		bag_cmd.append('estimated_gripper_pose_error_%s' % arm)
 		bag_cmd.append('found_red_%s' % arm)
 		bag_cmd.append('/master_server_%s/smach/container_status' % arm)
 		bag_cmd.append('/holding_pose_%s' % arm)
@@ -143,6 +144,7 @@ class Experiment(object):
 		self.calc_pose = defaultdict(list)
 		self.detected_pose = defaultdict(list)
 		self.estimated_pose = defaultdict(list)
+		self.estimated_pose_error = defaultdict(list)
 		
 		self.gripper_points = defaultdict(list)
 		self.foam_points = []
@@ -195,6 +197,9 @@ class Experiment(object):
 			elif is_topic('estimated_gripper_pose_'):
 				arm = topic[-1]
 				self.estimated_pose[arm].append((stamp(msg),[tfx.pose(msg)]))
+			elif is_topic('estimated_gripper_pose_error_'):
+				arm = topic[-1]
+				self.estimated_pose_error[arm].append((stamp(msg),[tfx.pose(msg)]))
 			elif is_topic('found_red_'):
 				arm = topic[-1]
 				self.found_red[arm].append((stamp(t),[msg.data]))
@@ -241,6 +246,7 @@ class Experiment(object):
 		self.detected_pose = merge(self.detected_pose)
 		self.gripper_points = merge(self.gripper_points,[1,2,3,4])
 		self.estimated_pose = merge(self.estimated_pose)
+		self.estimated_pose_error = merge(self.estimated_pose_error)
 		self.found_red = merge(self.found_red)
 		self.state_transitions = merge(self.state_transitions)
 		
