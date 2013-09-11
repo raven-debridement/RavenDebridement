@@ -223,10 +223,13 @@ class FoamAllocator(object):
     def hasFoam(self, armName, new=False):
         with self.lock:
             if new:
+                rospy.loginfo('Releasing allocation for %s'%armName)
                 self.releaseAllocation(armName)
+                rospy.loginfo('Allocation released for %s'%armName)
             centers = self._getUnallocatedCenters(armName, self._getAllCenters(), new=new)
             foam_found = bool(centers)
             if not foam_found:
+                rospy.loginfo('Foam not found')
                 msg = FoamAllocation()
                 msg.header.stamp = rospy.Time.now()
                 msg.arm = 'HAS_FOAM_FALSE'

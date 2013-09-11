@@ -158,13 +158,14 @@ class AllocateFoam(smach.State):
             pause_func(self)
 
         
-        rospy.loginfo('Allocating foam %s' % self.armName)
+        rospy.loginfo('Checking if foam for allocation')
         rospy.sleep(1)
         
         if not self.foamAllocator.hasFoam(new=True):
             rospy.loginfo('has foam returning false')
             return self.didNotFindFoam()
         
+        rospy.loginfo('Allocating foam %s' % self.armName)
         foamPose = self.foamAllocator.allocateFoam(new=True)
 
         if foamPose is None:
