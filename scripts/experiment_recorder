@@ -17,6 +17,8 @@ import tfx
 
 import datetime
 
+import IPython
+
 def stamp(msg):
 	return tfx.stamp(msg).datetime
 	#datetime.datetime.fromtimestamp(msg.header.stamp.to_sec())
@@ -81,6 +83,8 @@ def main():
 	if args.tf:
 		bag_cmd.append('/tf')
 	
+	bag_cmd.append('/tf_save')
+	
 	if args.command:
 		bag_cmd.append('raven_command')
 	
@@ -120,6 +124,8 @@ import pandas as pd
 
 class Experiment(object):
 	def __init__(self, file):
+		self.tfs = {}
+		
 		self.raven_trajectory = None
 		
 		self.calc_pose = defaultdict(list)
@@ -141,7 +147,13 @@ class Experiment(object):
 		bag = Bag(file)
 		
 		for topic, msg, t in bag.read_messages():
-			if is_topic(topic,'raven_state'):
+			if is_topic(topic,'tf_save'):
+				T = tfx.transform(msg)
+				if T.from_frame == '/0_link':
+					self.tfs[T.to_frame] = T
+				else:
+					self.tfs[T.from_frame] = T
+			elif is_topic(topic,'raven_state'):
 				pass
 			elif is_topic(topic,'raven_command'):
 				pass
@@ -149,7 +161,7 @@ class Experiment(object):
 				"""Header header
 				uint8[] ids
 				Point[] points"""
-				self.foam_points.append((stamp(msg),[tfx.point(p,header=msg.header) for p in msg.points]))
+				self.foam_points.append((stamp(msg),[[tfx.point(p,header=msg.header) for p in msg.points]]))
 			elif is_topic('foam_allocation'):
 				"""Header header
 				string arm
@@ -190,7 +202,29 @@ class Experiment(object):
 				Pose[] traj_R"""
 				self.trajopt.append((stamp(t),[tfx.pose(msg.start_L),tfx.pose(msg.end_L),[tfx.pose(p) for p in msg.traj_L],tfx.pose(msg.start_R),tfx.pose(msg.end_R),[tfx.pose(p) for p in msg.traj_R]]))
 		
-		self.foam_points = pd.DataFrame.from_items(self.foam_points,orient='index',columns=['p1','p2','p3','p4'])
+		def merge(data,cols=None):
+			def getCols(arm):
+				if cols:
+					return [(arm,col) for col in cols]
+				else:
+					return arm
+			d = {arm : pd.DataFrame.from_items(data[arm],orient='index',columns=getCols(arm)) for arm in data.keys()}
+			df = pd.concat(d.values(),axis=1)
+			if cols:
+				df.columns = pd.MultiIndex.from_tuples(df.columns, names=['arm','field'])
+			return df
+		
+		self.foam_points = pd.DataFrame.from_items(self.foam_points,orient='index',columns=['points'])
+		self.foam_allocation = merge(self.foam_allocation,['pose','new'])
+		self.detected_pose = merge(self.detected_pose)
+		self.gripper_points = merge(self.gripper_points,[1,2,3,4])
+		self.estimated_pose = merge(self.estimated_pose)
+		self.found_red = merge(self.found_red)
+		self.state_transitions = merge(self.state_transitions)
+		
+		trajopt_cols = [(arm,field) for arm in 'LR' for field in ['start','end','traj']]
+		trajopt_cols = pd.MultiIndex.from_tuples(trajopt_cols, names=['arm','field'])
+		self.trajopt = pd.DataFrame.from_items(self.trajopt,orient='index',columns=trajopt_cols)
 
 if __name__ == '__main__':
 	main()

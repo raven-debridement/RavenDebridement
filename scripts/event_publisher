@@ -1,0 +1,159 @@
+#!/usr/bin/env python
+
+import roslib
+roslib.load_manifest('std_msgs')
+
+import rospy
+from std_msgs.msg import String
+
+class Getch:
+    """Gets a single character from standard input.  Does not echo to the screen.
+    
+    Example usage:
+    
+    getch = Getch()
+    
+    ch = None
+    while True:
+        ch = getch('Hit a key')
+        if Getch.is_ctrl_c(ch):
+            break
+        print 'got ch:', ch
+    exit = getch.yesno('Are you sure you want to exit?')"""
+    @staticmethod
+    def is_ctrl_c(ch):
+        return ord(ch) == 3
+        
+    class _GetchWindows:
+        def __init__(self):
+            import msvcrt
+    
+        def __call__(self):
+            import msvcrt
+            return msvcrt.getch()
+    class _GetchUnix:
+        def __init__(self):
+            import tty, sys
+    
+        def __call__(self):
+            import sys, tty, termios
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                ch = sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            return ch
+    
+    def __init__(self):
+        try:
+            self.impl = self._GetchWindows()
+        except ImportError:
+            self.impl = self._GetchUnix()
+
+    def __call__(self, prompt=None, yesno=False):
+        if prompt:
+            import sys
+            sys.stdout.write(prompt)
+            sys.stdout.flush()
+        ch = self.impl()
+        if prompt:
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+        if yesno:
+            return ch.lower() == 'y'
+        else:
+            return ch
+    
+    def yesno(self, prompt = None):
+        return self(prompt=prompt, yesno=True)
+
+class EventPublisher(object):
+    def __init__(self):
+        self.events = {}
+        self.input_events = {}
+        self.help_key = 'h'
+        
+        self.getch = Getch()
+        
+        self.publisher = rospy.Publisher('/events',String)
+    
+    def add_event(self, key, event_string, desc=None):
+        key = str(key)
+        if len(key) != 1:
+            raise ValueError("Key %s must be a single character!" % key)
+        self.events[key] = (str(event_string), desc)
+    
+    def add_input_event(self, key, prefix, desc=None):
+        key = str(key)
+        if len(key) != 1:
+            raise ValueError("Key %s must be a single character!" % key)
+        self.input_events[key] = (str(prefix), desc)
+    
+    def set_help_key(self, key):
+        key = str(key)
+        if len(key) != 1:
+            raise ValueError("Key %s must be a single character!" % key)
+        self.help_key = key
+    
+    def print_keys(self,init_blank_line=False):
+        s = []
+        if init_blank_line:
+            s.append('')
+        if self.events:
+            s.append('KEYS:')
+            for key, (event_string, desc) in self.events.iteritems():
+                if desc is None:
+                    desc = event_string
+                s.append('%s: %s' % (key, desc))
+        if self.input_events:
+            s.append('INPUT KEYS:')
+            for key, (prefix, desc) in self.input_events.iteritems():
+                if desc is None:
+                    desc = prefix
+                s.append('%s: %s' % (key, desc))
+        print '\n'.join(s)
+    
+    def publish(self, string):
+        msg = String()
+        msg.data = string
+        self.publisher.publish(msg)
+    
+    def run(self):
+        self.print_keys()
+        while not rospy.is_shutdown():
+            ch = self.getch()
+            if self.getch.is_ctrl_c(ch):
+                break
+            if ch in self.events:
+                self.publish(self.events[ch][0])
+            elif ch in self.input_events:
+                prefix = self.input_events[ch][0]
+                val = raw_input('Enter %s:' % prefix)
+                self.publish('%s: %s' % (prefix, val))
+            elif ch == self.help_key:
+                self.print_keys(init_blank_line=True)
+            else:
+                print 'Unknown key %s' % ch
+
+def test_main():
+    rospy.init_node('event_publisher',anonymous=True)
+    
+    ep = EventPublisher()
+    ep.add_input_event('n', 'name', desc='Experiment name')
+    
+    ep.add_event('a', 'pickup_failure_L', desc='Pickup failure L')
+    ep.add_event('s', 'pickup_failure_R', desc='Pickup failure R')
+    
+    ep.add_event('k', 'drop_failure_L', desc='Drop failure L')
+    ep.add_event('l', 'drop_failure_R', desc='Drop failure R')
+    
+    ep.add_event('x', 'alloc_not_exist', desc="Allocated foam doesn't exist")
+    
+    ep.add_input_event('e', 'estop', desc='E-stop')
+    
+    ep.run()
+
+if __name__ == '__main__':
+    test_main()
