@@ -6,24 +6,7 @@ roslib.load_manifest('std_msgs')
 import rospy
 from std_msgs.msg import String
 
-class Getch:
-    """Gets a single character from standard input.  Does not echo to the screen.
-    
-    Example usage:
-    
-    getch = Getch()
-    
-    ch = None
-    while True:
-        ch = getch('Hit a key')
-        if Getch.is_ctrl_c(ch):
-            break
-        print 'got ch:', ch
-    exit = getch.yesno('Are you sure you want to exit?')"""
-    @staticmethod
-    def is_ctrl_c(ch):
-        return ord(ch) == 3
-        
+class EventPublisher(object):
     class _GetchWindows:
         def __init__(self):
             import msvcrt
@@ -47,37 +30,20 @@ class Getch:
             return ch
     
     def __init__(self):
-        try:
-            self.impl = self._GetchWindows()
-        except ImportError:
-            self.impl = self._GetchUnix()
-
-    def __call__(self, prompt=None, yesno=False):
-        if prompt:
-            import sys
-            sys.stdout.write(prompt)
-            sys.stdout.flush()
-        ch = self.impl()
-        if prompt:
-            sys.stdout.write('\n')
-            sys.stdout.flush()
-        if yesno:
-            return ch.lower() == 'y'
-        else:
-            return ch
-    
-    def yesno(self, prompt = None):
-        return self(prompt=prompt, yesno=True)
-
-class EventPublisher(object):
-    def __init__(self):
+        self.initial_input = []
         self.events = {}
         self.input_events = {}
         self.help_key = 'h'
         
-        self.getch = Getch()
+        try:
+            self.impl = self._GetchWindows()
+        except ImportError:
+            self.impl = self._GetchUnix()
         
         self.publisher = rospy.Publisher('/events',String)
+        
+    def add_initial_input(self, prefix, desc=None):
+        self.initial_input.append((str(prefix),desc))
     
     def add_event(self, key, event_string, desc=None):
         key = str(key)
@@ -121,10 +87,13 @@ class EventPublisher(object):
         self.publisher.publish(msg)
     
     def run(self):
+        def is_ctrl_c(ch):
+            return ord(ch) == 3
+        
         self.print_keys()
         while not rospy.is_shutdown():
             ch = self.getch()
-            if self.getch.is_ctrl_c(ch):
+            if is_ctrl_c(ch):
                 break
             if ch in self.events:
                 self.publish(self.events[ch][0])
@@ -141,7 +110,9 @@ def test_main():
     rospy.init_node('event_publisher',anonymous=True)
     
     ep = EventPublisher()
-    ep.add_input_event('n', 'name', desc='Experiment name')
+    ep.initial_input('name', desc='Experiment name')
+    ep.initial_input('user', desc='User name (or robot)')
+    ep.initial_input('num_foam', desc='Number of foam pieces')
     
     ep.add_event('a', 'pickup_failure_L', desc='Pickup failure L')
     ep.add_event('s', 'pickup_failure_R', desc='Pickup failure R')
