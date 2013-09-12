@@ -11,7 +11,7 @@ from raven_2_msgs.msg import *
 from geometry_msgs.msg import *
 from std_msgs.msg import Header
 
-from visualization_msgs import Marker
+from visualization_msgs.msg import Marker
 
 from RavenDebridement.srv import InvKinSrv
 import RavenDebridement.RavenCommand.kinematics as kin

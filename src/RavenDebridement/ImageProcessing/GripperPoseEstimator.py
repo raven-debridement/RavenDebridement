@@ -25,7 +25,7 @@ class GripperPoseEstimator():
     Used to estimate gripper pose by image processing
     """
 
-    def __init__(self, arms = ['L','R'], calcPosePostAdjustment=None, useSystematicTransform=False):
+    def __init__(self, arms = ['L','R'], calcPosePostAdjustment=None, adjustmentInterpolation=True):
         self.arms = arms
         
         self.truthPose = {}
@@ -37,6 +37,17 @@ class GripperPoseEstimator():
         self.post_adjustment = dict((arm,tfx.identity_tf()) for arm in self.arms)
         self.adjustment_side = dict((arm,'post') for arm in self.arms)
         self.switch_adjustment_update = True
+        self.adjustmentInterpolation = {'pre': 1, 'post': 1}
+        if adjustmentInterpolation is True:
+            self.adjustmentInterpolation['pre'] = self.adjustmentInterpolation['post'] = 0.5
+        elif isinstance(adjustmentInterpolation,dict):
+            self.adjustmentInterpolation['pre'] = adjustmentInterpolation.get('pre',0.5)
+            self.adjustmentInterpolation['post'] = adjustmentInterpolation.get('post',0.5)
+        elif isinstance(adjustmentInterpolation,(list,tuple)):
+            self.adjustmentInterpolation['pre'] = adjustmentInterpolation[0]
+            self.adjustmentInterpolation['post'] = adjustmentInterpolation[1]
+        else:
+            self.adjustmentInterpolation['pre'] = self.adjustmentInterpolation['post'] = adjustmentInterpolation
         
         self.estimateFromImage = dict()
         
@@ -44,8 +55,6 @@ class GripperPoseEstimator():
         if calcPosePostAdjustment:
             for k,v in calcPosePostAdjustment:
                 self.calcPosePostAdjustment[k] = tfx.transform(v,copy=True)
-        
-        self.useSystematicTransform = useSystematicTransform
         
         self.est_pose_pub = {}
         self.pose_error_pub = {}
@@ -93,22 +102,19 @@ class GripperPoseEstimator():
             prev_pre_adjustment = self.pre_adjustment[arm]
             prev_post_adjustment = self.post_adjustment[arm]
             
-            if self.useSystematicTransform:
-                pass
-            else:
-                if self.adjustment_side[arm] == 'pre':
-                    adjustment = deltaTruthPose * (deltaCalcPose * prev_post_adjustment).inverse()
-                    adjustment.orientation = tfx.tb_angles(0,0,0)
-                    adjustment.translation = [0,0,0]
-                    self.pre_adjustment[arm] = adjustment
-                    if self.switch_adjustment_update:
-                        self.adjustment_side[arm] = 'post'
-                elif self.adjustment_side[arm] == 'post':
-                    adjustment = (prev_pre_adjustment * deltaCalcPose).inverse() * deltaTruthPose
-                    #adjustment.translation = [0,0,0]
-                    self.post_adjustment[arm] = adjustment
-                    if self.switch_adjustment_update:
-                        self.adjustment_side[arm] = 'pre'
+            if self.adjustment_side[arm] == 'pre':
+                adjustment = deltaTruthPose * (deltaCalcPose * prev_post_adjustment).inverse()
+                adjustment.orientation = tfx.tb_angles(0,0,0)
+                adjustment.translation = [0,0,0]
+                self.pre_adjustment[arm] = self.pre_adjustment[arm].interpolate(adjustment,self.adjustmentInterpolation['pre'])
+                if self.switch_adjustment_update:
+                    self.adjustment_side[arm] = 'post'
+            elif self.adjustment_side[arm] == 'post':
+                adjustment = (prev_pre_adjustment * deltaCalcPose).inverse() * deltaTruthPose
+                #adjustment.translation = [0,0,0]
+                self.post_adjustment[arm] = self.post_adjustment[arm].interpolate(adjustment,self.adjustmentInterpolation['post'])
+                if self.switch_adjustment_update:
+                    self.adjustment_side[arm] = 'pre'
             
             self.pre_adj_pub[arm].publish(self.pre_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp, check_frame=False))
             self.post_adj_pub[arm].publish(self.post_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp, check_frame=False))

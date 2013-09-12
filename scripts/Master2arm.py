@@ -32,6 +32,7 @@ from RavenDebridement.ImageProcessing.ImageDetection import ImageDetector
 from RavenDebridement.ImageProcessing.FoamAllocator import FoamAllocator,\
     ArmFoamAllocator
 from RavenDebridement.ImageProcessing.GripperPoseEstimator import GripperPoseEstimator
+#from RavenDebridement.ImageProcessing.GripperPoseEstimator2 import GripperPoseEstimator
 
 import threading
 
@@ -347,6 +348,8 @@ class CheckPickup(smach.State):
         n_steps = deltaPose.position.norm * self.stepsPerMeter
         
         deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, startPose=gripperPose, n_steps=n_steps)
+        
+        
         self.ravenArm.executeDeltaPoseTrajectory(deltaPoseTraj,block=True)
         
         rospy.loginfo('Checking for foam')
@@ -628,8 +631,12 @@ class MasterClass(object):
             self.otherGripperName = Constants.Arm.Left
             self.otherToolframe = Constants.Frames.LeftTool
         
-        rospy.Publisher('/holding_pose_%s' % self.armName,PoseStamped).publish(self.holdingPose.msg.PoseStamped())
-        rospy.Publisher('/holding_pose_%s' % self.otherArmName,PoseStamped).publish(self.otherHoldingPose.msg.PoseStamped())
+        holding_pose_pub = rospy.Publisher('/holding_pose_%s' % self.armName,PoseStamped)
+        other_holding_pose_pub = rospy.Publisher('/holding_pose_%s' % self.otherArmName,PoseStamped)
+        
+        rospy.sleep(0.5)
+        holding_pose_pub.publish(self.holdingPose.msg.PoseStamped())
+        other_holding_pose_pub.publish(self.otherHoldingPose.msg.PoseStamped())
         
         other_sm_type = None
         #other_sm_type = 'nothing'
@@ -665,7 +672,9 @@ class MasterClass(object):
         self.foamOffset['R'] = [0.,.003,.006]
         
         for k,v in self.foamOffset.iteritems():
-            rospy.Publisher('/foam_offset_%s' % k,Vector3).publish(tfx.vector(v).msg.Vector3())
+            foam_offset_pub = rospy.Publisher('/foam_offset_%s' % k,Vector3)
+            rospy.sleep(0.5)
+            foam_offset_pub.publish(tfx.vector(v).msg.Vector3())
 
         # in cm/sec, I think
         self.openLoopSpeed = .01
@@ -852,19 +861,21 @@ def mainloop():
     
     receptaclePose = tfx.pose([-.060, .010, -.135], tfx.tb_angles(-90,90,0),frame='0_link')
     
-    rospy.Publisher('/receptacle_pose',PoseStamped).publish(receptaclePose.msg.PoseStamped())
-    
+    receptacle_pose_pub = rospy.Publisher('/receptacle_pose',PoseStamped)
     tf_pub = rospy.Publisher('/tf_save',TransformStamped)
+    MasterClass.event_publisher = rospy.Publisher('/events',String)
+    
+    rospy.sleep(0.5)
+    
+    receptacle_pose_pub.publish(receptaclePose.msg.PoseStamped())
     
     basic_frames = ['/tool_base_L','/tool_base_R','/world']
     camera_frames = ['/left_BC','/right_BC']
     kinect_frames = ['/camera_link','/camera_rgb_frame','/camera_rgb_optical_frame','/camera_depth','/right_BC']
     
-    for frame in basic_frames + camera_frames:
+    for frame in (basic_frames + camera_frames):
         T = tfx.lookupTransform(frame, '/0_link', wait=20)
         tf_pub.publish(T.msg.TransformStamped())
-    
-    MasterClass.event_publisher = rospy.Publisher('/events',String)
     
     closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -25.}
     

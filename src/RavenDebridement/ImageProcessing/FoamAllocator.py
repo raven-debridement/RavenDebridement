@@ -15,6 +15,7 @@ from geometry_msgs.msg import PolygonStamped, PoseStamped
 
 from RavenDebridement.msg import FoamPoints, FoamAllocation
 
+from RavenDebridement.RavenCommand import kinematics
 from RavenDebridement.Utils import Constants as MyConstants
 
 import IPython
@@ -212,7 +213,9 @@ class FoamAllocator(object):
             ok = True
             for allocArm, allocationCenter in self.allocations.iteritems():
                 if allocationCenter is not None and allocationCenter.distance(center) < self.allocationRadius:
-                    ok = ok and (allocArm == armName and new)
+                    ok = ok and (allocArm == armName and new) and \
+                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter,tfx.tb_angles(-90,90,0))) is not None and \
+                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter+[0,0,.05],tfx.tb_angles(-90,90,0))) is not None
                 #if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
                 #        not (not new and allocArm == armName):
                 #    ok = False
