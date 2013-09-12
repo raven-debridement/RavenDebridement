@@ -6,6 +6,8 @@ roslib.load_manifest('std_msgs')
 import rospy
 from std_msgs.msg import String
 
+import sys
+
 class EventPublisher(object):
     class _GetchWindows:
         def __init__(self):
@@ -91,6 +93,26 @@ class EventPublisher(object):
             return ord(ch) == 3
         
         self.print_keys()
+        print ''
+        
+        for prefix, desc in self.initial_input:
+            val = raw_input('Enter %s:' % prefix)
+            self.publish('%s: %s' % (prefix, val))
+        
+        ch = None
+        while ch == 'y' or ch is None:
+            if ch is None:
+                sys.stdout.write('\nAny notes?')
+            else:
+                sys.stdout.write('\nAny more notes?')
+            sys.stdout.flush()
+            ch = self.getch()
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+            if ch == 'y':
+                val = raw_input('Enter note:')
+                self.publish('note: %s' % val)
+        
         while not rospy.is_shutdown():
             ch = self.getch()
             if is_ctrl_c(ch):
@@ -105,6 +127,17 @@ class EventPublisher(object):
                 self.print_keys(init_blank_line=True)
             else:
                 print 'Unknown key %s' % ch
+        
+        ch = None
+        while ch == 'y' or ch is None:
+            sys.stdout.write('\nAny more notes?')
+            sys.stdout.flush()
+            ch = self.getch()
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+            if ch == 'y':
+                val = raw_input('Enter note:')
+                self.publish('note: %s' % val)
 
 def test_main():
     rospy.init_node('event_publisher',anonymous=True)
@@ -129,6 +162,8 @@ def test_main():
     ep.add_event('q', 'alloc_not_exist', desc="Allocated foam doesn't exist")
     
     ep.add_input_event('e', 'estop', desc='E-stop')
+    
+    ep.add_input_event('n', 'note', desc='Add a note')
     
     ep.run()
 
