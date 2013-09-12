@@ -47,10 +47,14 @@ class GripperPoseEstimator():
         
         self.est_pose_pub = {}
         self.pose_error_pub = {}
+        self.pre_adj_pub = {}
+        self.post_adj_pub = {}
         for arm in self.arms:
             rospy.Subscriber(Constants.GripperTape.Topic+'_'+arm, PoseStamped, partial(self._truthCallback,arm))
             self.est_pose_pub[arm] = rospy.Publisher('estimated_gripper_pose_%s'%arm, PoseStamped)
             self.pose_error_pub[arm] = rospy.Publisher('estimated_gripper_pose_error_%s'%arm, PoseStamped)
+            self.pre_adj_pub[arm] = rospy.Publisher('estimated_gripper_pose_pre_adjument_%s'%arm, TransformStamped)
+            self.post_adj_pub[arm] = rospy.Publisher('estimated_gripper_pose_post_adjument_%s'%arm, TransformStamped)
             
         rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._ravenStateCallback)
           
@@ -78,8 +82,8 @@ class GripperPoseEstimator():
         
         if prevTruthPose is not None and prevCalcPose is not None:
             currEstPose = self.estimatedPose[arm][0]
-            poseError = (truthPose.as_tf().inverse() * currEstPose).copy(stamp=truthPose.stamp)
-            self.pose_error_pub[arm].publish(poseError.msg.PoseStamped())
+            poseError = (truthPose.as_tf().inverse() * currEstPose)
+            self.pose_error_pub[arm].publish(poseError.msg.PoseStamped(stamp=truthPose.stamp))
         
             deltaTruthPose = prevTruthPose.as_tf().inverse() * truthPose.as_tf()
             deltaCalcPose = prevCalcPose.as_tf().inverse() * calcPose.as_tf()
@@ -99,6 +103,9 @@ class GripperPoseEstimator():
                 self.post_adjustment[arm] = adjustment
                 if self.switch_adjustment_update:
                     self.adjustment_side[arm] = 'pre'
+            
+            self.pre_adj_pub[arm].publish(self.pre_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp))
+            self.post_adj_pub[arm].publish(self.post_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp))
         
         self.truthPose[arm] = truthPose
         self.calcPoseAtTruth[arm] = calcPose
