@@ -6,7 +6,7 @@ roslib.load_manifest('std_msgs')
 import rospy
 from std_msgs.msg import String
 
-import sys
+import sys, collections
 
 class EventPublisher(object):
     class _GetchWindows:
@@ -33,8 +33,8 @@ class EventPublisher(object):
     
     def __init__(self):
         self.initial_input = []
-        self.events = {}
-        self.input_events = {}
+        self.events = collections.OrderedDict()
+        self.input_events = collections.OrderedDict()
         self.help_key = 'h'
         
         try:
@@ -97,7 +97,7 @@ class EventPublisher(object):
         print ''
         
         for prefix, desc in self.initial_input:
-            val = raw_input('Enter %s:' % prefix)
+            val = raw_input('Enter %s: ' % prefix)
             self.publish('%s: %s' % (prefix, val))
         
         ch = None
