@@ -138,8 +138,9 @@ class WaitForCompletion(smach.State):
             rospy.sleep(0.5)
             
             if poseTraj is None:
-                MasterClass.publish_event('Warning', 'trajopt returned None in WaitForCompletion %s' % self.armName)
-                rospy.loginfo('Warning: trajopt returned None in WaitForCompletion')
+                pass
+                #MasterClass.publish_event('Warning', 'trajopt returned None in WaitForCompletion %s' % self.armName)
+                #rospy.loginfo('Warning: trajopt returned None in WaitForCompletion')
         
         return 'success'
     

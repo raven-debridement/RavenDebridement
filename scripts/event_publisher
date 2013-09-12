@@ -117,10 +117,16 @@ def test_main():
     ep.add_event('a', 'pickup_failure_L', desc='Pickup failure L')
     ep.add_event('s', 'pickup_failure_R', desc='Pickup failure R')
     
+    ep.add_event('z', 'pickup_false_positive_L', desc='Pickup false positive L')
+    ep.add_event('x', 'pickup_false_positive_R', desc='Pickup false positive R')
+    
+    ep.add_event(',', 'drop_en_route_L', desc='Drop en route L')
+    ep.add_event('.', 'drop_en_route_R', desc='Drop en route R')
+    
     ep.add_event('k', 'drop_failure_L', desc='Drop failure L')
     ep.add_event('l', 'drop_failure_R', desc='Drop failure R')
     
-    ep.add_event('x', 'alloc_not_exist', desc="Allocated foam doesn't exist")
+    ep.add_event('q', 'alloc_not_exist', desc="Allocated foam doesn't exist")
     
     ep.add_input_event('e', 'estop', desc='E-stop')
     
