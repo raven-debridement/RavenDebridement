@@ -8,7 +8,7 @@ import tf.transformations as tft
 import tfx
 
 from raven_2_msgs.msg import *
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 
 from RavenDebridement.Utils import Util
 from RavenDebridement.Utils import Constants
@@ -25,7 +25,7 @@ class GripperPoseEstimator():
     Used to estimate gripper pose by image processing
     """
 
-    def __init__(self, arms = ['L','R'], calcPosePostAdjustment=None):
+    def __init__(self, arms = ['L','R'], calcPosePostAdjustment=None, useSystematicTransform=False):
         self.arms = arms
         
         self.truthPose = {}
@@ -44,6 +44,8 @@ class GripperPoseEstimator():
         if calcPosePostAdjustment:
             for k,v in calcPosePostAdjustment:
                 self.calcPosePostAdjustment[k] = tfx.transform(v,copy=True)
+        
+        self.useSystematicTransform = useSystematicTransform
         
         self.est_pose_pub = {}
         self.pose_error_pub = {}
@@ -91,21 +93,25 @@ class GripperPoseEstimator():
             prev_pre_adjustment = self.pre_adjustment[arm]
             prev_post_adjustment = self.post_adjustment[arm]
             
-            if self.adjustment_side[arm] == 'pre':
-                adjustment = deltaTruthPose * (deltaCalcPose * prev_post_adjustment).inverse()
-                adjustment.translation = [0,0,0]
-                self.pre_adjustment[arm] = adjustment
-                if self.switch_adjustment_update:
-                    self.adjustment_side[arm] = 'post'
+            if self.useSystematicTransform:
+                pass
             else:
-                adjustment = (prev_pre_adjustment * deltaCalcPose).inverse() * deltaTruthPose
-                adjustment.translation = [0,0,0]
-                self.post_adjustment[arm] = adjustment
-                if self.switch_adjustment_update:
-                    self.adjustment_side[arm] = 'pre'
+                if self.adjustment_side[arm] == 'pre':
+                    adjustment = deltaTruthPose * (deltaCalcPose * prev_post_adjustment).inverse()
+                    adjustment.orientation = tfx.tb_angles(0,0,0)
+                    adjustment.translation = [0,0,0]
+                    self.pre_adjustment[arm] = adjustment
+                    if self.switch_adjustment_update:
+                        self.adjustment_side[arm] = 'post'
+                elif self.adjustment_side[arm] == 'post':
+                    adjustment = (prev_pre_adjustment * deltaCalcPose).inverse() * deltaTruthPose
+                    #adjustment.translation = [0,0,0]
+                    self.post_adjustment[arm] = adjustment
+                    if self.switch_adjustment_update:
+                        self.adjustment_side[arm] = 'pre'
             
-            self.pre_adj_pub[arm].publish(self.pre_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp))
-            self.post_adj_pub[arm].publish(self.post_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp))
+            self.pre_adj_pub[arm].publish(self.pre_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp, check_frame=False))
+            self.post_adj_pub[arm].publish(self.post_adjustment[arm].msg.TransformStamped(stamp=truthPose.stamp, check_frame=False))
         
         self.truthPose[arm] = truthPose
         self.calcPoseAtTruth[arm] = calcPose
