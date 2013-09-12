@@ -64,6 +64,7 @@ class GripperPoseEstimator():
             #rospy.loginfo('looking up transform')
             tf_msg_to_link0 = tfx.lookupTransform(Constants.Frames.Link0, msg.header.frame_id, wait=5)
             truthPose = tf_msg_to_link0 * tfx.pose(msg)
+            
             #rospy.loginfo('found transform')
             #truthPose = tfx.convertToFrame(msg, Constants.Frames.Link0, ignore_stamp=True)
         except Exception, e:
@@ -77,7 +78,7 @@ class GripperPoseEstimator():
         
         if prevTruthPose is not None and prevCalcPose is not None:
             currEstPose = self.estimatedPose[arm][0]
-            poseErr = (truthPose.as_tf().inverse() * currEstPose).copy(stamp=truthPose.stamp)
+            poseError = (truthPose.as_tf().inverse() * currEstPose).copy(stamp=truthPose.stamp)
             self.pose_error_pub[arm].publish(poseError.msg.PoseStamped())
         
             deltaTruthPose = prevTruthPose.as_tf().inverse() * truthPose.as_tf()

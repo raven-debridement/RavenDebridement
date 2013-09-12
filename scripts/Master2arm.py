@@ -613,16 +613,16 @@ class MasterClass(object):
         if armName == Constants.Arm.Left:
             self.gripperName = Constants.Arm.Left
             self.toolframe = Constants.Frames.LeftTool
-            self.holdingPose = receptaclePose + [.04, -.03, .02]
-            self.otherHoldingPose = receptaclePose + [-.04, -.03, .02]
+            self.holdingPose = receptaclePose + [.04, -.03, .03]
+            self.otherHoldingPose = receptaclePose + [-.04, -.03, .03]
             self.otherArmName = Constants.Arm.Right
             self.otherGripperName = Constants.Arm.Right
             self.otherToolframe = Constants.Frames.RightTool
         elif armName == Constants.Arm.Right:
             self.gripperName = Constants.Arm.Right
             self.toolframe = Constants.Frames.RightTool
-            self.holdingPose = receptaclePose + [-.04, -.03, .02]
-            self.otherHoldingPose = receptaclePose + [.04, -.03, .02]
+            self.holdingPose = receptaclePose + [-.04, -.03, .03]
+            self.otherHoldingPose = receptaclePose + [.04, -.03, .03]
             self.otherArmName = Constants.Arm.Left
             self.otherGripperName = Constants.Arm.Left
             self.otherToolframe = Constants.Frames.LeftTool
@@ -660,8 +660,8 @@ class MasterClass(object):
 
         # height offset for foam
         self.foamOffset = dict()
-        self.foamOffset['L'] = [0.,.003,.008] #.004
-        self.foamOffset['R'] = [0.,.003,.008]
+        self.foamOffset['L'] = [0.,.003,.006] #.004
+        self.foamOffset['R'] = [0.,.003,.006]
         
         for k,v in self.foamOffset.iteritems():
             rospy.Publisher('/foam_offset_%s' % k,Vector3).publish(tfx.vector(v).msg.Vector3())
@@ -682,7 +682,7 @@ class MasterClass(object):
         MasterClass.publish_event('maxServoDistance',self.maxServoDistance)
         
         # amount moved during CheckPickup
-        self.vertAmount = .04
+        self.vertAmount = .05
         MasterClass.publish_event('vertAmount',self.vertAmount)
 
         # debugging outputs
@@ -865,7 +865,7 @@ def mainloop():
     
     MasterClass.event_publisher = rospy.Publisher('/events',String)
     
-    closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -35.}
+    closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -25.}
     
     MasterClass.publish_event('closed_grasp_L', closedGraspValues[Constants.Arm.Left])
     MasterClass.publish_event('closed_grasp_R', closedGraspValues[Constants.Arm.Right])

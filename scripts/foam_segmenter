@@ -319,6 +319,10 @@ class FoamSegmenter():
             threshImg = Util.threshold(image, self.hsvImg, self.threshImg, LOWERHSV, UPPERHSV)
             threshImg2 = Util.threshold(image, self.hsvImg, self.threshImg2, LOWERHSV2, UPPERHSV2)
             cv.Or(threshImg, threshImg2, threshImg)
+            
+            for height in xrange(700, threshImg.height):
+                for width in xrange(threshImg.width):
+                    threshImg[height, width] = 0.0
 
             return threshImg
 

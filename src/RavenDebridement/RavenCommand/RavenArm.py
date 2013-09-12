@@ -72,7 +72,7 @@ class RavenArm:
     # trajectory commands #
     #######################
 
-    def executePoseTrajectory(self, poseTraj, block=True, duration=None, speed=None):
+    def executePoseTrajectory(self, poseTraj, block=True, duration=None, speed=None, ignoreOrientation=False):
         """
         poseTraj is a tuple/list of poses
 
@@ -92,7 +92,7 @@ class RavenArm:
 
         prevPose = None
         for pose in poseTraj:
-            self.goToGripperPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed)
+            self.goToGripperPose(tfx.pose(pose), startPose=prevPose, block=False, duration=duration, speed=speed, ignoreOrientation=ignoreOrientation)
             prevPose = pose
 
         if block:
@@ -120,7 +120,7 @@ class RavenArm:
             return self.blockUntilPaused()
         return True
     
-    def executeDeltaPoseTrajectory(self, deltaPoses, startPose=None, block=True, speed=None):
+    def executeDeltaPoseTrajectory(self, deltaPoses, startPose=None, block=True, speed=None, ignoreOrientation=False):
         """
         Each deltaPose in deltaPoses is with respect to the startPose
         
@@ -133,7 +133,7 @@ class RavenArm:
         
         endPoses = [Util.endPose(startPose, deltaPose, self.commandFrame) for deltaPose in deltaPoses]
             
-        return self.executePoseTrajectory(endPoses, block=block, speed=speed)
+        return self.executePoseTrajectory(endPoses, block=block, speed=speed, ignoreOrientation=ignoreOrientation)
             
 
     def executeStampedDeltaPoseTrajectory(self, stampedDeltaPoses, startPose=None, block=True):
