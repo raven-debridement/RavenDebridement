@@ -11,6 +11,8 @@ from raven_2_msgs.msg import *
 from geometry_msgs.msg import *
 from std_msgs.msg import Header
 
+from visualization_msgs import Marker
+
 from RavenDebridement.srv import InvKinSrv
 import RavenDebridement.RavenCommand.kinematics as kin
 from RavenDebridement.msg import TrajoptCall
@@ -228,6 +230,7 @@ class RavenPlanner:
         self.end_pose_pubs = dict((armName, rospy.Publisher('planner_%s_end' % armName,PoseStamped)) for armName in self.armNames)
         
         self.trajopt_pub = rospy.Publisher('trajopt',TrajoptCall)
+        self.trajopt_marker_pub = rospy.Publisher('trajopt_marker',Marker)
         
         
         self.lock = threading.RLock()
@@ -549,6 +552,24 @@ class RavenPlanner:
                     msg.traj_R = [p.msg.Pose() for p in self.poseTraj[armName]]
         
         self.trajopt_pub.publish(msg)
+        marker = Marker()
+        marker.header.frame_id = '/0_link'
+        marker.header.stamp = rospy.Time.now()
+        marker.type = Marker.POINTS
+        marker.action = Marker.ADD
+        marker.ns = 'trajopt'
+        marker.id = 0
+        marker.scale.x = 0.002
+        marker.scale.y = 0.002
+        marker.color.a = 0.75
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.5
+        for arm in self.poseTraj:
+            for p in self.poseTraj[arm]:
+                marker.points.append(p.position.msg.Point())
+        #marker.lifetime = rospy.Duration(1.5)
+        self.trajopt_marker_pub.publish(marker)
     
     def optimize2(self, n_steps):
         return self.optimize1(n_steps, self.trajStartJoints, self.trajEndJoints)
