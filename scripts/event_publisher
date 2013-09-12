@@ -6,6 +6,8 @@ roslib.load_manifest('std_msgs')
 import rospy
 from std_msgs.msg import String
 
+import sys, collections
+
 class EventPublisher(object):
     class _GetchWindows:
         def __init__(self):
@@ -31,14 +33,14 @@ class EventPublisher(object):
     
     def __init__(self):
         self.initial_input = []
-        self.events = {}
-        self.input_events = {}
+        self.events = collections.OrderedDict()
+        self.input_events = collections.OrderedDict()
         self.help_key = 'h'
         
         try:
-            self.impl = self._GetchWindows()
+            self.getch = self._GetchWindows()
         except ImportError:
-            self.impl = self._GetchUnix()
+            self.getch = self._GetchUnix()
         
         self.publisher = rospy.Publisher('/events',String)
         
@@ -91,6 +93,27 @@ class EventPublisher(object):
             return ord(ch) == 3
         
         self.print_keys()
+        print '***Press %s to see keys again***' % self.help_key
+        print ''
+        
+        for prefix, desc in self.initial_input:
+            val = raw_input('Enter %s: ' % prefix)
+            self.publish('%s: %s' % (prefix, val))
+        
+        ch = None
+        while ch == 'y' or ch is None:
+            if ch is None:
+                sys.stdout.write('\nAny notes?')
+            else:
+                sys.stdout.write('\nAny more notes?')
+            sys.stdout.flush()
+            ch = self.getch()
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+            if ch == 'y':
+                val = raw_input('Enter note: ')
+                self.publish('note: %s' % val)
+        
         while not rospy.is_shutdown():
             ch = self.getch()
             if is_ctrl_c(ch):
@@ -99,20 +122,31 @@ class EventPublisher(object):
                 self.publish(self.events[ch][0])
             elif ch in self.input_events:
                 prefix = self.input_events[ch][0]
-                val = raw_input('Enter %s:' % prefix)
+                val = raw_input('Enter %s: ' % prefix)
                 self.publish('%s: %s' % (prefix, val))
             elif ch == self.help_key:
                 self.print_keys(init_blank_line=True)
             else:
                 print 'Unknown key %s' % ch
+        
+        ch = None
+        while ch == 'y' or ch is None:
+            sys.stdout.write('\nAny more notes?')
+            sys.stdout.flush()
+            ch = self.getch()
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+            if ch == 'y':
+                val = raw_input('Enter note: ')
+                self.publish('note: %s' % val)
 
 def test_main():
     rospy.init_node('event_publisher',anonymous=True)
     
     ep = EventPublisher()
-    ep.initial_input('name', desc='Experiment name')
-    ep.initial_input('user', desc='User name (or robot)')
-    ep.initial_input('num_foam', desc='Number of foam pieces')
+    ep.add_initial_input('name', desc='Experiment name')
+    ep.add_initial_input('user', desc='User name (or robot)')
+    ep.add_initial_input('num_foam', desc='Number of foam pieces')
     
     ep.add_event('a', 'pickup_failure_L', desc='Pickup failure L')
     ep.add_event('s', 'pickup_failure_R', desc='Pickup failure R')
@@ -129,6 +163,8 @@ def test_main():
     ep.add_event('q', 'alloc_not_exist', desc="Allocated foam doesn't exist")
     
     ep.add_input_event('e', 'estop', desc='E-stop')
+    
+    ep.add_input_event('n', 'note', desc='Add a note')
     
     ep.run()
 
