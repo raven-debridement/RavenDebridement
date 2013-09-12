@@ -38,9 +38,9 @@ class EventPublisher(object):
         self.help_key = 'h'
         
         try:
-            self.impl = self._GetchWindows()
+            self.getch = self._GetchWindows()
         except ImportError:
-            self.impl = self._GetchUnix()
+            self.getch = self._GetchUnix()
         
         self.publisher = rospy.Publisher('/events',String)
         
@@ -93,6 +93,7 @@ class EventPublisher(object):
             return ord(ch) == 3
         
         self.print_keys()
+        print '***Press %s to see keys again***' % self.help_key
         print ''
         
         for prefix, desc in self.initial_input:
@@ -110,7 +111,7 @@ class EventPublisher(object):
             sys.stdout.write('\n')
             sys.stdout.flush()
             if ch == 'y':
-                val = raw_input('Enter note:')
+                val = raw_input('Enter note: ')
                 self.publish('note: %s' % val)
         
         while not rospy.is_shutdown():
@@ -121,7 +122,7 @@ class EventPublisher(object):
                 self.publish(self.events[ch][0])
             elif ch in self.input_events:
                 prefix = self.input_events[ch][0]
-                val = raw_input('Enter %s:' % prefix)
+                val = raw_input('Enter %s: ' % prefix)
                 self.publish('%s: %s' % (prefix, val))
             elif ch == self.help_key:
                 self.print_keys(init_blank_line=True)
@@ -136,16 +137,16 @@ class EventPublisher(object):
             sys.stdout.write('\n')
             sys.stdout.flush()
             if ch == 'y':
-                val = raw_input('Enter note:')
+                val = raw_input('Enter note: ')
                 self.publish('note: %s' % val)
 
 def test_main():
     rospy.init_node('event_publisher',anonymous=True)
     
     ep = EventPublisher()
-    ep.initial_input('name', desc='Experiment name')
-    ep.initial_input('user', desc='User name (or robot)')
-    ep.initial_input('num_foam', desc='Number of foam pieces')
+    ep.add_initial_input('name', desc='Experiment name')
+    ep.add_initial_input('user', desc='User name (or robot)')
+    ep.add_initial_input('num_foam', desc='Number of foam pieces')
     
     ep.add_event('a', 'pickup_failure_L', desc='Pickup failure L')
     ep.add_event('s', 'pickup_failure_R', desc='Pickup failure R')
