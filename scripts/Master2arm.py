@@ -628,8 +628,8 @@ class MasterClass(object):
             self.otherGripperName = Constants.Arm.Left
             self.otherToolframe = Constants.Frames.LeftTool
         
-        rospy.Publisher('/holding_pose_' % self.armName,PoseStamped).publish(self.holdingPose.msg.PoseStamped())
-        rospy.Publisher('/holding_pose_' % self.otherArmName,PoseStamped).publish(self.otherHoldingPose.msg.PoseStamped())
+        rospy.Publisher('/holding_pose_%s' % self.armName,PoseStamped).publish(self.holdingPose.msg.PoseStamped())
+        rospy.Publisher('/holding_pose_%s' % self.otherArmName,PoseStamped).publish(self.otherHoldingPose.msg.PoseStamped())
         
         other_sm_type = None
         #other_sm_type = 'nothing'
@@ -850,7 +850,7 @@ def mainloop():
     if args.show_openrave:
         ravenPlanner.env.SetViewer('qtcoin')
     
-    receptaclePose = tfx.pose([-.066, .006, -.139], tfx.tb_angles(-90,90,0),frame='0_link')
+    receptaclePose = tfx.pose([-.060, .010, -.135], tfx.tb_angles(-90,90,0),frame='0_link')
     
     rospy.Publisher('/receptacle_pose',PoseStamped).publish(receptaclePose.msg.PoseStamped())
     
@@ -866,7 +866,7 @@ def mainloop():
     
     MasterClass.event_publisher = rospy.Publisher('/events',String)
     
-    closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -25.}
+    closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -35.}
     
     MasterClass.publish_event('closed_grasp_L', closedGraspValues[Constants.Arm.Left])
     MasterClass.publish_event('closed_grasp_R', closedGraspValues[Constants.Arm.Right])

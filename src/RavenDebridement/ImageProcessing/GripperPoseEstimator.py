@@ -124,6 +124,8 @@ class GripperPoseEstimator():
         if prevTruthPose is None:
             return
         prevCalcPose = self.calcPoseAtTruth[arm]
+        if prevCalcPose is None:
+            return
         pre_adjustment = self.pre_adjustment[arm]
         post_adjustment = self.post_adjustment[arm]
         
