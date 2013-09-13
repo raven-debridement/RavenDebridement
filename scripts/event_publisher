@@ -148,8 +148,8 @@ def test_main():
     ep.add_initial_input('user', desc='User name (or robot)')
     ep.add_initial_input('num_foam', desc='Number of foam pieces')
     
-    ep.add_event('q', 'grasp_failure_L', desc='Pickup failure L')
-    ep.add_event('w', 'grasp_failure_R', desc='Pickup failure R')
+    ep.add_event('q', 'grasp_failure_L', desc='Grasp failure L')
+    ep.add_event('w', 'grasp_failure_R', desc='Grasp failure R')
     
     ep.add_event('a', 'pickup_failure_L', desc='Pickup failure L')
     ep.add_event('s', 'pickup_failure_R', desc='Pickup failure R')
@@ -164,6 +164,7 @@ def test_main():
     ep.add_event('l', 'drop_failure_R', desc='Drop failure R')
     
     ep.add_event('f', 'alloc_not_exist', desc="Allocated foam doesn't exist")
+    ep.add_event('g', 'ik_failure', desc='IK failure')
     
     ep.add_input_event('e', 'estop', desc='E-stop')
     

@@ -5,11 +5,13 @@ import rospy
 import tfx
 import collections
 
+import math
 import operator as op
 import functools
 
 import threading
 
+from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PolygonStamped, PoseStamped
 
@@ -53,6 +55,8 @@ class FoamAllocator(object):
         #self._printThread.start()
         
         self.marker_pub = rospy.Publisher('/foam_allocator_markers', MarkerArray)
+        
+        self.event_pub = rospy.Publisher('/events', String)
         
         self._publishThread = threading.Thread(target=self._publisher)
         self._publishThread.daemon = True
@@ -211,11 +215,19 @@ class FoamAllocator(object):
         unallocCenters = []
         for center in centers:
             ok = True
+            if kinematics.invArmKin(armName, tfx.pose(center,tfx.tb_angles(-90,90,0)), math.pi/4.0) is None:
+                ok = False
+                self.event_pub.publish(String('Cannot allocate foam piece for arm {0} because IK invalid for pose {1}'.format(armNAme,center)))
+            if kinematics.invArmKin(armName, tfx.pose(center+[0,0,.06],tfx.tb_angles(-90,90,0)), math.pi/4.0) is None:
+                ok = False
+                self.event_pub.publish(String('Cannot allocate foam piece for arm {0} because IK invalid for move vertical pose {1}'.format(armName,center+[0,0,.06])))
             for allocArm, allocationCenter in self.allocations.iteritems():
                 if allocationCenter is not None and allocationCenter.distance(center) < self.allocationRadius:
+                    print 'allocationCenter {0}'.format(allocationCenter)
                     ok = ok and (allocArm == armName and new) and \
-                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter,tfx.tb_angles(-90,90,0))) is not None and \
-                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter+[0,0,.05],tfx.tb_angles(-90,90,0))) is not None
+                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter,tfx.tb_angles(-90,90,0)), math.pi/4.0) is not None and \
+                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter+[0,0,.06],tfx.tb_angles(-90,90,0)),math.pi/4.0) is not None
+                        
                 #if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
                 #        not (not new and allocArm == armName):
                 #    ok = False

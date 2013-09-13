@@ -668,7 +668,7 @@ class MasterClass(object):
 
         # height offset for foam
         self.foamOffset = dict()
-        self.foamOffset['L'] = [0.,.0035,.006] #.004
+        self.foamOffset['L'] = [0.,.004,.006] #.004
         self.foamOffset['R'] = [0.,.003,.006]
         
         for k,v in self.foamOffset.iteritems():
