@@ -142,14 +142,18 @@ class WaitForCompletion(smach.State):
                 pass
                 #MasterClass.publish_event('Warning', 'trajopt returned None in WaitForCompletion %s' % self.armName)
                 #rospy.loginfo('Warning: trajopt returned None in WaitForCompletion')
+                
+        MasterClass.publish_event('arm_complete_%s' % self.armName)
         
         return 'success'
     
 class AllocateFoam(smach.State):
-    def __init__(self, armName, foamAllocator, completer=None):
+    def __init__(self, armName, foamAllocator, ravenArm, ravenPlanner, completer=None):
         smach.State.__init__(self, outcomes = ['foamFound','noFoamFound'], input_keys = ['foamOffset'], output_keys = ['foamPose'])
         self.armName = armName
         self.foamAllocator = foamAllocator
+        self.ravenArm = ravenArm
+        self.ravenPlanner = ravenPlanner
         self.completer = completer
         
         self.foam_pub = rospy.Publisher('foam_allocator_%s'%armName, PoseStamped)
@@ -173,12 +177,25 @@ class AllocateFoam(smach.State):
             rospy.loginfo('has foam returning false')
             return self.didNotFindFoam()
         
-        rospy.loginfo('Allocating foam %s' % self.armName)
-        foamPose = self.foamAllocator.allocateFoam(new=True)
-
-        if foamPose is None:
-            return self.didNotFindFoam()
+        rospy.loginfo('Waiting for valid foam allocation %s' % self.armName)
         
+        foamPose = None
+        while foamPose is None:
+            #if not self.foamAllocator.hasFoam(new=True):
+            #    return self.didNotFindFoam()
+            
+            rospy.loginfo('Spinning, waiting for valid foam allocation %s' % self.armName)
+            foamPose = self.foamAllocator.allocateFoam(new=True)
+            rospy.loginfo('Just tried to allocate foam piece %s' % self.armName)
+            
+            endPose = self.ravenArm.getGripperPose()
+            n_steps = 5
+            poseTraj = self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps, block=False)
+            
+            rospy.sleep(.5)
+        
+        rospy.loginfo('Found valid foam allocation %s' % self.armName)
+                
         foamPose = tfx.pose(foamPose) + userdata.foamOffset
         
         self.foam_pub.publish(foamPose.msg.PoseStamped())
@@ -318,12 +335,13 @@ class GraspFoam(smach.State):
         return 'graspedFoam'
     
 class CheckPickup(smach.State):
-    def __init__(self, ravenArm, ravenPlanner, gripperPoseEstimator, vertAmount, commandFrame, stepsPerMeter):
+    def __init__(self, ravenArm, ravenPlanner, gripperPoseEstimator, foamAllocator, vertAmount, commandFrame, stepsPerMeter):
         smach.State.__init__(self, outcomes = ['foamInGripper', 'foamNotInGripper'])
         self.armName = ravenArm.name
         self.ravenArm = ravenArm
         self.ravenPlanner = ravenPlanner
         self.gripperPoseEstimator = gripperPoseEstimator
+        self.foamAllocator = foamAllocator
         self.vertAmount = vertAmount
         self.commandFrame = commandFrame
         self.stepsPerMeter = stepsPerMeter
@@ -339,7 +357,7 @@ class CheckPickup(smach.State):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             
-        rospy.loginfo('Moving vertical')
+        rospy.loginfo('Moving vertical %s' % self.armName)
             
         gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName))
         deltaPose = tfx.pose([0, 0, self.vertAmount], frame=self.commandFrame)
@@ -347,18 +365,20 @@ class CheckPickup(smach.State):
         
         n_steps = deltaPose.position.norm * self.stepsPerMeter
         
+        rospy.loginfo('Getting trajectory for move vertical %s' % self.armName)
         deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, startPose=gripperPose, n_steps=n_steps)
         
-        
+        rospy.loginfo('Executing move vertical trajectory %s' % self.armName)
         self.ravenArm.executeDeltaPoseTrajectory(deltaPoseTraj,block=True)
         
-        rospy.loginfo('Checking for foam')
+        rospy.loginfo('Checking for foam %s' % self.armName)
         rospy.sleep(.5)
         
         if not self.foamInGripper:
             self.ravenArm.openGripper()
             return 'foamNotInGripper'
         
+        self.foamAllocator.releaseAllocation()
         return 'foamInGripper'
     
     
@@ -668,8 +688,8 @@ class MasterClass(object):
 
         # height offset for foam
         self.foamOffset = dict()
-        self.foamOffset['L'] = [0.,.004,.006] #.004
-        self.foamOffset['R'] = [0.,.003,.006]
+        self.foamOffset['L'] = [0.,0,0] #.004
+        self.foamOffset['R'] = [0.,0,0]
         
         for k,v in self.foamOffset.iteritems():
             foam_offset_pub = rospy.Publisher('/foam_offset_%s' % k,Vector3)
@@ -746,7 +766,7 @@ class MasterClass(object):
         def arm(s):
             return '{0}_{1}'.format(s, armName)
         
-        smach.StateMachine.add(arm('allocateFoam'), AllocateFoam(armName, foamArmAllocator, completer=self.completer),
+        smach.StateMachine.add(arm('allocateFoam'), AllocateFoam(armName, foamArmAllocator, ravenArm, self.ravenPlanner,completer=self.completer),
                                transitions = {'foamFound' : arm('planTrajToFoam'),
                                               'noFoamFound' : arm('waitForOtherArmToComplete')})
         smach.StateMachine.add(arm('waitForOtherArmToComplete'), WaitForCompletion(ravenArm, self.ravenPlanner, self.completer),
@@ -761,7 +781,7 @@ class MasterClass(object):
                                               'notReachedFoam' : arm('planTrajToFoam')})
         smach.StateMachine.add(arm('graspFoam'), GraspFoam(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, self.gripperOpenCloseDuration),
                                transitions = {'graspedFoam' : arm('checkPickup')})
-        smach.StateMachine.add(arm('checkPickup'), CheckPickup(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, self.vertAmount, transFrame, self.stepsPerMeter),
+        smach.StateMachine.add(arm('checkPickup'), CheckPickup(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, foamArmAllocator, self.vertAmount, transFrame, self.stepsPerMeter),
                                    transitions = {'foamInGripper' : arm('planTrajToReceptacle'),
                                                  'foamNotInGripper' : arm('allocateFoam')})
         smach.StateMachine.add(arm('planTrajToReceptacle'), PlanTrajToReceptacle(holdingPose, ravenArm, self.gripperPoseEstimator,
@@ -780,6 +800,7 @@ class MasterClass(object):
                                transitions = {'findNextFoamPiece' : arm('allocateFoam')})
     
     def run(self):
+        MasterClass.publish_event('experiment_start')
         self.ravenArm.start()
         self.otherRavenArm.start()
         
@@ -819,6 +840,8 @@ class MasterClass(object):
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             if not self.sm.is_running() and not self.other_sm.is_running():
+                MasterClass.publish_event('experiment_complete')
+                rospy.sleep(0.5)
                 rospy.signal_shutdown('state machines finished')
                 break
             rate.sleep()
@@ -877,15 +900,13 @@ def mainloop():
         T = tfx.lookupTransform(frame, '/0_link', wait=20)
         tf_pub.publish(T.msg.TransformStamped())
     
-    closedGraspValues = {Constants.Arm.Left : -5., Constants.Arm.Right : -25.}
+    closedGraspValues = {Constants.Arm.Left : -15., Constants.Arm.Right : -30.}
     
     MasterClass.publish_event('closed_grasp_L', closedGraspValues[Constants.Arm.Left])
     MasterClass.publish_event('closed_grasp_R', closedGraspValues[Constants.Arm.Right])
     
     master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues)
-    MasterClass.publish_event('experiment_start')
     master.run()
-    MasterClass.publish_event('experiment_complete')
 
 
 if __name__ == '__main__':

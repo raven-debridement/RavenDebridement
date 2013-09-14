@@ -657,7 +657,7 @@ class RavenPlanner:
             self.trajRequest[armName] = True
         if self.trajEndJoints[armName] is None:
             print armName, startPose, endPose, kwargs
-            raise Exception()
+            raise Exception() 
     
     def getTrajectoryFromPose(self, armName, endPose, startPose=None, endGrasp = None, n_steps=50, block=True, approachDir=None):
         self.waitForState()
@@ -683,6 +683,7 @@ class RavenPlanner:
         if block:
             print 'waiting for arm {} traj'.format(armName)
             while self.trajRequest[armName] and not rospy.is_shutdown():
+                #print 'trajRequests {0}'.format(self.trajRequest)
                 rospy.sleep(0.05)
              
             return self.deltaPoseTraj[armName]   
