@@ -683,7 +683,6 @@ class RavenPlanner:
         if block:
             print 'waiting for arm {} traj'.format(armName)
             while self.trajRequest[armName] and not rospy.is_shutdown():
-                #print 'trajRequests {0}'.format(self.trajRequest)
                 rospy.sleep(0.05)
              
             return self.deltaPoseTraj[armName]   

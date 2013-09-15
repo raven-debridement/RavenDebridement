@@ -57,6 +57,7 @@ class FoamSegmenter():
         self.boxBottomLeft = tfx.point([.24,0,0],frame='/world')
         self.boxTopRight = tfx.convertToFrame(tfx.point([0,0,0]), '/world', '/frame_top_R', wait=10)
         self.boxTopRight.x = 2.*self.boxTopRight.x
+        self.boxTopRight.z = .09
 
         self.pointpub = rospy.Publisher(topic, FoamPoints)
         self.markerpub = rospy.Publisher(topic+'_marker_array', MarkerArray)
@@ -177,8 +178,8 @@ class FoamSegmenter():
                 #x,y = self.getCenterOfMass(splitContour)
                 xys.append((x,bottomHeight-40))
         
-        Util.showImage(origImg, "image")
-        print xys
+        #Util.showImage(origImg, "image")
+        #print xys
         
         if self.show_image:
             Util.showImage(image, "left")
@@ -219,10 +220,6 @@ class FoamSegmenter():
             
             pose = tfx.pose(point.list)
             pose.frame = point.frame
-            print 'point'
-            print point
-            print 'pose'
-            print pose
             
             points.append(tfx.convertToFrame(point, pt.header.frame_id))
             marker = Util.createMarker(tfx.pose(point).msg.PoseStamped(),id=1,lifetime=2)

@@ -28,8 +28,9 @@ class FoamAllocator(object):
         self.ignore = False
         
         self.currentCenters = []
+        self.newCenters = False
         
-        self.centerHistoryLength = tfx.duration(1)
+        self.centerHistoryLength = tfx.duration(5)
         self.centerHistory = {}
         
         self.centerCombiningThreshold = 0.007
@@ -43,7 +44,7 @@ class FoamAllocator(object):
         
         self.lock = threading.RLock()
         
-        self.estPoseExclusionRadius = 0.03
+        self.estPoseExclusionRadius = 0.035
         self.estPose = {arm : None for arm in 'LR'}
         self.estPoseSubs = { arm : rospy.Subscriber('/estimated_gripper_pose_%s' % arm, PoseStamped,functools.partial(self._estPoseCallback,arm)) for arm in 'LR'}
         
@@ -186,6 +187,7 @@ class FoamAllocator(object):
             
             t = tfx.stamp(msg.header.stamp)
             all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
+            self.centerHistory[t] = all_pts
             pts = []
             for pt in all_pts:
                 for _, estPose in self.estPose.iteritems():
@@ -195,8 +197,8 @@ class FoamAllocator(object):
                             break
                 else:
                     pts.append(pt)
-            self.centerHistory[t] = pts
             self.currentCenters = pts
+            self.newCenters = True
     
     def _getAllCenters(self):
         with self.lock:
@@ -217,6 +219,7 @@ class FoamAllocator(object):
         numAlloc = collections.defaultdict(int)
         for center in centers:
             ok = True
+            print tfx.pose(center)
             foam_ik_valid = kinematics.invArmKin(armName, tfx.pose(center,tfx.tb_angles(-90,90,0)), math.pi/4.0) is not None
             lift_ik_valid = kinematics.invArmKin(armName, tfx.pose(center+[0,0,.06],tfx.tb_angles(-90,90,0)), math.pi/4.0) is not None
             if not foam_ik_valid:
@@ -242,14 +245,17 @@ class FoamAllocator(object):
                 return True
             numAlloc.pop(armName,None)
             for n in numAlloc.values():
-                if n > 1:
+                if n >= 1:
                     return True
             return False
         else:
             return unallocCenters
     
     def hasFoam(self, armName, new=False):
+            
+            
         with self.lock:
+            
             if new:
                 rospy.loginfo('Releasing allocation for %s'%armName)
                 self.releaseAllocation(armName)
@@ -264,16 +270,20 @@ class FoamAllocator(object):
             return foam_found
     
     def allocateFoam(self, armName, new=False):
+        
+        with self.lock:
+            self.newCenters = False
+        timeout = Util.Timeout(2)
+        timeout.start()
+        while not self.newCenters:
+            rospy.sleep(0.1)
+            if timeout.hasTimedOut():
+                return None
         with self.lock:
             
-            startTime = tfx.time.now()
-            timeout = Util.Timeout(2)
-            timeout.start()
-            while not self.currentCenters:
-                rospy.sleep(0.1)
-                if timeout.hasTimedOut():
-                    return None
             centers = self._getUnallocatedCenters(armName, self.currentCenters, new=new)
+            print 'centers %s' % armName
+            print centers
                     
             if not centers:
                 msg = FoamAllocation()
