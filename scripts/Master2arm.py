@@ -174,6 +174,8 @@ class AllocateFoam(smach.State):
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
+            
+        self.gripperPoseEstimator.enableImageEstimation(self.armName)
 
         self.receptacleLock.releaseToken(self.armName)
         self.ravenArm.setGripper(1.2, duration=1)
@@ -729,8 +731,8 @@ class MasterClass(object):
         holding_pose_pub.publish(self.holdingPose.msg.PoseStamped())
         other_holding_pose_pub.publish(self.otherHoldingPose.msg.PoseStamped())
         
-        other_sm_type = None
-        #other_sm_type = 'nothing'
+        #other_sm_type = None
+        other_sm_type = 'nothing'
         #other_sm_type = 'updown'
         
         if other_sm_type is None:
@@ -809,9 +811,8 @@ class MasterClass(object):
         
         with self.other_sm:
             if other_sm_type == 'nothing':
-                smach.StateMachine.add(otherArm('doNothing'), DoNothing(self.otherRavenArm, self.ravenPlanner, completer=self.completer),
-                                       transitions = {'success': otherArm('doNothing'),
-                                                      'complete' : 'success',
+                smach.StateMachine.add(otherArm('waitForOtherArmToComplete'), WaitForCompletion(self.otherRavenArm, self.ravenPlanner, completer=self.completer),
+                                       transitions = {'success': 'success',
                                                       'failure' : 'failure'})
             elif other_sm_type == 'updown':
                 smach.StateMachine.add(otherArm('moveUp'), Move(self.otherRavenArm, self.ravenPlanner, [0,0,.01], completer=self.completer),
