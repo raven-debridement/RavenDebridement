@@ -1,3 +1,7 @@
+"""
+DEPRECATED: see raven_planner in raven_2_trajectory
+"""
+
 #!/usr/bin/env python
 
 

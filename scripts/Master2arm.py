@@ -23,16 +23,15 @@ from std_msgs.msg import Bool, String
 from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion, TransformStamped, Vector3
 from raven_pose_estimator.srv import ThreshRed
 
-from RavenDebridement.Utils import Util
-from RavenDebridement.Utils import Constants
-from RavenDebridement.RavenCommand.RavenArm import RavenArm
-from RavenDebridement.RavenCommand.RavenPlanner2 import RavenPlanner, transformRelativePoseForIk
-#from RavenDebridement.RavenCommand.RavenBSP import RavenPlannerBSP
-from RavenDebridement.ImageProcessing.ImageDetection import ImageDetector
+from raven_2_utils import raven_util
+from raven_2_utils import raven_constants
+from raven_2_trajectory.raven_arm import RavenArm
+from raven_2_trajectory.raven_planner import RavenPlanner, transformRelativePoseForIk
+from raven_2_vision.gripper_pose_estimator import GripperPoseEstimator
+
 from RavenDebridement.ImageProcessing.FoamAllocator import FoamAllocator,\
     ArmFoamAllocator
-from RavenDebridement.ImageProcessing.GripperPoseEstimator import GripperPoseEstimator
-#from RavenDebridement.ImageProcessing.GripperPoseEstimator2 import GripperPoseEstimator
+
 
 import threading
 
@@ -182,7 +181,7 @@ class AllocateFoam(smach.State):
             
         gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName)).copy()
         
-        deltaPose = Util.deltaPose(gripperPose, self.holdingPose, self.transFrame, self.rotFrame)
+        deltaPose = raven_util.deltaPose(gripperPose, self.holdingPose, self.transFrame, self.rotFrame)
         
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
         rospy.loginfo('Planning to hold pose %s' % self.armName)
@@ -269,11 +268,11 @@ class PlanTrajToFoam(smach.State):
         userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
         
         
-        deltaPose = Util.deltaPose(gripperPose, foamPose, self.transFrame, self.rotFrame)
+        deltaPose = raven_util.deltaPose(gripperPose, foamPose, self.transFrame, self.rotFrame)
              
         rospy.loginfo('Planning trajectory from gripper to object')
         
-        endPoseForPub = Util.endPose(gripperPose, deltaPose, frame=Constants.Frames.Link0)
+        endPoseForPub = raven_util.endPose(gripperPose, deltaPose, frame=raven_constants.Frames.Link0)
         self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
 
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
@@ -314,14 +313,14 @@ class MoveTowardsFoam(smach.State):
             
         transBound = .008
         rotBound = float("inf")
-        if Util.withinBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
             rospy.loginfo('Reached foam piece')
             return 'reachedFoam'
         
         outerTransBound = .015
         outerRotBound = float("inf")
         maxInOuterThreshold = 7
-        if Util.withinBounds(gripperPose, foamPose, outerTransBound, outerRotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, foamPose, outerTransBound, outerRotBound, self.transFrame, self.rotFrame):
             userdata.numInOuterThreshold += 1
             if userdata.numInOuterThreshold > maxInOuterThreshold:
                 MasterClass.publish_event('move_towards_foam_timeout_%s' % self.armName)
@@ -340,7 +339,7 @@ class MoveTowardsFoam(smach.State):
         else:
             endTrajStep = -1
             
-        self.midPosePub.publish((Util.endPose(gripperPose,deltaPoseTraj[endTrajStep]).msg.PoseStamped()))
+        self.midPosePub.publish((raven_util.endPose(gripperPose,deltaPoseTraj[endTrajStep]).msg.PoseStamped()))
             
         truncDeltaPoseTraj = deltaPoseTraj[:endTrajStep]
         
@@ -412,7 +411,7 @@ class CheckPickup(smach.State):
         gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName))
         deltaPose = tfx.pose([0, 0, self.vertAmount], frame=self.commandFrame)
         
-        #endPose = Util.endPose(gripperPose, deltaPose)
+        #endPose = raven_util.endPose(gripperPose, deltaPose)
         endPose = gripperPose + [0, 0, self.vertAmount]
         
         n_steps = deltaPose.position.norm * self.stepsPerMeter
@@ -468,11 +467,11 @@ class PlanTrajToReceptacle(smach.State):
         
         #objectPose.orientation = gripperPose.orientation
         
-        deltaPose = Util.deltaPose(gripperPose, holdingPose, self.transFrame, self.rotFrame)
+        deltaPose = raven_util.deltaPose(gripperPose, holdingPose, self.transFrame, self.rotFrame)
              
         rospy.loginfo('Planning trajectory from gripper to receptacle')
         
-        endPoseForPub = Util.endPose(gripperPose, deltaPose, frame=Constants.Frames.Link0)
+        endPoseForPub = raven_util.endPose(gripperPose, deltaPose, frame=raven_constants.Frames.Link0)
         self.endPosePub.publish(endPoseForPub.msg.PoseStamped())
 
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
@@ -515,7 +514,7 @@ class MoveTowardsReceptacle(smach.State):
             
         transBound = .006
         rotBound = float("inf")
-        if Util.withinBounds(gripperPose, holdingPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, holdingPose, transBound, rotBound, self.transFrame, self.rotFrame):
             if self.receptacleLock.requestToken(self.armName):
                 rospy.loginfo('Near open receptacle. Moving in for drop-off.')
                 return 'receptacleAvailable'
@@ -580,11 +579,11 @@ class DropFoamInReceptacle(smach.State):
         gripperPose = self.gripperPoseEstimator.getGripperPose(self.armName)
         calcGripperPose = startPose = tfx.pose(self.ravenArm.getGripperPose())
         
-        deltaPose = Util.deltaPose(gripperPose, receptaclePose, self.transFrame, self.rotFrame)
+        deltaPose = raven_util.deltaPose(gripperPose, receptaclePose, self.transFrame, self.rotFrame)
              
         rospy.loginfo('Planning trajectory from gripper to receptacle')
 
-        endPose = Util.endPose(calcGripperPose, deltaPose, frame=Constants.Frames.Link0)
+        endPose = raven_util.endPose(calcGripperPose, deltaPose, frame=raven_constants.Frames.Link0)
         self.ravenArm.goToGripperPose(endPose, block=True)
         
         self.ravenArm.setGripper(1.2)
@@ -707,22 +706,22 @@ class MasterClass(object):
     def __init__(self, armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues=dict()):
         self.armName = armName
         
-        if armName == Constants.Arm.Left:
-            self.gripperName = Constants.Arm.Left
-            self.toolframe = Constants.Frames.LeftTool
+        if armName == raven_constants.Arm.Left:
+            self.gripperName = raven_constants.Arm.Left
+            self.toolframe = raven_constants.Frames.LeftTool
             self.holdingPose = receptaclePose + [.04, -.03, .03]
             self.otherHoldingPose = receptaclePose + [-.04, -.03, .03]
-            self.otherArmName = Constants.Arm.Right
-            self.otherGripperName = Constants.Arm.Right
-            self.otherToolframe = Constants.Frames.RightTool
-        elif armName == Constants.Arm.Right:
-            self.gripperName = Constants.Arm.Right
-            self.toolframe = Constants.Frames.RightTool
+            self.otherArmName = raven_constants.Arm.Right
+            self.otherGripperName = raven_constants.Arm.Right
+            self.otherToolframe = raven_constants.Frames.RightTool
+        elif armName == raven_constants.Arm.Right:
+            self.gripperName = raven_constants.Arm.Right
+            self.toolframe = raven_constants.Frames.RightTool
             self.holdingPose = receptaclePose + [-.04, -.03, .03]
             self.otherHoldingPose = receptaclePose + [.04, -.03, .03]
-            self.otherArmName = Constants.Arm.Left
-            self.otherGripperName = Constants.Arm.Left
-            self.otherToolframe = Constants.Frames.LeftTool
+            self.otherArmName = raven_constants.Arm.Left
+            self.otherGripperName = raven_constants.Arm.Left
+            self.otherToolframe = raven_constants.Frames.LeftTool
         
         holding_pose_pub = rospy.Publisher('/holding_pose_%s' % self.armName,PoseStamped)
         other_holding_pose_pub = rospy.Publisher('/holding_pose_%s' % self.otherArmName,PoseStamped)
@@ -753,8 +752,8 @@ class MasterClass(object):
         self.receptacleLock = ReceptacleToken()
         
         # translation frame
-        self.transFrame = Constants.Frames.Link0
-        self.otherTransFrame = Constants.Frames.Link0
+        self.transFrame = raven_constants.Frames.Link0
+        self.otherTransFrame = raven_constants.Frames.Link0
         # rotation frame
         self.rotFrame = self.toolframe
         self.otherRotFrame = self.otherToolframe
@@ -930,7 +929,7 @@ class MasterClass(object):
 
 def mainloop():
     rospy.init_node('master_node',anonymous=False)
-    armName = Constants.Arm.Right
+    armName = raven_constants.Arm.Right
     
     import argparse
     parser = argparse.ArgumentParser()
@@ -955,8 +954,8 @@ def mainloop():
         
     
     foamAllocator = FoamAllocator()
-    gripperPoseEstimator = GripperPoseEstimator(Constants.Arm.Both)
-    ravenPlanner = RavenPlanner(Constants.Arm.Both,withWorkspace=args.with_workspace)
+    gripperPoseEstimator = GripperPoseEstimator(raven_constants.Arm.Both)
+    ravenPlanner = RavenPlanner(raven_constants.Arm.Both,withWorkspace=args.with_workspace)
     
     if args.show_openrave:
         ravenPlanner.env.SetViewer('qtcoin')
@@ -979,10 +978,10 @@ def mainloop():
         T = tfx.lookupTransform(frame, '/0_link', wait=20)
         tf_pub.publish(T.msg.TransformStamped())
     
-    closedGraspValues = {Constants.Arm.Left : -15., Constants.Arm.Right : -25.}
+    closedGraspValues = {raven_constants.Arm.Left : -15., raven_constants.Arm.Right : -25.}
     
-    MasterClass.publish_event('closed_grasp_L', closedGraspValues[Constants.Arm.Left])
-    MasterClass.publish_event('closed_grasp_R', closedGraspValues[Constants.Arm.Right])
+    MasterClass.publish_event('closed_grasp_L', closedGraspValues[raven_constants.Arm.Left])
+    MasterClass.publish_event('closed_grasp_R', closedGraspValues[raven_constants.Arm.Right])
     
     master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues)
     master.run()

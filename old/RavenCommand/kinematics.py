@@ -1,3 +1,7 @@
+"""
+DEPRECATED: current version in raven_2_control
+"""
+
 import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
