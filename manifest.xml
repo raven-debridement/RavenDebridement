@@ -16,13 +16,13 @@
   <depend package="geometry_msgs"/>
   <depend package="std_msgs"/>
   <depend package="sensor_msgs"/>
-  <depend package="ar_pose"/>
 
   <depend package="bullet"/>
   
   <depend package="raven_2_msgs"/>
   <depend package="raven_2_trajectory"/>
   <depend package="raven_2_control"/>
+  <depend package="raven_2_utils"/>
   <depend package="tfx"/>
   <depend package="tf_conversions"/>
   <depend package="dynamic_reconfigure"/>

@@ -1,3 +1,7 @@
+"""
+DEPRECATED: current version in raven_2_utils
+"""
+
 #!/usr/bin/env python
 
 """

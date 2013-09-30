@@ -1,3 +1,7 @@
+"""
+DEPRECATED: current version in raven_2_trajectory
+"""
+
 #!/usr/bin/env python
 
 import roslib; roslib.load_manifest('RavenDebridement')
