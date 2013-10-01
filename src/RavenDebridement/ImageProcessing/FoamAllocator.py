@@ -17,9 +17,9 @@ from geometry_msgs.msg import PolygonStamped, PoseStamped
 
 from RavenDebridement.msg import FoamPoints, FoamAllocation
 
-from RavenDebridement.RavenCommand import kinematics
-from RavenDebridement.Utils import Constants as MyConstants
-from RavenDebridement.Utils import Util
+from raven_2_utils import raven_util
+from raven_2_utils import raven_constants
+from raven_2_control import kinematics
 
 import IPython
 
@@ -186,7 +186,7 @@ class FoamAllocator(object):
             self._filterCenterHistory()
             
             t = tfx.stamp(msg.header.stamp)
-            all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
+            all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),raven_constants.Frames.Link0) for pt in msg.points])#,header=msg.header
             self.centerHistory[t] = all_pts
             pts = []
             for pt in all_pts:
@@ -273,7 +273,7 @@ class FoamAllocator(object):
         
         with self.lock:
             self.newCenters = False
-        timeout = Util.Timeout(2)
+        timeout = raven_util.Timeout(2)
         timeout.start()
         while not self.newCenters:
             rospy.sleep(0.1)
@@ -292,7 +292,7 @@ class FoamAllocator(object):
                 self.allocation_pub.publish(msg)
                 return None
             
-            if armName == MyConstants.Arm.Left:
+            if armName == raven_constants.Arm.Left:
                 cmp = op.gt
             else:
                 cmp = op.lt
@@ -305,7 +305,7 @@ class FoamAllocator(object):
             self.allocations[armName] = best
             
             
-            best = tfx.convertToFrame(best,MyConstants.Frames.Link0)
+            best = tfx.convertToFrame(best,raven_constants.Frames.Link0)
             print 'returning new allocation', armName, best
             self._printState()
             

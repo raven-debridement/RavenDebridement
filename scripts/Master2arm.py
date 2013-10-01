@@ -730,8 +730,8 @@ class MasterClass(object):
         holding_pose_pub.publish(self.holdingPose.msg.PoseStamped())
         other_holding_pose_pub.publish(self.otherHoldingPose.msg.PoseStamped())
         
-        #other_sm_type = None
-        other_sm_type = 'nothing'
+        other_sm_type = None
+        #other_sm_type = 'nothing'
         #other_sm_type = 'updown'
         
         if other_sm_type is None:
