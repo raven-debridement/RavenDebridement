@@ -3,7 +3,7 @@ import rospy
 roslib.load_manifest('RavenDebridement')
 import tfx
 
-from RavenDebridement.RavenCommand.RavenArm import RavenArm
+from raven_2_trajectory.raven_arm import RavenArm
 
 import IPython
 

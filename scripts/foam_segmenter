@@ -3,12 +3,15 @@
 import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
+import message_filters
 
 import RavenDebridement.foam_util as Util
 
 from RavenDebridement.msg import FoamPoints
 
 import cv
+import numpy
+import scipy.cluster.vq
 
 from sensor_msgs.msg import Image, CameraInfo
 from stereo_msgs.msg import DisparityImage
@@ -32,9 +35,9 @@ LOWERHSV2 = cv.Scalar(170, 120, 50)
 UPPERHSV2 = cv.Scalar(180, 255, 255)
 
 class FoamSegmenter():
-    def __init__(self, left_camera, right_camera, disparity, topic, num_objects=None, show_image=False, track=False):
-        self.image = {'l': None, 'r': None}
-        self.info = {'l': None, 'r': None}
+    def __init__(self, left_camera, right_camera, rgb_camera, depth_camera, disparity, topic, num_objects=None, show_image=False, track=False):
+        self.image = {'l': None, 'r': None, 'b':None, 'd':None}
+        self.info = {'l': None, 'r': None, 'b':None, 'd':None}
         self.bridge = cv_bridge.CvBridge()
         self.calculating = False
         self.foundCentroidInLeft = False
@@ -69,6 +72,12 @@ class FoamSegmenter():
         rospy.Subscriber(right_camera + "/camera_info", CameraInfo, self.rightInfoCallback)
         rospy.Subscriber(disparity, DisparityImage, self.disparityCallback)
         rospy.Subscriber(left_camera + "/image_rect_color", Image, self.leftImageCallback, queue_size = 1)
+        
+        
+        rospy.Subscriber(rgb_camera + "/camera_info", CameraInfo, self.rgbInfoCallback)
+        rospy.Subscriber(depth_camera + "/camera_info", CameraInfo, self.depthInfoCallback)
+        rospy.Subscriber(rgb_camera + "/image_rect_color", Image, self.rgbImageCallback, queue_size = 1)
+        rospy.Subscriber(depth_camera + "/image_rect", Image, self.depthImageCallback, queue_size = 1)
         #rospy.Subscriber(right_camera + "/image_rect_color", Image, self.rightImageCallback, queue_size = 1)
         
 
@@ -86,9 +95,197 @@ class FoamSegmenter():
         if self.info['r']:
             return
         self.info['r'] = msg
+    
+    def rgbInfoCallback(self, msg):
+        if self.info['b']:
+            return
+        self.info['b'] = msg
+        self.rhsvImg = cv.CreateImage((msg.width, msg.height), 8, 3)
+        self.rthreshImg = cv.CreateImage((msg.width, msg.height), 8, 1)
+        self.rthreshImg2 = cv.CreateImage((msg.width, msg.height), 8, 1)
+        self.K = numpy.array([msg.K[0:3], msg.K[3:6], msg.K[6:9]])
+        self.invK = numpy.linalg.inv(self.K)
+    
+    def depthInfoCallback(self, msg):
+        if self.info['d']:
+            return
+        self.info['d'] = msg
         
     #def rightImageCallback(self, msg):
     #    self.image['r'] = self.process(msg, 'r')
+    
+    def rgbImageCallback(self, msg):
+        if not self.info['b'] or not self.image['d'] or rospy.is_shutdown():
+            return
+        
+        # Threshold the image
+        self.image['b'] = self.process(msg, 'b')
+        image = self.image['b']
+        if self.show_image:
+            # Uncomment to show the thresholded image
+            Util.showImage(image, "rgbthreshed")
+            
+        foamPoints = numpy.zeros((3,0))
+        for i in xrange(image.width):
+            for j in xrange(image.height):
+                if image[j,i] != 0:
+                    depth = self.image['d'][j, i]
+                    if not numpy.isnan(depth):
+                        p = numpy.array([[depth*i], [depth*j], [depth]])
+                        p = numpy.dot(self.invK, p)
+                        foamPoints = numpy.append(foamPoints, p, axis=1)
+        
+        foamPoints = numpy.transpose(foamPoints)
+        whitened = scipy.cluster.vq.whiten(foamPoints)
+        centroids = scipy.cluster.vq.kmeans(whitened, 6)
+        print foamPoints
+        print centroids
+        
+        """    
+        # find contours
+        storage = cv.CreateMemStorage(0)
+        
+        contours = cv.FindContours(image, storage, mode=cv.CV_RETR_LIST, method=cv.CV_CHAIN_APPROX_SIMPLE)
+
+        if len(contours) == 0:
+            return
+
+        # Find the first contour with length > 60 and get the center
+        color = cv.Scalar(255)
+        holeColor = cv.Scalar(255)
+        maxLevel = 1
+        thickness = cv.CV_FILLED
+        xys = []
+        found = False
+        
+        origImg = self.bridge.imgmsg_to_cv(msg, "bgr8")
+        #cv.DrawContours(origImg, contours, color, holeColor, maxLevel, thickness)
+        #cv.DrawContours(origImg,contours,-1,(0,255,0),3)
+
+        
+        while contours is not None and not rospy.is_shutdown():
+            contour = contours[:]
+            contours = contours.h_next()
+            if len(contour) < 60:
+                continue
+            
+            splitContours = self.splitByAspect(contour)
+            #splitContours = [contour]
+            
+            #y = int(sum(sum([height for width, height in splitContour])/float(len(splitContour)) for splitContour in splitContours)/float(len(splitContours)))
+            
+            import numpy as np
+            for index in range(len(splitContours)):
+                if index != 0: break
+                splitContour = splitContours[index]
+                if len(splitContour) < 60:
+                    continue
+                for x, y in splitContour:
+                    origImg[y,x] = np.array([(index+1)*50,0,0])
+            
+            for splitContour in splitContours:
+                if len(splitContour) == 0:
+                    continue
+                
+                    #cv.Set2D(origImg,x,y,(0,255,0))
+                
+                #found = True
+                cv.FillPoly(image, [splitContour], color)
+                
+                heights = [height for width, height in splitContour]
+                bottomHeight = max(heights) # since inverted
+                
+                #found, self.xClose, self.yClose, xCentroid, yCentroid = Util.find_centroid(image)
+                x = int(sum([width for width, height in splitContour])/float(len(splitContour)))
+                #y = int(sum([height for width, height in splitContour])/float(len(splitContour)))
+                
+                #x,y = self.getCenterOfMass(splitContour)
+                xys.append((x,bottomHeight-40))
+        
+        #Util.showImage(origImg, "image")
+        #print xys
+        
+        if self.show_image:
+            Util.showImage(image, "left")
+        imgmsg = self.bridge.cv_to_imgmsg(image)
+        self.imagepub.publish(imgmsg)
+        
+        points = []
+        marker_array = MarkerArray()
+        for xClose,yClose in xys:
+            # Search for the closest disparity pixel by searching in a square with larger and larger radius
+            disparity = -1000
+            for radius in range(50):
+                x, y, disparity = self.getBoxDisparity((xClose,yClose), radius, image)
+                if disparity > self.minDisparity:
+                    break
+            
+            # Use disparity value to find 3d location of point
+            if disparity <= self.minDisparity:
+                continue
+            
+            pt = Util.convertStereo(x, y , disparity, self.info)
+            print 'pt'
+            print pt
+            point = tfx.convertToFrame(pt, '0_link')
+            #print 'point'
+            #print point
+            
+            
+            if not self.isValidPoint(point):
+                continue
+            
+            
+            if point.z < self.min_z_value:
+                point.z = self.min_z_value
+            
+            #print 'posestamped'
+            #print tfx.pose(point).msg.PoseStamped()
+            
+            pose = tfx.pose(point.list)
+            pose.frame = point.frame
+            
+            points.append(tfx.convertToFrame(point, pt.header.frame_id))
+            marker = Util.createMarker(tfx.pose(point).msg.PoseStamped(),id=1,lifetime=2)
+            marker_array.markers.append(marker)
+        for i in xrange(len(marker_array.markers)):
+            marker_array.markers[i].id = i
+        self.markerpub.publish(marker_array)
+        
+        if not self.track:
+            unique_pts = {}
+            for pt in points:
+                for id, pt_list in unique_pts.iteritems():
+                    if pt_list[0].distance(pt) < self.center_threshold:
+                        pt_list.append(pt)
+                        break
+                else:
+                    unique_pts[len(unique_pts)] = [pt]
+            for k in unique_pts.iterkeys():
+                unique_pts[k] = reduce(operator.add, unique_pts[k])/len(unique_pts[k])
+            self.object_centers = unique_pts.values()
+            
+            # filter out object_centers not in box
+            self.object_centers = [object_center for object_center in self.object_centers if self.isValidPoint(object_center)]
+            
+            msg = FoamPoints()
+            msg.header.frame_id = self.info['l'].header.frame_id
+            msg.header.stamp = rospy.Time.now()
+            
+            for center in self.object_centers:
+                if center is None:
+                    continue
+                msg.points.append(center.msg.Point())
+            self.pointpub.publish(msg)
+            return
+                
+        
+        print '-------------------------'
+        print 'current state:'
+        print 'ctrs', [c.tostring() for c in self.object_centers if c is not None]
+        """
+    def depthImageCallback(self, msg):
+        self.image['d'] = self.bridge.imgmsg_to_cv(msg, desired_encoding="passthrough")
 
     def leftImageCallback(self, msg):
         if not self.info['l'] or not self.disparityImg or rospy.is_shutdown():
@@ -493,6 +690,18 @@ class FoamSegmenter():
                     threshImg[height, width] = 0.0
 
             return threshImg
+        
+        if arm == 'b':
+            Util.showImage(image, "rgb")
+            rthreshImg = self.threshold(image, self.rhsvImg, self.rthreshImg, LOWERHSV, UPPERHSV)
+            rthreshImg2 = self.threshold(image, self.rhsvImg, self.rthreshImg2, LOWERHSV2, UPPERHSV2)
+            cv.Or(rthreshImg, rthreshImg2, rthreshImg)
+            
+            for height in xrange(350, rthreshImg.height):
+                for width in xrange(rthreshImg.width):
+                    rthreshImg[height, width] = 0.0
+
+            return rthreshImg
 
 if __name__ == '__main__':
     rospy.init_node('foam_segmenter_test')
@@ -503,5 +712,7 @@ if __name__ == '__main__':
     args = parser.parse_args(rospy.myargv()[1:])
     left_camera = 'left'
     right_camera = 'right'
-    segmenter = FoamSegmenter(left_camera, right_camera, 'disparity', '/foam_points', **vars(args))
+    rgb_camera = 'camera/rgb'
+    depth_camera = 'camera/depth_registered'
+    segmenter = FoamSegmenter(left_camera, right_camera, rgb_camera, depth_camera, 'disparity', '/foam_points', **vars(args))
     rospy.spin()
