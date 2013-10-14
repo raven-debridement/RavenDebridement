@@ -1,3 +1,7 @@
+"""
+DEPRECATED: current version in raven_2_trajectory
+"""
+
 #!/usr/bin/env python
 
 
@@ -657,7 +661,7 @@ class RavenPlanner:
             self.trajRequest[armName] = True
         if self.trajEndJoints[armName] is None:
             print armName, startPose, endPose, kwargs
-            raise Exception()
+            raise Exception() 
     
     def getTrajectoryFromPose(self, armName, endPose, startPose=None, endGrasp = None, n_steps=50, block=True, approachDir=None):
         self.waitForState()

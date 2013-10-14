@@ -5,18 +5,21 @@ import rospy
 import tfx
 import collections
 
+import math
 import operator as op
 import functools
 
 import threading
 
+from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PolygonStamped, PoseStamped
 
 from RavenDebridement.msg import FoamPoints, FoamAllocation
 
-from RavenDebridement.RavenCommand import kinematics
-from RavenDebridement.Utils import Constants as MyConstants
+from raven_2_utils import raven_util
+from raven_2_utils import raven_constants
+from raven_2_control import kinematics
 
 import IPython
 
@@ -25,14 +28,15 @@ class FoamAllocator(object):
         self.ignore = False
         
         self.currentCenters = []
+        self.newCenters = False
         
-        self.centerHistoryLength = tfx.duration(1)
+        self.centerHistoryLength = tfx.duration(5)
         self.centerHistory = {}
         
         self.centerCombiningThreshold = 0.007
         
         self.allocations = {}
-        self.allocationRadius = 0.02
+        self.allocationRadius = 0.03
         
         self.waitForFoamDuration = tfx.duration(5)
         
@@ -40,7 +44,7 @@ class FoamAllocator(object):
         
         self.lock = threading.RLock()
         
-        self.estPoseExclusionRadius = 0.03
+        self.estPoseExclusionRadius = 0.035
         self.estPose = {arm : None for arm in 'LR'}
         self.estPoseSubs = { arm : rospy.Subscriber('/estimated_gripper_pose_%s' % arm, PoseStamped,functools.partial(self._estPoseCallback,arm)) for arm in 'LR'}
         
@@ -53,6 +57,8 @@ class FoamAllocator(object):
         #self._printThread.start()
         
         self.marker_pub = rospy.Publisher('/foam_allocator_markers', MarkerArray)
+        
+        self.event_pub = rospy.Publisher('/events', String)
         
         self._publishThread = threading.Thread(target=self._publisher)
         self._publishThread.daemon = True
@@ -180,7 +186,8 @@ class FoamAllocator(object):
             self._filterCenterHistory()
             
             t = tfx.stamp(msg.header.stamp)
-            all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),MyConstants.Frames.Link0) for pt in msg.points])#,header=msg.header
+            all_pts = tuple([tfx.convertToFrame(tfx.point(pt,frame=msg.header.frame_id),raven_constants.Frames.Link0) for pt in msg.points])#,header=msg.header
+            self.centerHistory[t] = all_pts
             pts = []
             for pt in all_pts:
                 for _, estPose in self.estPose.iteritems():
@@ -190,8 +197,8 @@ class FoamAllocator(object):
                             break
                 else:
                     pts.append(pt)
-            self.centerHistory[t] = pts
             self.currentCenters = pts
+            self.newCenters = True
     
     def _getAllCenters(self):
         with self.lock:
@@ -207,30 +214,53 @@ class FoamAllocator(object):
                         allCenters.append(center)
             return [tfx.point(center) for center in allCenters]
     
-    def _getUnallocatedCenters(self, armName, centers, new=False):
+    def _getUnallocatedCenters(self, armName, centers, new=False, forHasFoam=False):
         unallocCenters = []
+        numAlloc = collections.defaultdict(int)
         for center in centers:
             ok = True
+            print tfx.pose(center)
+            foam_ik_valid = kinematics.invArmKin(armName, tfx.pose(center,tfx.tb_angles(-90,90,0)), math.pi/4.0) is not None
+            lift_ik_valid = kinematics.invArmKin(armName, tfx.pose(center+[0,0,.06],tfx.tb_angles(-90,90,0)), math.pi/4.0) is not None
+            if not foam_ik_valid:
+                ok = False
+                self.event_pub.publish(String('Cannot allocate foam piece for arm {0} because IK invalid for pose {1}'.format(armName,center)))
+            if not lift_ik_valid:
+                ok = False
+                self.event_pub.publish(String('Cannot allocate foam piece for arm {0} because IK invalid for move vertical pose {1}'.format(armName,center+[0,0,.06])))
             for allocArm, allocationCenter in self.allocations.iteritems():
                 if allocationCenter is not None and allocationCenter.distance(center) < self.allocationRadius:
-                    ok = ok and (allocArm == armName and new) and \
-                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter,tfx.tb_angles(-90,90,0))) is not None and \
-                        kinematics.invArmKin(allocArm, tfx.pose(allocationCenter+[0,0,.05],tfx.tb_angles(-90,90,0))) is not None
+                    print 'allocationCenter {0}'.format(allocationCenter)
+                    numAlloc[allocArm] += 1
+                    ok = ok and (allocArm == armName and new)
+                        
+                        
                 #if allocationCenter is not None and allocationCenter.distance(center) <  self.allocationRadius and \
                 #        not (not new and allocArm == armName):
                 #    ok = False
             if ok:
                 unallocCenters.append(center)
-        return unallocCenters
+        if forHasFoam:
+            if unallocCenters:
+                return True
+            numAlloc.pop(armName,None)
+            for n in numAlloc.values():
+                if n >= 1:
+                    return True
+            return False
+        else:
+            return unallocCenters
     
     def hasFoam(self, armName, new=False):
+            
+            
         with self.lock:
+            
             if new:
                 rospy.loginfo('Releasing allocation for %s'%armName)
                 self.releaseAllocation(armName)
                 rospy.loginfo('Allocation released for %s'%armName)
-            centers = self._getUnallocatedCenters(armName, self._getAllCenters(), new=new)
-            foam_found = bool(centers)
+            foam_found = self._getUnallocatedCenters(armName, self._getAllCenters(), new=new, forHasFoam=True)
             if not foam_found:
                 rospy.loginfo('Foam not found')
                 msg = FoamAllocation()
@@ -240,12 +270,20 @@ class FoamAllocator(object):
             return foam_found
     
     def allocateFoam(self, armName, new=False):
+        
+        with self.lock:
+            self.newCenters = False
+        timeout = raven_util.Timeout(2)
+        timeout.start()
+        while not self.newCenters:
+            rospy.sleep(0.1)
+            if timeout.hasTimedOut():
+                return None
         with self.lock:
             
-            startTime = tfx.time.now()
-            while not self.currentCenters:
-                rospy.sleep(0.1)
             centers = self._getUnallocatedCenters(armName, self.currentCenters, new=new)
+            print 'centers %s' % armName
+            print centers
                     
             if not centers:
                 msg = FoamAllocation()
@@ -254,7 +292,7 @@ class FoamAllocator(object):
                 self.allocation_pub.publish(msg)
                 return None
             
-            if armName == MyConstants.Arm.Left:
+            if armName == raven_constants.Arm.Left:
                 cmp = op.gt
             else:
                 cmp = op.lt
@@ -267,7 +305,7 @@ class FoamAllocator(object):
             self.allocations[armName] = best
             
             
-            best = tfx.convertToFrame(best,MyConstants.Frames.Link0)
+            best = tfx.convertToFrame(best,raven_constants.Frames.Link0)
             print 'returning new allocation', armName, best
             self._printState()
             

@@ -1,3 +1,7 @@
+"""
+DEPRECATED: current version in raven_2_control
+"""
+
 import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
@@ -605,6 +609,8 @@ def invArmKin(armId, pose, grasp, debug=False):
         elif valid_dist[1] < maxValidDist:
             get_joints_with_limits1(d_act,thp_act,g1_act,g2_act);
             get_joints_with_limits2(ths_act[1],the_act[1],thr_act[1]);
+            
+        print 'Invalid pose {0} for arm {1}'.format(pose, armId)
 
         return None;
 

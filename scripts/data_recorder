@@ -11,7 +11,7 @@ from collections import defaultdict
 from raven_2_msgs.msg import RavenState
 from geometry_msgs.msg import PoseStamped
 
-from RavenDebridement.Utils import Constants
+from raven_2_utils import raven_constants
 
 import tfx
 
@@ -22,13 +22,15 @@ class DataRecorder(object):
         self.camera_poses = defaultdict(list)
         self.robot_poses = defaultdict(list)
         self.robot_joints = defaultdict(list)
+        self.estimated_poses = defaultdict(list)
         
         self.is_recording = True
         
         for arm in self.arms:
-            rospy.Subscriber(Constants.GripperTape.Topic+'_'+arm, PoseStamped, functools.partial(self._tape_pose_cb,arm))
+            rospy.Subscriber(raven_constants.GripperTape.Topic+'_'+arm, PoseStamped, functools.partial(self._tape_pose_cb,arm))
+            rospy.Subscriber('/estimated_gripper_pose_'+arm, PoseStamped, functools.partial(self._est_pose_cb,arm))
         
-        rospy.Subscriber(Constants.RavenTopics.RavenState, RavenState, self._raven_state_cb)
+        rospy.Subscriber(raven_constants.RavenTopics.RavenState, RavenState, self._raven_state_cb)
     
     def _tape_pose_cb(self, arm, msg):
         if not self.is_recording:
@@ -39,6 +41,16 @@ class DataRecorder(object):
         
         pose = tfx.pose(msg)
         self.camera_poses[arm].append((pose.stamp.seconds,pose.array))
+    
+    def _est_pose_cb(self, arm, msg):
+        if not self.is_recording:
+            return
+        
+        if self.camera_to_robot_tf is None:
+            self.camera_to_robot_tf = tfx.lookupTransform('/0_link', msg.header.frame_id).array
+        
+        pose = tfx.pose(msg)
+        self.estimated_poses[arm].append((pose.stamp.seconds,pose.array))
     
     def _raven_state_cb(self, msg):
         if not self.is_recording:
@@ -56,7 +68,7 @@ class DataRecorder(object):
             fp = open(fp,'w')
         
         d = {}
-        for key in ['camera_to_robot_tf','camera_poses','robot_poses','robot_joints']:
+        for key in ['camera_to_robot_tf','camera_poses','robot_poses','robot_joints','estimated_poses']:
             d[key] = getattr(self,key)
         
         pickle.dump(d, fp)
