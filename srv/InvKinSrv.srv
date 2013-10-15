@@ -1,6 +1,0 @@
-Header header
-uint8 arm_type # from raven_2_msgs/Constants
-float32 grasp
-geometry_msgs/Pose pose
----
-raven_2_msgs/JointState[] joints
