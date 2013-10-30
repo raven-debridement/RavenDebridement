@@ -11,6 +11,8 @@ import numpy as np
 
 from collections import defaultdict
 
+import gpr_model
+
 import tf
 import tf.transformations as tft
 import tfx
@@ -240,7 +242,7 @@ class AllocateFoam(smach.State):
     
     
 class PlanTrajToFoam(smach.State):
-    def __init__(self, ravenArm, gripperPoseEstimator, ravenPlanner, stepsPerMeter, transFrame, rotFrame):
+    def __init__(self, ravenArm, gripperPoseEstimator, ravenPlanner, errorModel, stepsPerMeter, transFrame, rotFrame):
         smach.State.__init__(self, outcomes = ['success', 'failure','IKFailure'],
                              output_keys = ['deltaPoseTraj','gripperPose'],
                              io_keys = ['foamPose'])
@@ -248,6 +250,7 @@ class PlanTrajToFoam(smach.State):
         self.ravenArm = ravenArm
         self.gripperPoseEstimator = gripperPoseEstimator
         self.ravenPlanner = ravenPlanner
+        self.errorModel = errorModel
         self.stepsPerMeter = stepsPerMeter
         self.transFrame = transFrame
         self.rotFrame = rotFrame
@@ -259,6 +262,7 @@ class PlanTrajToFoam(smach.State):
             pause_func(self)
         
         foamPose = tfx.pose(userdata.foamPose).copy()
+        foamPoseGripperFrame = self.errorModel.predictSinglePose(foamPose, self.armName)
         
         self.gripperPoseEstimator.enableImageEstimation(self.armName)
         rospy.sleep(2) # since some lag
@@ -268,7 +272,7 @@ class PlanTrajToFoam(smach.State):
         userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
         
         
-        deltaPose = raven_util.deltaPose(gripperPose, foamPose, self.transFrame, self.rotFrame)
+        deltaPose = raven_util.deltaPose(gripperPose, foamPoseGripperFrame, self.transFrame, self.rotFrame)
              
         rospy.loginfo('Planning trajectory from gripper to object')
         
@@ -278,7 +282,7 @@ class PlanTrajToFoam(smach.State):
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
         
         try:
-            deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, foamPose, startPose=gripperPose, n_steps=n_steps, approachDir=np.array([0,.1,.9]))
+            deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, foamPoseGripperFrame, startPose=gripperPose, n_steps=n_steps, approachDir=np.array([0,.1,.9]))
         except RuntimeError as e:
             rospy.loginfo(e)
             return 'IKFailure'
@@ -294,10 +298,11 @@ class PlanTrajToFoam(smach.State):
     
     
 class MoveTowardsFoam(smach.State):
-    def __init__(self, ravenArm, maxServoDistance, transFrame, rotFrame):
+    def __init__(self, ravenArm, errorModel, maxServoDistance, transFrame, rotFrame):
         smach.State.__init__(self, outcomes = ['reachedFoam', 'notReachedFoam'], input_keys = ['deltaPoseTraj','gripperPose'], io_keys = ['foamPose','numInOuterThreshold'])
         self.armName = ravenArm.name
         self.ravenArm = ravenArm
+        self.errorModel = errorModel
         self.maxServoDistance = maxServoDistance
         self.transFrame = transFrame
         self.rotFrame = rotFrame
@@ -310,17 +315,18 @@ class MoveTowardsFoam(smach.State):
             
         gripperPose = tfx.pose(userdata.gripperPose).copy()
         foamPose = tfx.pose(userdata.foamPose).copy()
+        foamPoseGripperFrame = self.errorModel.predictSinglePose(foamPose, self.armName)
             
         transBound = .008
         rotBound = float("inf")
-        if raven_util.withinBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, foamPoseGripperFrame, transBound, rotBound, self.transFrame, self.rotFrame):
             rospy.loginfo('Reached foam piece')
             return 'reachedFoam'
         
         outerTransBound = .015
         outerRotBound = float("inf")
         maxInOuterThreshold = 7
-        if raven_util.withinBounds(gripperPose, foamPose, outerTransBound, outerRotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, foamPoseGripperFrame, outerTransBound, outerRotBound, self.transFrame, self.rotFrame):
             userdata.numInOuterThreshold += 1
             if userdata.numInOuterThreshold > maxInOuterThreshold:
                 MasterClass.publish_event('move_towards_foam_timeout_%s' % self.armName)
@@ -506,8 +512,7 @@ class MoveTowardsReceptacle(smach.State):
 
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
-            pause_func(self)
-            
+            pause_func(self)            
             
         gripperPose = tfx.pose(userdata.gripperPose)
         holdingPose = tfx.pose(self.holdingPose)
@@ -703,7 +708,7 @@ class MasterClass(object):
         with cls.file_lock:
             cls.output_file.write(*args,**kwargs)
     
-    def __init__(self, armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues=dict()):
+    def __init__(self, armName, ravenPlanner, foamAllocator, gripperPoseEstimator, errorModel, receptaclePose, closedGraspValues=dict()):
         self.armName = armName
         
         if armName == raven_constants.Arm.Left:
@@ -744,7 +749,8 @@ class MasterClass(object):
         self.ravenArm = RavenArm(self.armName, closedGraspValues.get(self.armName,0.))
         self.ravenPlanner = ravenPlanner
         self.gripperPoseEstimator = gripperPoseEstimator
-        
+        self.errorModel = errorModel
+
         self.foamAllocator = ArmFoamAllocator(self.armName,foamAllocator)
         self.otherFoamAllocator = ArmFoamAllocator(self.otherArmName,foamAllocator)
         
@@ -845,11 +851,11 @@ class MasterClass(object):
                                transitions = {'success' : 'success',
                                               'failure' : 'failure'})
         smach.StateMachine.add(arm('planTrajToFoam'), PlanTrajToFoam(ravenArm, self.gripperPoseEstimator, self.ravenPlanner,
-                                                               self.stepsPerMeter, transFrame, rotFrame),
+                                                               self.errorModel, self.stepsPerMeter, transFrame, rotFrame),
                                transitions = {'success' : arm('moveTowardsFoam'),
                                               'failure' : 'failure',
                                               'IKFailure' : arm('allocateFoam')})
-        smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowardsFoam(ravenArm, self.maxServoDistance, transFrame, rotFrame),
+        smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowardsFoam(ravenArm, self.errorModel, self.maxServoDistance, transFrame, rotFrame),
                                transitions = {'reachedFoam' : arm('graspFoam'),
                                               'notReachedFoam' : arm('planTrajToFoam')})
         smach.StateMachine.add(arm('graspFoam'), GraspFoam(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, self.gripperOpenCloseDuration),
@@ -951,12 +957,14 @@ def mainloop():
         
     if args.start_in_hold_pose:
         MasterClass.START_IN_HOLD_POSE = True
-        
     
     foamAllocator = FoamAllocator()
     gripperPoseEstimator = GripperPoseEstimator(raven_constants.Arm.Both)
     ravenPlanner = RavenPlanner(raven_constants.Arm.Both,withWorkspace=args.with_workspace)
-    
+
+    errorModelFile = rospy.get_param('error_model')
+    errorModel = gpr_model.RavenErrorModel('error_model', training_mode=gpr_model.CAM_TO_FK)
+
     if args.show_openrave:
         ravenPlanner.env.SetViewer('qtcoin')
     
@@ -983,7 +991,7 @@ def mainloop():
     MasterClass.publish_event('closed_grasp_L', closedGraspValues[raven_constants.Arm.Left])
     MasterClass.publish_event('closed_grasp_R', closedGraspValues[raven_constants.Arm.Right])
     
-    master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, receptaclePose, closedGraspValues)
+    master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, errorModel, receptaclePose, closedGraspValues)
     master.run()
 
 
