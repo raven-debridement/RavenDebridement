@@ -1,4 +1,0 @@
-uint8 arm_type # from raven_2_msgs/Constants
-raven_2_msgs/ToolCommandStamped tool_command
----
-raven_2_msgs/JointState[] joints

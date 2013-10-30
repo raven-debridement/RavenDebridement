@@ -11,44 +11,63 @@
     <!-- For AR marker detection -->
     <!--<include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />-->
     
-    <node name="color_gripper_segmenter_R" type="color_gripper_segmenter"  pkg="raven_pose_estimator" output="screen">
+    <node name="color_gripper_segmenter_R" type="color_gripper_segmenter.py"  pkg="raven_2_vision" output="screen">
         <param name="arm" type="string" value="R" />
     </node>
         
-    <node name="color_gripper_segmenter_L" type="color_gripper_segmenter"  pkg="raven_pose_estimator" output="screen">
+    <node name="color_gripper_segmenter_L" type="color_gripper_segmenter.py"  pkg="raven_2_vision" output="screen">
         <param name="arm" type="string" value="L" />
+    </node>
+
+    <node name="gripper_pose_estimator" type="gripper_pose_estimator.py"  pkg="raven_2_vision" output="screen">
     </node>
     
     <include file="$(find RavenDebridement)/launch/IK_server.launch" />
 
     <!-- Viewers for segmented gripper points -->
-    <node pkg="image_view" type="image_view" name="L_blue_left" output="screen">
-        <param name="image" type="string" value="/L_blue_left" />
+    <node pkg="image_view" type="image_view" respawn="false" name="L_blue_left" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'L_blue_left'" />      
+	<remap from="image" to="L_blue_left" />
     </node>
-    <node pkg="image_view" type="image_view" name="L_blue_right" output="screen">
-        <param name="image" type="string" value="/L_blue_right" />
+    <node pkg="image_view" type="image_view" respawn="false" name="L_blue_right" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'L_blue_right'" />      
+	<remap from="image" to="L_blue_right" />
     </node>
-    <node pkg="image_view" type="image_view" name="L_purple_left" output="screen">
-        <param name="image" type="string" value="/L_purple_left" />
+    <node pkg="image_view" type="image_view" respawn="false" name="L_purple_left" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'L_purple_left'" />      
+	<remap from="image" to="L_purple_left" />
     </node>
-    <node pkg="image_view" type="image_view" name="L_purple_right" output="screen">
-        <param name="image" type="string" value="/L_purple_right" />
+    <node pkg="image_view" type="image_view" respawn="false" name="L_purple_right" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'L_purple_right'" />      
+	<remap from="image" to="L_purple_right" />
     </node>
-    <node pkg="image_view" type="image_view" name="R_green_left" output="screen">
-        <param name="image" type="string" value="/R_green_left" />
+    <node pkg="image_view" type="image_view" respawn="false" name="R_green_left" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'R_green_left'" />      
+	<remap from="image" to="R_green_left" />
     </node>
-    <node pkg="image_view" type="image_view" name="R_green_right" output="screen">
-        <param name="image" type="string" value="/R_green_right" />
+    <node pkg="image_view" type="image_view" respawn="false" name="R_green_right" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'R_green_right'" />      
+	<remap from="image" to="R_green_right" />
     </node>
-    <node pkg="image_view" type="image_view" name="R_orange_left" output="screen">
-        <param name="image" type="string" value="/R_orannge_left" />
+    <node pkg="image_view" type="image_view" respawn="false" name="R_orange_left" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'R_orange_left'" />      
+	<remap from="image" to="R_orange_left" />
     </node>
-    <node pkg="image_view" type="image_view" name="R_orange_right" output="screen">
-        <param name="image" type="string" value="/R_orannge_right" />
+    <node pkg="image_view" type="image_view" respawn="false" name="R_orange_right" output="screen">
+	<param name="autosize" type="bool" value="False" />
+	<param name="window_name" type="str" value="'R_orange_right'" />      
+	<remap from="image" to="R_orange_right" />
     </node>
     
     <!-- Foam pose detection -->
-    <node name="foam_poses" type="foam_segmenter" pkg="RavenDebridement" output="screen">
+    <node name="foam_poses" pkg="RavenDebridement" type="foam_segmenter" output="screen">
         <remap from="disparity" to="BC/disparity" />
         <remap from="left/camera_info" to="BC/left/camera_info" />
         <remap from="right/camera_info" to="BC/right/camera_info" />
