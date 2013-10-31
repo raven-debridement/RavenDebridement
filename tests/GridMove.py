@@ -12,13 +12,14 @@ from raven_2_trajectory.raven_arm import RavenArm
 import IPython
 
 class GridMove():
-    def __init__(self, armName, x=.03, y=.05, z=.004, testAngles = False):
+    def __init__(self, armName, rand=False, x=.03, y=.05, z=.004, testAngles = False):
         self.ravenArm = RavenArm(armName)
         
         if armName == 'R':
             self.homePose = tfx.pose([-.12,-.02,-.135],tfx.tb_angles(-90,90,0))
         else:
             self.homePose = tfx.pose([-.03,-.02,-.135],tfx.tb_angles(-90,90,0))
+        self.random = rand
         
         self.x_levels = 3
         self.y_levels = 3
@@ -105,7 +106,9 @@ class GridMove():
         print 'moveByGrid'
         print "GRID", len(grid)
         
-        random.seed(1000)
+        if not self.random:
+            print 'seeded'
+            random.seed(2000)
         random.shuffle(grid)
         homePose = grid[0]
         self.ravenArm.goToGripperPose(homePose)
@@ -135,11 +138,14 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('arm',nargs='?',default='L')
+    parser.add_argument('rand',nargs='?',default=False)
     args = parser.parse_args(rospy.myargv()[1:])
     arm_side = args.arm
     del args.arm
+    rand = args.rand
+    del args.rand
     
     rospy.sleep(2)
-    gm = GridMove(arm_side)
+    gm = GridMove(arm_side, rand)
     gm.run()        
         

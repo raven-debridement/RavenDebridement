@@ -12,6 +12,7 @@ import numpy as np
 from collections import defaultdict
 
 import gpr_model
+import os
 
 import tf
 import tf.transformations as tft
@@ -23,7 +24,6 @@ smach.set_shutdown_check(rospy.is_shutdown)
 
 from std_msgs.msg import Bool, String
 from geometry_msgs.msg import PointStamped, Point, PoseStamped, Quaternion, TransformStamped, Vector3
-from raven_pose_estimator.srv import ThreshRed
 
 from raven_2_utils import raven_util
 from raven_2_utils import raven_constants
@@ -262,8 +262,8 @@ class PlanTrajToFoam(smach.State):
             pause_func(self)
         
         foamPose = tfx.pose(userdata.foamPose).copy()
-        foamPoseGripperFrame = self.errorModel.predictSinglePose(foamPose, self.armName)
-        
+        foamPoseGPCorrected, foamPoseSysCorrected = self.errorModel.predictSinglePose(foamPose, self.armName)
+ 
         self.gripperPoseEstimator.enableImageEstimation(self.armName)
         rospy.sleep(2) # since some lag
         gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName)).copy()
@@ -271,8 +271,7 @@ class PlanTrajToFoam(smach.State):
         
         userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
         
-        
-        deltaPose = raven_util.deltaPose(gripperPose, foamPoseGripperFrame, self.transFrame, self.rotFrame)
+        deltaPose = raven_util.deltaPose(gripperPose, foamPoseGPCorrected, self.transFrame, self.rotFrame)
              
         rospy.loginfo('Planning trajectory from gripper to object')
         
@@ -282,7 +281,7 @@ class PlanTrajToFoam(smach.State):
         n_steps = int(self.stepsPerMeter * deltaPose.position.norm) + 1
         
         try:
-            deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, foamPoseGripperFrame, startPose=gripperPose, n_steps=n_steps, approachDir=np.array([0,.1,.9]))
+            deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, foamPoseGPCorrected, startPose=gripperPose, n_steps=n_steps, approachDir=np.array([0,.1,.9]))
         except RuntimeError as e:
             rospy.loginfo(e)
             return 'IKFailure'
@@ -315,18 +314,18 @@ class MoveTowardsFoam(smach.State):
             
         gripperPose = tfx.pose(userdata.gripperPose).copy()
         foamPose = tfx.pose(userdata.foamPose).copy()
-        foamPoseGripperFrame = self.errorModel.predictSinglePose(foamPose, self.armName)
+        foamPoseGPCorrected, foamPoseSysCorrected = self.errorModel.predictSinglePose(foamPose, self.armName)
             
         transBound = .008
         rotBound = float("inf")
-        if raven_util.withinBounds(gripperPose, foamPoseGripperFrame, transBound, rotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, foamPoseGPCorrected, transBound, rotBound, self.transFrame, self.rotFrame):
             rospy.loginfo('Reached foam piece')
             return 'reachedFoam'
         
         outerTransBound = .015
         outerRotBound = float("inf")
         maxInOuterThreshold = 7
-        if raven_util.withinBounds(gripperPose, foamPoseGripperFrame, outerTransBound, outerRotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, foamPoseGPCorrected, outerTransBound, outerRotBound, self.transFrame, self.rotFrame):
             userdata.numInOuterThreshold += 1
             if userdata.numInOuterThreshold > maxInOuterThreshold:
                 MasterClass.publish_event('move_towards_foam_timeout_%s' % self.armName)
@@ -786,7 +785,7 @@ class MasterClass(object):
         MasterClass.publish_event('stepsPerMeter',self.stepsPerMeter)
 
         # move no more than 5cm per servo
-        self.maxServoDistance = .025
+        self.maxServoDistance = 1.0
         MasterClass.publish_event('maxServoDistance',self.maxServoDistance)
         
         # amount moved during CheckPickup
@@ -963,7 +962,8 @@ def mainloop():
     ravenPlanner = RavenPlanner(raven_constants.Arm.Both,withWorkspace=args.with_workspace)
 
     errorModelFile = rospy.get_param('error_model')
-    errorModel = gpr_model.RavenErrorModel('error_model', training_mode=gpr_model.CAM_TO_FK)
+    errorModelFile = os.path.join(roslib.packages.get_pkg_subdir('raven_2_params', 'data'), errorModelFile)
+    errorModel = gpr_model.RavenErrorModel(errorModelFile, mode=gpr_model.CAM_TO_FK)
 
     if args.show_openrave:
         ravenPlanner.env.SetViewer('qtcoin')
