@@ -11,7 +11,7 @@ import numpy as np
 
 from collections import defaultdict
 
-import gpr_model
+from raven_calibration import gpr_model
 import os
 
 import tf
@@ -264,8 +264,10 @@ class PlanTrajToFoam(smach.State):
         foamPose = tfx.pose(userdata.foamPose).copy()
         foamPoseGPCorrected, foamPoseSysCorrected = self.errorModel.predictSinglePose(foamPose, self.armName)
  
-        self.gripperPoseEstimator.enableImageEstimation(self.armName)
-        rospy.sleep(2) # since some lag
+        # no longer needed because not visual estimation
+        #self.gripperPoseEstimator.enableImageEstimation(self.armName)
+        #rospy.sleep(2) # since some lag
+        
         gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName)).copy()
         
         
@@ -469,8 +471,6 @@ class PlanTrajToReceptacle(smach.State):
         gripperPose = tfx.pose(self.gripperPoseEstimator.getGripperPose(self.armName))
         
         userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
-        
-        #objectPose.orientation = gripperPose.orientation
         
         deltaPose = raven_util.deltaPose(gripperPose, holdingPose, self.transFrame, self.rotFrame)
              
@@ -707,7 +707,7 @@ class MasterClass(object):
         with cls.file_lock:
             cls.output_file.write(*args,**kwargs)
     
-    def __init__(self, armName, ravenPlanner, foamAllocator, gripperPoseEstimator, errorModel, receptaclePose, closedGraspValues=dict()):
+    def __init__(self, armName, ravenPlanner, foamAllocator, gripperPoseEstimator, errorModel, receptaclePose, defaultPoseSpeed, closedGraspValues=dict()):
         self.armName = armName
         
         if armName == raven_constants.Arm.Left:
@@ -726,6 +726,10 @@ class MasterClass(object):
             self.otherArmName = raven_constants.Arm.Left
             self.otherGripperName = raven_constants.Arm.Left
             self.otherToolframe = raven_constants.Frames.LeftTool
+            
+        # in cm/sec
+        self.defaultPoseSpeed = defaultPoseSpeed
+        MasterClass.publish_event('defaultPoseSpeed',self.defaultPoseSpeed)
         
         holding_pose_pub = rospy.Publisher('/holding_pose_%s' % self.armName,PoseStamped)
         other_holding_pose_pub = rospy.Publisher('/holding_pose_%s' % self.otherArmName,PoseStamped)
@@ -745,7 +749,7 @@ class MasterClass(object):
 
         self.listener = tf.TransformListener.instance()
 
-        self.ravenArm = RavenArm(self.armName, closedGraspValues.get(self.armName,0.))
+        self.ravenArm = RavenArm(self.armName, closedGraspValues.get(self.armName,0.), self.defaultPoseSpeed)
         self.ravenPlanner = ravenPlanner
         self.gripperPoseEstimator = gripperPoseEstimator
         self.errorModel = errorModel
@@ -772,10 +776,6 @@ class MasterClass(object):
             foam_offset_pub = rospy.Publisher('/foam_offset_%s' % k,Vector3)
             rospy.sleep(0.5)
             foam_offset_pub.publish(tfx.vector(v).msg.Vector3())
-
-        # in cm/sec, I think
-        self.openLoopSpeed = .01
-        MasterClass.publish_event('openLoopSpeed',self.openLoopSpeed)
 
         self.gripperOpenCloseDuration = 7
         MasterClass.publish_event('gripperOpenCloseDuration',self.gripperOpenCloseDuration)
@@ -809,7 +809,7 @@ class MasterClass(object):
             self.setup_sm(self.armName, self.ravenArm, self.foamAllocator, self.transFrame, self.rotFrame, self.holdingPose)
         
         
-        self.otherRavenArm = RavenArm(self.otherArmName, closedGraspValues.get(self.otherArmName,0.))
+        self.otherRavenArm = RavenArm(self.otherArmName, closedGraspValues.get(self.otherArmName,0.), self.defaultPoseSpeed)
         
         self.other_sm = smach.StateMachine(outcomes=['success','failure'],input_keys=['foamOffset'])
         
@@ -944,6 +944,7 @@ def mainloop():
     parser.add_argument('--start-in-hold-pose',action='store_true')
     parser.add_argument('--show-openrave',action='store_true')
     parser.add_argument('--with-workspace',action='store_true')
+    parser.add_argument('--speed',type=float,default=.01)
     args = parser.parse_args(rospy.myargv()[1:])
     
     if args.pause is not False:
@@ -991,7 +992,7 @@ def mainloop():
     MasterClass.publish_event('closed_grasp_L', closedGraspValues[raven_constants.Arm.Left])
     MasterClass.publish_event('closed_grasp_R', closedGraspValues[raven_constants.Arm.Right])
     
-    master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, errorModel, receptaclePose, closedGraspValues)
+    master = MasterClass(armName, ravenPlanner, foamAllocator, gripperPoseEstimator, errorModel, receptaclePose, args.speed, closedGraspValues)
     master.run()
 
 
