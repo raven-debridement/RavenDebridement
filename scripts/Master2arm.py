@@ -373,20 +373,8 @@ class GraspFoam(smach.State):
     def execute(self, userdata):
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
-        
-        #request traj to allow planning
-        endPose = self.ravenArm.getGripperPose()
-        n_steps = 5
-        try:
-            self.ravenPlanner.getTrajectoryFromPose(self.armName, endPose, n_steps=n_steps, block=False)
-        except RuntimeError as e:
-            rospy.loginfo(e)
-            return 'IKFailure'
-            
-        self.gripperPoseEstimator.suppressImageEstimation(self.armName)
-            
+                    
         self.ravenArm.closeGripper()
-        
         
         return 'graspedFoam'
     
