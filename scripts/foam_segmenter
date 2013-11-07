@@ -124,7 +124,7 @@ class FoamSegmenter():
         if self.show_image:
             # Uncomment to show the thresholded image
             Util.showImage(image, "rgbthreshed")
-            
+            """
         foamPoints = numpy.zeros((3,0))
         for i in xrange(image.width):
             for j in xrange(image.height):
@@ -283,7 +283,7 @@ class FoamSegmenter():
         print '-------------------------'
         print 'current state:'
         print 'ctrs', [c.tostring() for c in self.object_centers if c is not None]
-        """
+        
     def depthImageCallback(self, msg):
         self.image['d'] = self.bridge.imgmsg_to_cv(msg, desired_encoding="passthrough")
 

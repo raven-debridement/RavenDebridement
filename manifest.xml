@@ -19,6 +19,7 @@
 
   <depend package="bullet"/>
   
+  <depend package="raven_2_vision"/>
   <depend package="raven_2_msgs"/>
   <depend package="raven_2_trajectory"/>
   <depend package="raven_2_control"/>
@@ -27,12 +28,11 @@
   <depend package="tf_conversions"/>
   <depend package="dynamic_reconfigure"/>
   <depend package="rospy"/>
+  <depend package="image_geometry"/>
+  <depend package="cv_bridge"/>
 
   <depend package="smach"/>
   <depend package="smach_ros"/>
-
-  <depend package="raven_pose_estimator"/>
-
   
   <export>
     <cpp cflags="-I${prefix}/include" lflags="-L${prefix}/lib"/>

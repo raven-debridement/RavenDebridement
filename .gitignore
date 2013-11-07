@@ -9,5 +9,7 @@ build
 bin
 lib
 srv_gen
+msg_gen
 src/RavenDebridement/srv/
+src/RavenDebridement/msg/
 models/modified

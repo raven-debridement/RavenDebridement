@@ -4,6 +4,9 @@ import roslib
 roslib.load_manifest('RavenDebridement')
 import rospy
 
+import IPython
+from ipdb import launch_ipdb_on_exception
+
 import functools, argparse
 import cPickle as pickle
 from collections import defaultdict
@@ -25,7 +28,10 @@ class DataRecorder(object):
         self.estimated_poses = defaultdict(list)
         
         self.is_recording = True
-        
+        if self.camera_to_robot_tf is None:
+            self.camera_to_robot_tf = tfx.lookupTransform('/0_link', '/left_BC').array
+        print self.camera_to_robot_tf
+ 
         for arm in self.arms:
             rospy.Subscriber(raven_constants.GripperTape.Topic+'_'+arm, PoseStamped, functools.partial(self._tape_pose_cb,arm))
             rospy.Subscriber('/estimated_gripper_pose_'+arm, PoseStamped, functools.partial(self._est_pose_cb,arm))
@@ -35,9 +41,6 @@ class DataRecorder(object):
     def _tape_pose_cb(self, arm, msg):
         if not self.is_recording:
             return
-        
-        if self.camera_to_robot_tf is None:
-            self.camera_to_robot_tf = tfx.lookupTransform('/0_link', msg.header.frame_id).array
         
         pose = tfx.pose(msg)
         self.camera_poses[arm].append((pose.stamp.seconds,pose.array))
@@ -55,13 +58,13 @@ class DataRecorder(object):
     def _raven_state_cb(self, msg):
         if not self.is_recording:
             return
-        
-        for arm in self.arms:
-            arm_msg = [arm_ for arm_ in msg.arms if arm_.name == arm][0]
-            pose = tfx.pose(arm_msg.tool.pose,header=msg.header)
-            self.robot_poses[arm].append((pose.stamp.seconds,pose.array))
-            joints = tuple(j.position for j in arm_msg.joints)
-            self.robot_joints[arm].append((pose.stamp.seconds,joints))
+        with launch_ipdb_on_exception():
+            for arm in self.arms:
+                arm_msg = [arm_ for arm_ in msg.arms if arm_.name == arm][0]
+                pose = tfx.pose(arm_msg.tool.pose,header=msg.header)
+                self.robot_poses[arm].append((pose.stamp.seconds,pose.array))
+                joints = tuple(j.position for j in arm_msg.joints)
+                self.robot_joints[arm].append((pose.stamp.seconds,joints))
     
     def write(self,fp):
         if isinstance(fp,basestring):
@@ -80,15 +83,23 @@ class DataRecorder(object):
         self.is_recording = True
 
 def main():
+    
     rospy.init_node('data_recorder',anonymous=True)
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('file_name',nargs='?',default='data.pkl')
+    parser.add_argument('arm',nargs='?',default=None)
+    parser.add_argument('-file_name',nargs='?',default='data.pkl')
     parser.add_argument('--pause',action='store_true')
     
     args = parser.parse_args()
     
-    recorder = DataRecorder()
+    arms = [args.arm]
+    del args.arm
+    
+    if not arms[0]:
+        arms = ['L', 'R']
+        
+    recorder = DataRecorder(arms=arms)
     
     if args.pause:
         recorder.stop_recording()
