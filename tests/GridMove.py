@@ -12,7 +12,7 @@ from raven_2_trajectory.raven_arm import RavenArm
 import IPython
 
 class GridMove():
-    def __init__(self, armName, rand=False, x=.03, y=.05, z=.004, testAngles = False):
+    def __init__(self, armName, rand=False, x=.03, y=.05, z=.004, testAngles=False, maxPoses=1000):
         self.ravenArm = RavenArm(armName)
         
         if armName == 'R':
@@ -21,13 +21,15 @@ class GridMove():
             self.homePose = tfx.pose([-.03,-.02,-.135],tfx.tb_angles(-90,90,0))
         self.random = rand
         
-        self.x_levels = 3
-        self.y_levels = 3
-        self.z_levels = 5
+        self.x_levels = 5
+        self.y_levels = 5
+        self.z_levels = 7
         
         self.x = x
         self.y = y
         self.z = z
+        
+        self.maxPoses = maxPoses
         
         # generate all angle combinations in order to sample the rotations as well
         self.angles = []
@@ -35,16 +37,16 @@ class GridMove():
         self.angles.append(tfx.tb_angles(-90,90,0))
         
         if testAngles:
-            self.angles.append(tfx.tb_angles(-90,75,0))
-            self.angles.append(tfx.tb_angles(-90,105,0))
+            self.angles.append(tfx.tb_angles(-90,80,0))
+            self.angles.append(tfx.tb_angles(-90,100,0))
             
-            self.angles.append(tfx.tb_angles(-75,90,0))
-            self.angles.append(tfx.tb_angles(-75,75,0))
-            self.angles.append(tfx.tb_angles(-75,105,0))
+            self.angles.append(tfx.tb_angles(-80,90,0))
+            self.angles.append(tfx.tb_angles(-80,80,0))
+            self.angles.append(tfx.tb_angles(-80,100,0))
             
-            self.angles.append(tfx.tb_angles(-105,90,0))
-            self.angles.append(tfx.tb_angles(-105,75,0))
-            self.angles.append(tfx.tb_angles(-105,105,0))
+            self.angles.append(tfx.tb_angles(-100,90,0))
+            self.angles.append(tfx.tb_angles(-100,80,0))
+            self.angles.append(tfx.tb_angles(-100,100,0))
         
         self.grid = []
         self.grid += [self.homePose + [float(i)*(x/self.x_levels),0,0] for i in xrange(self.x_levels)]
@@ -97,7 +99,7 @@ class GridMove():
         
         return grid
         
-    def moveByGrid(self, homePose):
+    def moveByGrid(self, homePose, maxPoses=1000):
         grid = []
         for _ in xrange(self.z_levels):
             homePose.position.z -= self.z
@@ -108,16 +110,21 @@ class GridMove():
         
         if not self.random:
             print 'seeded'
-            random.seed(2000)
+            random.seed(1000)
         random.shuffle(grid)
         homePose = grid[0]
         self.ravenArm.goToGripperPose(homePose)
+        
+        i = 0
         for pose in grid:
             print pose
             rospy.sleep(3)
             if rospy.is_shutdown():
                 return
             self.ravenArm.goToGripperPose(pose)
+            if i > maxPoses:
+                break
+            i = i+1
         
     def run(self):
         self.ravenArm.start()
@@ -126,7 +133,7 @@ class GridMove():
         raw_input()
         
         homePose = self.homePose
-        self.moveByGrid(homePose)
+        self.moveByGrid(homePose, self.maxPoses)
                 
         if rospy.is_shutdown():
             return
@@ -146,6 +153,6 @@ if __name__ == '__main__':
     del args.rand
     
     rospy.sleep(2)
-    gm = GridMove(arm_side, rand)
+    gm = GridMove(arm_side, rand, testAngles=True, maxPoses=200)
     gm.run()        
         

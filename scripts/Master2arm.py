@@ -11,7 +11,6 @@ import numpy as np
 
 from collections import defaultdict
 
-from raven_calibration import gpr_model
 import os
 
 import tf
@@ -30,6 +29,7 @@ from raven_2_utils import raven_constants
 from raven_2_trajectory.raven_arm import RavenArm
 from raven_2_trajectory.raven_planner import RavenPlanner, transformRelativePoseForIk
 from raven_2_vision.gripper_pose_estimator import GripperPoseEstimator
+from raven_2_calibration import gpr_model
 
 from RavenDebridement.ImageProcessing.FoamAllocator import FoamAllocator,\
     ArmFoamAllocator
@@ -263,6 +263,7 @@ class PlanTrajToFoam(smach.State):
         
         foamPose = tfx.pose(userdata.foamPose).copy()
         foamPoseGPCorrected, foamPoseSysCorrected = self.errorModel.predictSinglePose(foamPose, self.armName)
+        foamPoseGPCorrected.position.y = foamPoseGPCorrected.position.y - 0.004
  
         # no longer needed because not visual estimation
         #self.gripperPoseEstimator.enableImageEstimation(self.armName)
@@ -317,7 +318,8 @@ class MoveTowardsFoam(smach.State):
         gripperPose = tfx.pose(userdata.gripperPose).copy()
         foamPose = tfx.pose(userdata.foamPose).copy()
         foamPoseGPCorrected, foamPoseSysCorrected = self.errorModel.predictSinglePose(foamPose, self.armName)
-            
+        foamPoseGPCorrected.position.y = foamPoseGPCorrected.position.y - 0.004
+     
         transBound = .008
         rotBound = float("inf")
         if raven_util.withinBounds(gripperPose, foamPoseGPCorrected, transBound, rotBound, self.transFrame, self.rotFrame):
