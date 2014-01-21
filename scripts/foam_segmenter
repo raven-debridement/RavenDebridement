@@ -225,8 +225,8 @@ class FoamSegmenter():
                 continue
             
             pt = Util.convertStereo(x, y , disparity, self.info)
-            print 'pt'
-            print pt
+            #print 'pt'
+            #print pt
             point = tfx.convertToFrame(pt, '0_link')
             #print 'point'
             #print point
@@ -398,8 +398,8 @@ class FoamSegmenter():
                 continue
             
             pt = Util.convertStereo(x, y , disparity, self.info)
-            print 'pt'
-            print pt
+            #print 'pt'
+            #print pt
             point = tfx.convertToFrame(pt, '0_link')
             #print 'point'
             #print point
