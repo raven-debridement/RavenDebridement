@@ -43,7 +43,7 @@ class GridMove():
         
         self.angles.append(tfx.tb_angles(-90,90,0))
         
-        if testAngles:
+        if False:
             self.angles.append(tfx.tb_angles(-90,80,0))
             self.angles.append(tfx.tb_angles(-90,100,0))
             
@@ -167,6 +167,6 @@ if __name__ == '__main__':
     del args.speed
     
     rospy.sleep(2)
-    gm = GridMove(arm_side, rand, testAngles=True, maxPoses=100, speed=speed)
+    gm = GridMove(arm_side, rand, testAngles=False, maxPoses=100, speed=speed)
     gm.run()        
         

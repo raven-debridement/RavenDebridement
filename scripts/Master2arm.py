@@ -34,7 +34,6 @@ from raven_2_calibration import gpr_model
 from RavenDebridement.ImageProcessing.FoamAllocator import FoamAllocator,\
     ArmFoamAllocator
 
-
 import threading
 
 import IPython
@@ -265,7 +264,7 @@ class PlanTrajToFoam(smach.State):
         
         foamPose = tfx.pose(userdata.foamPose).copy()
         foamPoseGPCorrected, foamPoseSysCorrected = self.errorModel.predictSinglePose(foamPose, self.armName)
-        foamPoseGPCorrected.position.y = foamPoseGPCorrected.position.y# - 0.002
+        # foamPoseGPCorrected.position.y = foamPoseGPCorrected.position.y# - 0.002
  
         # no longer needed because not visual estimation
         #self.gripperPoseEstimator.enableImageEstimation(self.armName)
@@ -276,7 +275,7 @@ class PlanTrajToFoam(smach.State):
         
         userdata.gripperPose = tfx.pose(gripperPose).msg.PoseStamped()
         
-        deltaPose = raven_util.deltaPose(gripperPose, foamPoseGPCorrected, self.transFrame, self.rotFrame)
+        deltaPose = raven_util.deltaPose(gripperPose, foamPose, self.transFrame, self.rotFrame)
              
         rospy.loginfo('Planning trajectory from gripper to object')
         
@@ -322,11 +321,11 @@ class MoveTowardsFoam(smach.State):
         gripperPose = tfx.pose(userdata.gripperPose).copy()
         foamPose = tfx.pose(userdata.foamPose).copy()
         foamPoseGPCorrected, foamPoseSysCorrected = self.errorModel.predictSinglePose(foamPose, self.armName)
-        foamPoseGPCorrected.position.y = foamPoseGPCorrected.position.y# - 0.002
+        #foamPoseGPCorrected.position.y = foamPoseGPCorrected.position.y# - 0.002
      
         transBound = .008
         rotBound = float("inf")
-        if raven_util.withinBounds(gripperPose, foamPoseGPCorrected, transBound, rotBound, self.transFrame, self.rotFrame):
+        if raven_util.withinBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
             rospy.loginfo('Reached foam piece')
             return 'reachedFoam'
         
@@ -655,12 +654,7 @@ class Move(smach.State):
             return 'failure'
         
         self.ravenArm.executePoseTrajectory(poseTraj,block=True)
-
         return 'success'
-    
-    
-    
-
 
 class TransitionPublisher(object):
     def __init__(self):
@@ -966,7 +960,7 @@ def mainloop():
     errorModelFile = os.path.join(roslib.packages.get_pkg_subdir('raven_2_params', 'data'), errorModelFile)
     errorModel = gpr_model.RavenErrorModel(errorModelFile, mode=gpr_model.CAM_TO_FK)
 
-    ravenPlanner = RavenPlanner(raven_constants.Arm.Both, errorModel=errorModel, withWorkspace=args.with_workspace)
+    ravenPlanner = RavenPlanner(raven_constants.Arm.Both, withWorkspace=args.with_workspace)
 
     if args.show_openrave:
         ravenPlanner.env.SetViewer('qtcoin')

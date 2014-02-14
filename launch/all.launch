@@ -8,6 +8,7 @@
     <!-- Creates static transform from 0_link to camera_link (the primesense) -->
     <!---<node pkg="tf" type="static_transform_publisher" name="zero_link_camera_link" args="-0.001 0.269 0.148 -1.500 0.589 0.052 0_link camera_link 100" /> -->
     <node pkg="tf" type="static_transform_publisher" name="zero_link_camera_link" args="-0.005 0.257 0.141 -1.482 0.648 0.084 0_link camera_link 100" />
+      <node pkg="tf" type="static_transform_publisher" name="zero_link_phasespace" args="0.097 1.771 -0.801 -0.304 -0.007 1.562 0_link phasespace 100" />
     
     <!-- For AR marker detection -->
     <!--<include file="$(find stereo_marker_detect)/launch/stereo_detector.launch" />-->

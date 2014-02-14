@@ -47,12 +47,16 @@ class DataRecorder(object):
  
         self.camera_frame = None
         self.robot_frame = None
+        
+        self.camera_msgs = 0
+        self.robot_msgs = 0
+ 
+        rospy.Subscriber(robot_pose_topic, RavenState, self._raven_state_cb)
  
         for arm in self.arms:
             rospy.Subscriber(tracked_pose_topic+'_'+arm, PoseStamped, functools.partial(self._tracked_pose_cb,arm))
             rospy.Subscriber(estimated_pose_topic+'_'+arm, PoseStamped, functools.partial(self._estimated_pose_cb,arm)) # what is this
- 
-        rospy.Subscriber(robot_pose_topic, RavenState, self._raven_state_cb)
+
         
     def _tracked_pose_cb(self, arm, msg):
         if not self.is_recording:
@@ -64,6 +68,7 @@ class DataRecorder(object):
             self.camera_to_robot_tf = tfx.lookupTransform(self.robot_frame, self.camera_frame).array
         elif self.camera_to_robot_tf is not None:
             # store poses, put them in the correct frame
+            self.camera_msgs = self.camera_msgs+1
             pose = tfx.pose(msg)
             self.camera_poses[arm].append((pose.stamp.seconds,self.camera_to_robot_tf.dot(pose.array)))
         
@@ -83,21 +88,63 @@ class DataRecorder(object):
         
         with launch_ipdb_on_exception():
             for arm in self.arms:
+                self.robot_msgs = self.robot_msgs+1
                 arm_msg = [arm_ for arm_ in msg.arms if arm_.name == arm][0]
                 pose = tfx.pose(arm_msg.tool.pose,header=msg.header)
                 self.robot_poses[arm].append((pose.stamp.seconds,pose.array))
                 joints = tuple(j.position for j in arm_msg.joints)
                 self.robot_joints[arm].append((pose.stamp.seconds,joints))
     
-    def write(self,fp):
+    def write(self, fp, synchronized=True):
         print 'Writing to file...'
         
         if isinstance(fp,basestring):
             fp = open(fp,'w')
-            
+        
         d = {}
-        for key in [raven_constants.RavenDataKeys.CAM_ROBOT_TF_KEY, raven_constants.RavenDataKeys.CAM_POSE_KEY, raven_constants.RavenDataKeys.ROBOT_POSE_KEY, raven_constants.RavenDataKeys.ROBOT_JOINT_KEY,'estimated_poses', raven_constants.RavenDataKeys.CONVERTED_KEY]:
-            d[key] = getattr(self,key)
+        if synchronized:
+            for key in [raven_constants.RavenDataKeys.CAM_ROBOT_TF_KEY, raven_constants.RavenDataKeys.ROBOT_JOINT_KEY,'estimated_poses', raven_constants.RavenDataKeys.CONVERTED_KEY]:
+                d[key] = getattr(self,key)
+            d[raven_constants.RavenDataKeys.CAM_TS_KEY] = {}
+            d[raven_constants.RavenDataKeys.CAM_POSE_KEY] = {}
+            d[raven_constants.RavenDataKeys.ROBOT_TS_KEY] = {}
+            d[raven_constants.RavenDataKeys.ROBOT_POSE_KEY] = {}
+            
+            
+            for arm in self.arms:
+                camera_ts = [pose[0] for pose in self.camera_poses[arm]]
+                camera_poses = [pose[1] for pose in self.camera_poses[arm]]
+                robot_ts = [pose[0] for pose in self.robot_poses[arm]]
+                robot_poses = [pose[1] for pose in self.robot_poses[arm]]
+                
+                # match first timestamps
+                if camera_ts[0] > robot_ts[0]:
+                    while camera_ts[0] > robot_ts[0]:
+                        robot_ts.pop(0)
+                        robot_poses.pop(0)
+                else:
+                    while camera_ts[0] < robot_ts[0]:
+                        camera_ts.pop(0)
+                        camera_poses.pop(0)
+                
+                # get corresponding robot indices
+                robot_inds = []
+                for ts in camera_ts:
+                    robot_inds.append(get_robot_pose_ind(ts, robot_ts))
+        
+                robot_ts_save = []
+                robot_poses_save = []
+                for ind in robot_inds:
+                    robot_ts_save.append(robot_ts[ind])
+                    robot_poses_save.append(robot_poses[ind])
+                
+                d[raven_constants.RavenDataKeys.CAM_TS_KEY][arm] = camera_ts
+                d[raven_constants.RavenDataKeys.CAM_POSE_KEY][arm] = camera_poses
+                d[raven_constants.RavenDataKeys.ROBOT_TS_KEY][arm] = robot_ts_save
+                d[raven_constants.RavenDataKeys.ROBOT_POSE_KEY][arm] = robot_poses_save
+        else:
+            for key in [raven_constants.RavenDataKeys.CAM_ROBOT_TF_KEY, raven_constants.RavenDataKeys.CAM_POSE_KEY, raven_constants.RavenDataKeys.ROBOT_POSE_KEY, raven_constants.RavenDataKeys.ROBOT_JOINT_KEY,'estimated_poses', raven_constants.RavenDataKeys.CONVERTED_KEY]:
+                d[key] = getattr(self,key)
         
         pickle.dump(d, fp)
         
@@ -157,6 +204,7 @@ def main():
     parser.add_argument('--pause',action='store_true')
     parser.add_argument('--plot',nargs='?',default=False)
     parser.add_argument('--sort',nargs='?',default=False)
+    parser.add_argument('--sync',nargs='?',default=False)
     
     args = parser.parse_args()
     
@@ -184,7 +232,7 @@ def main():
     recorder.stop_recording(sort=args.sort)
     if args.plot:
         recorder.plot(arms[0])
-    recorder.write(args.filename)
+    recorder.write(args.filename, synchronized=args.sync)
 
 if __name__ == '__main__':
     main()
