@@ -103,6 +103,10 @@ class DataRecorder(object):
             fp = open(fp,'w')
         
         d = {}
+        for arm in self.arms:
+            if len(self.camera_poses[arm]) == 0 or len(self.robot_poses[arm]) == 0:
+                return False
+        
         if synchronized:
             for key in [raven_constants.RavenDataKeys.CAM_ROBOT_TF_KEY, raven_constants.RavenDataKeys.ROBOT_JOINT_KEY,'estimated_poses', raven_constants.RavenDataKeys.CONVERTED_KEY]:
                 d[key] = getattr(self,key)
@@ -148,6 +152,7 @@ class DataRecorder(object):
                 d[key] = getattr(self,key)
         
         pickle.dump(d, fp)
+        return True
         
     def stop_recording(self, sort=False):
         # sort lists - for some reason they do not necessarily come in the correct order
