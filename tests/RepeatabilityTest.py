@@ -19,6 +19,7 @@ import scipy.io
 
 from raven_2_trajectory.raven_arm import RavenArm
 from raven_2_trajectory.raven_planner import RavenPlanner
+from raven_2_vision import gripper_pose_estimator
 from raven_2_control import kinematics
 from raven_2_utils import raven_constants
 from raven_2_utils import raven_util
@@ -30,9 +31,9 @@ NUM_STEPS = 50
 
 class RepeatibilityTester():
     def __init__(self, armName, gmmMatFile, numPoses=1000, speed=0.01):
-        self.ravenArm = RavenArm(armName, defaultPoseSpeed=speed)
+        #self.ravenArm = RavenArm(armName, defaultPoseSpeed=speed)
         self.ravenPlanner = RavenPlanner(armName)
-        self.gripperPoseEstimator = GripperPoseEstimator(armName)
+        self.gripperPoseEstimator = gripper_pose_estimator.GripperPoseEstimator(armName)
         self.arm = armName
         
         if armName == 'R':
@@ -52,7 +53,8 @@ class RepeatibilityTester():
         covariances = np.array([[1.5], [1], [0.5]]) ** 2
         weights = np.array([0.3, 0.5, 0.2])
         """
-        gmm = scipy.io.loadmat(gmmMatFile)
+        gmm = scipy.io.loadmat(gmmMatFile, struct_as_record=True)
+        IPython.embed()
         n_components = gmm['NComponents']
         weights = gmm['PComponents']
         means = gmm['mu']
@@ -86,8 +88,8 @@ class RepeatibilityTester():
                 
                 IPython.embed()
                 try:
-                    deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, prev_pose, startPose=self.homePose, n_steps=self.n_steps)
                     deltaPoseTraj.append(deltaPose)
+                    deltaPoseTraj = self.ravenPlanner.getTrajectoryFromPose(self.ravenArm.name, prev_pose, startPose=self.homePose, n_steps=self.n_steps)
                 except RuntimeError as e:
                     rospy.loginfo(e)
                     return 'IKFailure'
@@ -124,7 +126,7 @@ class RepeatibilityTester():
         self.ravenArm.stop()
         
 if __name__ == '__main__':
-    rospy.init_node('GridMove', anonymous=True)
+    rospy.init_node('RepeatabilityTest', anonymous=True)
     
     parser = argparse.ArgumentParser()
     parser.add_argument('arm',nargs='?',default='L')
@@ -140,6 +142,6 @@ if __name__ == '__main__':
     del args.speed
     
     rospy.sleep(2)
-    gm = GridMove(arm_side, rand, testAngles=False, maxPoses=100, speed=speed)
+    gm = RepeatibilityTester(arm_side, gmmFile, speed=speed)
     gm.run()        
         

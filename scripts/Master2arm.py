@@ -201,7 +201,7 @@ class AllocateFoam(smach.State):
         self.dataRecorder = None
         self.running = False
         self.collectionFinished = True
-        self.filename = 'trajectory_data_phasespace4/move_holding_data_' + self.armName + '_%d.pkl'
+        self.filename = 'trajectory_data_phasespace5/move_holding_data_' + self.armName + '_%d.pkl'
         self.trajNumber = 0    
         
         self.foam_pub = rospy.Publisher('foam_allocator_%s'%armName, PoseStamped)
@@ -266,7 +266,7 @@ class AllocateFoam(smach.State):
         if self.collectData:
             rospy.sleep(0.05)
             curFilename = self.filename %(self.trajNumber)
-            self.stopDataCollection(curFilename, plot=True )
+            self.stopDataCollection(curFilename, plot=False)
         
         rospy.loginfo('Checking if foam for allocation')
         #rospy.sleep(10)
@@ -393,14 +393,14 @@ class MoveTowardsFoam(smach.State):
         self.rotFrame = rotFrame
         
         self.midPosePub = rospy.Publisher('traj_mid_pose_%s'%self.armName,PoseStamped)
-        
-        # data collection objects
+      # data collection objects
         self.collectData = collectData
         self.dataRecorder = None
         self.running = False
         self.collectionFinished = True
-        self.filename = 'trajectory_data_phasespace4/move_towards_foam_data_' + self.armName + '_%d.pkl'
+        self.filename = 'trajectory_data_phasespace5/move_towards_foam_data_' + self.armName + '_%d.pkl'
         self.trajNumber = 0
+        self.tries = []
 
     def startDataCollection(self):
         if not self.running:
@@ -423,9 +423,7 @@ class MoveTowardsFoam(smach.State):
             rospy.loginfo('Saved data')
 
     def execute(self, userdata):
-        if not userdata.tries:
-            userdata.tries = []
-        
+#         if not tries:
         if MasterClass.PAUSE_BETWEEN_STATES:
             pause_func(self)
             print 'PAUSING'
@@ -437,9 +435,11 @@ class MoveTowardsFoam(smach.State):
      
         rotBound = float("inf")
         transBound = .008
-        if raven_util.withinBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
+        if raven_util.checkBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
+#         if raven_util.withinBounds(gripperPose, foamPose, transBound, rotBound, self.transFrame, self.rotFrame):
+            
             rospy.loginfo('Reached foam piece')
-            userdata.tries.append(['reachedFoam', userdata.numInOuterThreshold])
+            self.tries.append(['reachedFoam', userdata.numInOuterThreshold])
             return 'reachedFoam'
         
         outerTransBound = .015
@@ -450,7 +450,7 @@ class MoveTowardsFoam(smach.State):
             if userdata.numInOuterThreshold > maxInOuterThreshold:
                 MasterClass.publish_event('move_towards_foam_timeout_%s' % self.armName)
                 rospy.loginfo('Max num in outer threshold reached')
-                userdata.tries.append(['failed_reaching_foam', userdata.numInOuterThreshold])
+                self.tries.append(['failed_reaching_foam', userdata.numInOuterThreshold])
                 return 'reachedFoam'
 
         rospy.loginfo('Moving towards the foam piece')
@@ -523,7 +523,7 @@ class CheckPickup(smach.State):
         self.commandFrame = commandFrame
         self.stepsPerMeter = stepsPerMeter
         
-        self.foamInGripper = True
+        self.foamInGripper = False
         rospy.Subscriber('found_red_%s' % self.armName, Bool, self._foamTrackerCallback)
         
         # data collection objects
@@ -531,7 +531,7 @@ class CheckPickup(smach.State):
         self.dataRecorder = None
         self.running = False
         self.collectionFinished = True
-        self.filename = 'trajectory_data_phasespace4/check_pickup_data_' + self.armName + '_%d.pkl'
+        self.filename = 'trajectory_data_phasespace5/check_pickup_data_' + self.armName + '_%d.pkl'
         self.trajNumber = 0
         
     def _foamTrackerCallback(self, msg):
@@ -1004,8 +1004,9 @@ class MasterClass(object):
         def arm(s):
             return '{0}_{1}'.format(s, armName)
         
+        collectData=True
         smach.StateMachine.add(arm('allocateFoam'), AllocateFoam(armName, foamArmAllocator, ravenArm, self.ravenPlanner,
-                                                                 self.gripperPoseEstimator, holdingPose, self.stepsPerMeter, transFrame, rotFrame, self.receptacleLock, completer=self.completer, simulatedFoam=self.simulatedFoam),
+                                                                 self.gripperPoseEstimator, holdingPose, self.stepsPerMeter, transFrame, rotFrame, self.receptacleLock, completer=self.completer, simulatedFoam=self.simulatedFoam, collectData=collectData),
                                transitions = {'foamFound' : arm('planTrajToFoam'),
                                               'noFoamFound' : arm('waitForOtherArmToComplete')})
         smach.StateMachine.add(arm('waitForOtherArmToComplete'), WaitForCompletion(ravenArm, self.ravenPlanner, self.completer),
@@ -1016,13 +1017,13 @@ class MasterClass(object):
                                transitions = {'success' : arm('moveTowardsFoam'),
                                               'failure' : 'failure',
                                               'IKFailure' : arm('allocateFoam')})
-        smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowardsFoam(ravenArm, self.errorModel, self.maxServoDistance, transFrame, rotFrame),
+        smach.StateMachine.add(arm('moveTowardsFoam'), MoveTowardsFoam(ravenArm, self.errorModel, self.maxServoDistance, transFrame, rotFrame, collectData=collectData),
                                transitions = {'reachedFoam' : arm('graspFoam'),
                                               'notReachedFoam' : arm('planTrajToFoam')})
         smach.StateMachine.add(arm('graspFoam'), GraspFoam(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, self.gripperOpenCloseDuration),
                                transitions = {'graspedFoam' : arm('checkPickup'),
                                               'IKFailure' : arm('allocateFoam')})
-        smach.StateMachine.add(arm('checkPickup'), CheckPickup(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, foamArmAllocator, self.vertAmount, transFrame, self.stepsPerMeter),
+        smach.StateMachine.add(arm('checkPickup'), CheckPickup(ravenArm, self.ravenPlanner, self.gripperPoseEstimator, foamArmAllocator, self.vertAmount, transFrame, self.stepsPerMeter, collectData=collectData),
                                    transitions = {'foamInGripper' : arm('planTrajToReceptacle'),
                                                  'foamNotInGripper' : arm('allocateFoam'),
                                                  'IKFailure' : arm('allocateFoam')})

@@ -124,13 +124,17 @@ class DataRecorder(object):
                 
                 # match first timestamps
                 if camera_ts[0] > robot_ts[0]:
-                    while camera_ts[0] > robot_ts[0]:
+                    while len(robot_ts) > 0 and camera_ts[0] > robot_ts[0]:
                         robot_ts.pop(0)
                         robot_poses.pop(0)
                 else:
-                    while camera_ts[0] < robot_ts[0]:
+                    while len(camera_ts) > 0 and camera_ts[0] < robot_ts[0]:
                         camera_ts.pop(0)
                         camera_poses.pop(0)
+                        
+                for arm in self.arms:
+                    if len(self.camera_poses[arm]) == 0 or len(self.robot_poses[arm]) == 0:
+                        return False
                 
                 # get corresponding robot indices
                 robot_inds = []
