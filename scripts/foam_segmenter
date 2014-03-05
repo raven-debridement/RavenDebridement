@@ -10,6 +10,7 @@ import RavenDebridement.foam_util as Util
 from RavenDebridement.msg import FoamPoints
 
 import cv
+import cv2
 import numpy
 import scipy.cluster.vq
 
@@ -47,7 +48,6 @@ class FoamSegmenter():
         self.num_objects = num_objects
         self.object_centers = [None] * num_objects
         self.center_threshold = 0.015
-
         self.disparityImg = None
         self.hsvImg = cv.CreateImage((1280, 960), 8, 3)
         self.threshImg = cv.CreateImage((1280, 960), 8, 1)
@@ -73,7 +73,6 @@ class FoamSegmenter():
         rospy.Subscriber(disparity, DisparityImage, self.disparityCallback)
         rospy.Subscriber(left_camera + "/image_rect_color", Image, self.leftImageCallback, queue_size = 1)
         
-        
         rospy.Subscriber(rgb_camera + "/camera_info", CameraInfo, self.rgbInfoCallback)
         rospy.Subscriber(depth_camera + "/camera_info", CameraInfo, self.depthInfoCallback)
         rospy.Subscriber(rgb_camera + "/image_rect_color", Image, self.rgbImageCallback, queue_size = 1)
@@ -82,9 +81,16 @@ class FoamSegmenter():
         
 
     def disparityCallback(self, msg):
-        image = self.bridge.imgmsg_to_cv(msg.image, "mono8")
-        self.disparityImg = image
-        self.minDisparity = msg.min_disparity
+
+        left_image = self.image['l']
+        if left_image is not None:
+            tmpImg = self.bridge.imgmsg_to_cv(msg.image, "mono8")
+            self.minDisparity = max(msg.min_disparity, 0.0)
+            self.disparityScale = left_image.width / tmpImg.width
+            scaleMat = numpy.zeros((tmpImg.height, tmpImg.height))
+            cv2.setIdentity(scaleMat, self.disparityScale)
+            self.disparityImg = cv.fromarray(scaleMat.dot(tmpImg))
+
 
     def leftInfoCallback(self, msg):
         if self.info['l']:
@@ -141,7 +147,7 @@ class FoamSegmenter():
         print foamPoints
         print centroids
         
-        """    
+        """
         # find contours
         storage = cv.CreateMemStorage(0)
         
@@ -171,6 +177,7 @@ class FoamSegmenter():
             
             splitContours = self.splitByAspect(contour)
             #splitContours = [contour]
+            #IPython.embed()
             
             #y = int(sum(sum([height for width, height in splitContour])/float(len(splitContour)) for splitContour in splitContours)/float(len(splitContours)))
             
@@ -188,7 +195,7 @@ class FoamSegmenter():
                     continue
                 
                     #cv.Set2D(origImg,x,y,(0,255,0))
-                
+                print "XXX", splitContour
                 #found = True
                 cv.FillPoly(image, [splitContour], color)
                 
@@ -198,7 +205,7 @@ class FoamSegmenter():
                 #found, self.xClose, self.yClose, xCentroid, yCentroid = Util.find_centroid(image)
                 x = int(sum([width for width, height in splitContour])/float(len(splitContour)))
                 #y = int(sum([height for width, height in splitContour])/float(len(splitContour)))
-                
+                #IPython.embed()
                 #x,y = self.getCenterOfMass(splitContour)
                 xys.append((x,bottomHeight-40))
         
@@ -216,12 +223,14 @@ class FoamSegmenter():
             # Search for the closest disparity pixel by searching in a square with larger and larger radius
             disparity = -1000
             for radius in range(50):
-                x, y, disparity = self.getBoxDisparity((xClose,yClose), radius, image)
-                if disparity > self.minDisparity:
-                    break
+                if image is not None:
+                    x, y, disparity = self.getBoxDisparity((xClose,yClose), radius, image)
+                    if disparity > self.minDisparity:
+                        break
             
             # Use disparity value to find 3d location of point
             if disparity <= self.minDisparity:
+                print 'Failed due to min disparity'
                 continue
             
             pt = Util.convertStereo(x, y , disparity, self.info)
@@ -233,6 +242,7 @@ class FoamSegmenter():
             
             
             if not self.isValidPoint(point):
+                print 'Failed due to min disparity'
                 continue
             
             
@@ -288,7 +298,7 @@ class FoamSegmenter():
         self.image['d'] = self.bridge.imgmsg_to_cv(msg, desired_encoding="passthrough")
 
     def leftImageCallback(self, msg):
-        if not self.info['l'] or not self.disparityImg or rospy.is_shutdown():
+        if self.info['l'] is None or rospy.is_shutdown():
             return
         
         # Threshold the image
@@ -297,6 +307,7 @@ class FoamSegmenter():
         if self.show_image:
             # Uncomment to show the thresholded image
             Util.showImage(image, "threshed")
+            Util.showImage(self.disparityImg, "disp")
 
         # find contours
         storage = cv.CreateMemStorage(0)
@@ -334,8 +345,7 @@ class FoamSegmenter():
             x,y = self.getCenterOfMass(contour)
             xys.append((x,bottomBound-40))
         """
-        
-        
+
         while contours is not None and not rospy.is_shutdown():
             contour = contours[:]
             contours = contours.h_next()
@@ -343,6 +353,7 @@ class FoamSegmenter():
                 continue
             
             splitContours = self.splitByAspect(contour)
+            #IPython.embed()
             #splitContours = [contour]
             
             #y = int(sum(sum([height for width, height in splitContour])/float(len(splitContour)) for splitContour in splitContours)/float(len(splitContours)))
@@ -385,27 +396,32 @@ class FoamSegmenter():
         
         points = []
         marker_array = MarkerArray()
+
+        print "Found this many candidates", len(xys)
+
         for xClose,yClose in xys:
             # Search for the closest disparity pixel by searching in a square with larger and larger radius
             disparity = -1000
-            for radius in range(50):
-                x, y, disparity = self.getBoxDisparity((xClose,yClose), radius, image)
-                if disparity > self.minDisparity:
-                    break
+            for radius in range(30):
+                if image is not None:
+                    x, y, disparity = self.getBoxDisparity((xClose,yClose), radius, image)
+                    if disparity > self.minDisparity:
+                        break
             
             # Use disparity value to find 3d location of point
+            #IPython.embed()
             if disparity <= self.minDisparity:
                 continue
             
-            pt = Util.convertStereo(x, y , disparity, self.info)
+            pt = Util.convertStereo(x, y, disparity, self.info)
             #print 'pt'
             #print pt
             point = tfx.convertToFrame(pt, '0_link')
             #print 'point'
             #print point
             
-            
             if not self.isValidPoint(point):
+                print 'Invalid',point,disparity,self.minDisparity
                 continue
             
             
@@ -531,6 +547,7 @@ class FoamSegmenter():
             contour = contour[1:] + [contour[0]]
             
     def splitByAspect(self, contour):
+        #IPython.embed()
         
         maxWidth = max(width for width, height in contour)
         minWidth = min(width for width, height in contour)
@@ -623,45 +640,45 @@ class FoamSegmenter():
         """
         Gets a disparity value in a square of radius radius, or None if no disparity value can be found.
         """
-        
+
         xClose, yClose = pt
 
         dispImg = self.disparityImg
-        
-        # check left edge
-        x = xClose - radius
-        for y in range(yClose - radius, yClose + radius + 1):
-            d = self.getDisparity(x, y, image, dispImg)
-            if d > self.minDisparity:
-                return (x, y, d)
-                
-        # check top edge
-        y = yClose + radius
-        for x in range(xClose - radius, xClose + radius + 1):
-            d = self.getDisparity(x, y, image, dispImg)
-            if d > self.minDisparity:
-                return (x, y, d)
+        if dispImg is not None:
+            # check left edge
+            x = xClose - radius
+            for y in range(yClose - radius, yClose + radius + 1):
+                d = self.getDisparity(x, y, image, dispImg)
+                if d > self.minDisparity:
+                    return (x, y, d)
+                    
+            # check top edge
+            y = yClose + radius
+            for x in range(xClose - radius, xClose + radius + 1):
+                d = self.getDisparity(x, y, image, dispImg)
+                if d > self.minDisparity:
+                    return (x, y, d)
 
-        # check right edge
-        x = xClose + radius
-        for y in range(yClose - radius, yClose + radius + 1):
-            d = self.getDisparity(x, y, image, dispImg)
-            if d > self.minDisparity:
-                return (x, y, d)
+            # check right edge
+            x = xClose + radius
+            for y in range(yClose - radius, yClose + radius + 1):
+                d = self.getDisparity(x, y, image, dispImg)
+                if d > self.minDisparity:
+                    return (x, y, d)
 
-        return 0,0,0
+            return 0,0,0
 
-        # check bottom edge
-        y = yClose - radius
-        for x in range(xClose - radius, xClose + radius + 1):
-            d = self.getDisparity(x, y, image, dispImg)
-            if d > self.minDisparity:
-                return (x, y, d)
+            # check bottom edge
+            y = yClose - radius
+            for x in range(xClose - radius, xClose + radius + 1):
+                d = self.getDisparity(x, y, image, dispImg)
+                if d > self.minDisparity:
+                    return (x, y, d)
 
     def getDisparity(self, x, y, image, dispImg):
         if 0 <= y < image.height and 0 <= x < image.width:
             if image[y, x] > 0:
-                return cv.GetReal2D(dispImg, y, x)
+                return cv.GetReal2D(dispImg, y / self.disparityScale, x / self.disparityScale)
             
         return -float("inf")
     
@@ -714,5 +731,5 @@ if __name__ == '__main__':
     right_camera = 'right'
     rgb_camera = 'camera/rgb'
     depth_camera = 'camera/depth_registered'
-    segmenter = FoamSegmenter(left_camera, right_camera, rgb_camera, depth_camera, 'disparity', '/foam_points', **vars(args))
+    segmenter = FoamSegmenter(left_camera, right_camera, rgb_camera, depth_camera, 'downsampled_disparity', '/foam_points', **vars(args))
     rospy.spin()

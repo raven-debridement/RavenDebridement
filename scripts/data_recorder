@@ -166,8 +166,8 @@ class DataRecorder(object):
 
         camera_ts = [pose[0] for pose in self.camera_poses[arm]]
         camera_poses = [pose[1] for pose in self.camera_poses[arm]]
-        robot_ts = [pose[0] for pose in self.robot_poses[arm]]
-        robot_poses = [pose[1] for pose in self.robot_poses[arm]]
+        robot_ts = [pose[0] for pose in self.command_poses[arm]]
+        robot_poses = [pose[1] for pose in self.command_poses[arm]]
 
         # get corresponding robot indices
         robot_inds = []

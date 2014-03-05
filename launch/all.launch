@@ -66,12 +66,12 @@
     </node>
     
     <!-- Foam pose detection -->
-    <node name="foam_poses" pkg="RavenDebridement" type="foam_segmenter" output="screen">
-        <remap from="disparity" to="BC/disparity" />
-        <remap from="left/camera_info" to="BC/left/camera_info" />
-        <remap from="right/camera_info" to="BC/right/camera_info" />
-        <remap from="left/image_rect_color" to="BC/left/image_rect_color" />
-        <remap from="right/image_rect_color" to="BC/right/image_rect_color" />
+    <node ns="BC" name="foam_poses" pkg="RavenDebridement" type="foam_segmenter" output="screen">
+        <remap from="disparity" to="downsampled_disparity" />
+        <remap from="left/camera_info" to="left/camera_info" />
+        <remap from="right/camera_info" to="right/camera_info" />
+        <remap from="left/image_rect_color" to="left/image_rect_color" />
+        <remap from="right/image_rect_color" to="right/image_rect_color" />
     </node>
 
     <include file="$(find openni_launch)/launch/openni.launch" />
